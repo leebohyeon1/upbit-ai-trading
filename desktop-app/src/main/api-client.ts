@@ -30,11 +30,11 @@ class TradingAPIClient {
     }
   }
 
-  async startTrading(aiEnabled: boolean = false, ticker: string = 'KRW-BTC'): Promise<boolean> {
+  async startTrading(aiEnabled: boolean = false, tickers: string[] = ['KRW-BTC']): Promise<boolean> {
     try {
       const response = await this.axiosInstance.post('/start', {
         ai_enabled: aiEnabled,
-        ticker: ticker,
+        tickers: tickers,
       });
       return response.data.success;
     } catch (error) {

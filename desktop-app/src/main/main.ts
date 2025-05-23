@@ -215,8 +215,8 @@ class TradingApp {
 
   private async startTrading(tickers: string[] = ['KRW-BTC']): Promise<boolean> {
     try {
-      // API 서버에 자동매매 시작 요청 (첫 번째 티커만 전송 - 백엔드 수정 필요)
-      const success = await apiClient.startTrading(this.tradingState.aiEnabled, tickers[0]);
+      // API 서버에 자동매매 시작 요청 (다중 코인 지원)
+      const success = await apiClient.startTrading(this.tradingState.aiEnabled, tickers);
       
       if (success) {
         this.tradingState.isRunning = true;

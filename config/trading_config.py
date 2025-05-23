@@ -11,6 +11,7 @@ DECISION_THRESHOLDS = {
 INVESTMENT_RATIOS = {
     "min_ratio": 0.15,  # 최소 투자 비율 (보유 자산의 %) (기본값: 0.2) - 더 작게 시작
     "max_ratio": 0.5,  # 최대 투자 비율 (보유 자산의 %) (기본값: 0.5) - 과도한 투자 방지
+    "per_coin_max_ratio": 0.2,  # 코인당 최대 투자 비율 (다중 코인 거래 시)
 }
 
 # 기술적 지표별 신호 강도 설정
