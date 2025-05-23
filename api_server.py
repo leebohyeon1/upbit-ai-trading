@@ -125,11 +125,9 @@ def run_trading_bot_for_ticker(ticker: str):
         # SignalAnalyzer 생성
         signal_analyzer = SignalAnalyzer(
             config=config,
-            market_indicators=market_indicators,
             technical_indicators=technical_indicators,
-            upbit_api=upbit_api,
-            claude_api=claude_api,
-            logger=logger_instance
+            market_indicators=market_indicators,
+            claude_api=claude_api
         )
         
         # 트레이딩 엔진 생성
@@ -146,8 +144,8 @@ def run_trading_bot_for_ticker(ticker: str):
         logger_instance.log_app(f"자동매매 시작 - 티커: {ticker}, AI: {trading_state.ai_enabled}")
         while not trading_state.stop_flag and ticker in trading_state.active_tickers:
             try:
-                # analyze_market 메서드 실행
-                analysis_result = signal_analyzer.analyze_market(ticker)
+                # analyze 메서드 실행 (MarketAnalyzer의 analyze 메서드 호출)
+                analysis_result = signal_analyzer.analyze(ticker)
                 
                 # 거래 실행
                 if analysis_result['decision'] != 'hold':
