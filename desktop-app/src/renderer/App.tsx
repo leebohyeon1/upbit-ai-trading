@@ -25,8 +25,9 @@ import {
   Card,
   CardContent,
   Divider,
+  TextField,
+  InputAdornment,
 } from '@mui/material';
-import Grid from '@mui/material/Grid2';
 import {
   PlayArrow,
   Stop,
@@ -37,6 +38,10 @@ import {
   AccountBalance,
   Add,
   Delete,
+  Settings,
+  Visibility,
+  VisibilityOff,
+  Save,
 } from '@mui/icons-material';
 
 interface TradingState {
@@ -60,6 +65,12 @@ interface TabPanelProps {
   value: number;
 }
 
+interface ApiKeys {
+  upbitAccessKey: string;
+  upbitSecretKey: string;
+  anthropicApiKey: string;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -69,6 +80,8 @@ declare global {
       toggleAI: (enabled: boolean) => Promise<boolean>;
       minimizeToTray: () => Promise<void>;
       onTradingStateChanged: (callback: (state: TradingState) => void) => void;
+      saveApiKeys: (keys: ApiKeys) => Promise<boolean>;
+      getApiKeys: () => Promise<ApiKeys>;
     };
   }
 }
@@ -100,6 +113,15 @@ const App: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [selectedTicker, setSelectedTicker] = useState('KRW-BTC');
   const [portfolio, setPortfolio] = useState<PortfolioCoin[]>([]);
+  const [apiKeys, setApiKeys] = useState<ApiKeys>({
+    upbitAccessKey: '',
+    upbitSecretKey: '',
+    anthropicApiKey: ''
+  });
+  const [showAccessKey, setShowAccessKey] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   // 인기 코인 목록
   const popularCoins = [
@@ -118,6 +140,7 @@ const App: React.FC = () => {
   useEffect(() => {
     // 초기 상태 로드
     loadTradingState();
+    loadApiKeys();
 
     // 상태 변경 리스너 등록
     window.electronAPI.onTradingStateChanged((state) => {
@@ -219,6 +242,34 @@ const App: React.FC = () => {
     ));
   };
 
+  const loadApiKeys = async () => {
+    try {
+      const keys = await window.electronAPI.getApiKeys();
+      setApiKeys(keys);
+    } catch (err) {
+      console.error('Failed to load API keys:', err);
+    }
+  };
+
+  const handleSaveApiKeys = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const success = await window.electronAPI.saveApiKeys(apiKeys);
+      if (success) {
+        // 성공 메시지를 위한 별도 상태 추가 또는 Alert 컴포넌트 사용
+        setSuccessMessage('API 키가 저장되었습니다.');
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError('API 키 저장에 실패했습니다.');
+      }
+    } catch (err) {
+      setError('API 키 저장 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Container maxWidth="md" sx={{ py: 2 }}>
       <Paper elevation={3}>
@@ -246,14 +297,21 @@ const App: React.FC = () => {
           </Alert>
         )}
 
+        {successMessage && (
+          <Alert severity="success" sx={{ mx: 2, mb: 2 }} onClose={() => setSuccessMessage(null)}>
+            {successMessage}
+          </Alert>
+        )}
+
         <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab icon={<Dashboard />} label="대시보드" />
           <Tab icon={<AccountBalance />} label="포트폴리오" />
+          <Tab icon={<Settings />} label="환경설정" />
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <Grid container spacing={3}>
-            <Grid size={12}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -304,9 +362,9 @@ const App: React.FC = () => {
                   />
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
 
-            <Grid size={12}>
+            <Box>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -334,13 +392,13 @@ const App: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, md: 6 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 50%' } }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -373,9 +431,9 @@ const App: React.FC = () => {
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
 
-            <Grid size={12}>
+            <Box>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -427,8 +485,124 @@ const App: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    API 키 설정
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    거래를 위해 필요한 API 키를 입력해주세요.
+                  </Typography>
+                  
+                  <Box mt={3}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Upbit API
+                    </Typography>
+                    <Box mb={2}>
+                      <TextField
+                        fullWidth
+                        label="Access Key"
+                        type={showAccessKey ? "text" : "password"}
+                        value={apiKeys.upbitAccessKey}
+                        onChange={(e) => setApiKeys({...apiKeys, upbitAccessKey: e.target.value})}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton
+                                onClick={() => setShowAccessKey(!showAccessKey)}
+                                edge="end"
+                              >
+                                {showAccessKey ? <VisibilityOff /> : <Visibility />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Box>
+                    
+                    <Box mb={3}>
+                      <TextField
+                        fullWidth
+                        label="Secret Key"
+                        type={showSecretKey ? "text" : "password"}
+                        value={apiKeys.upbitSecretKey}
+                        onChange={(e) => setApiKeys({...apiKeys, upbitSecretKey: e.target.value})}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton
+                                onClick={() => setShowSecretKey(!showSecretKey)}
+                                edge="end"
+                              >
+                                {showSecretKey ? <VisibilityOff /> : <Visibility />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Box>
+                    
+                    <Typography variant="subtitle2" gutterBottom>
+                      Claude AI API (선택사항)
+                    </Typography>
+                    <Box mb={3}>
+                      <TextField
+                        fullWidth
+                        label="API Key"
+                        type={showAnthropicKey ? "text" : "password"}
+                        value={apiKeys.anthropicApiKey}
+                        onChange={(e) => setApiKeys({...apiKeys, anthropicApiKey: e.target.value})}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton
+                                onClick={() => setShowAnthropicKey(!showAnthropicKey)}
+                                edge="end"
+                              >
+                                {showAnthropicKey ? <VisibilityOff /> : <Visibility />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Box>
+                    
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={<Save />}
+                      onClick={handleSaveApiKeys}
+                      disabled={loading || !apiKeys.upbitAccessKey || !apiKeys.upbitSecretKey}
+                      fullWidth
+                    >
+                      API 키 저장
+                    </Button>
+                  </Box>
+                  
+                  <Box mt={3}>
+                    <Alert severity="info">
+                      <Typography variant="body2">
+                        • Upbit API 키는 <a href="https://upbit.com/mypage/open_api_management" target="_blank" rel="noopener noreferrer">여기</a>에서 발급받을 수 있습니다.
+                      </Typography>
+                      <Typography variant="body2">
+                        • 거래 권한이 있는 API 키를 사용해주세요.
+                      </Typography>
+                      <Typography variant="body2">
+                        • API 키는 안전하게 암호화되어 로컬에 저장됩니다.
+                      </Typography>
+                    </Alert>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Box>
+          </Box>
         </TabPanel>
 
         <Box p={2} bgcolor="background.default">

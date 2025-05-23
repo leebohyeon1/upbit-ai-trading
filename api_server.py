@@ -47,6 +47,11 @@ class TradingState:
         self.stop_flag = False
         self.logger = None
         self.active_tickers = []  # 활성 티커 목록
+        self.api_keys = {
+            'upbit_access_key': None,
+            'upbit_secret_key': None,
+            'anthropic_api_key': None
+        }
         
 trading_state = TradingState()
 
@@ -68,6 +73,11 @@ class TradingStatusResponse(BaseModel):
 class SuccessResponse(BaseModel):
     success: bool
     message: Optional[str] = None
+
+class ApiKeysRequest(BaseModel):
+    upbit_access_key: str
+    upbit_secret_key: str
+    anthropic_api_key: Optional[str] = None
 
 # API 엔드포인트
 @app.get("/")
@@ -96,7 +106,15 @@ def run_trading_bot_for_ticker(ticker: str):
     logger_instance = None
     try:
         # 환경 설정 로드
-        load_dotenv()
+        if trading_state.api_keys['upbit_access_key'] and trading_state.api_keys['upbit_secret_key']:
+            # API 키가 설정되어 있으면 환경 변수로 설정
+            os.environ['UPBIT_ACCESS_KEY'] = trading_state.api_keys['upbit_access_key']
+            os.environ['UPBIT_SECRET_KEY'] = trading_state.api_keys['upbit_secret_key']
+            if trading_state.api_keys['anthropic_api_key']:
+                os.environ['ANTHROPIC_API_KEY'] = trading_state.api_keys['anthropic_api_key']
+        else:
+            # API 키가 없으면 .env 파일에서 로드
+            load_dotenv()
         
         # 로거 설정
         logger_instance = Logger()
@@ -314,6 +332,24 @@ async def toggle_ai(request: ToggleAIRequest):
 # WebSocket 엔드포인트 (실시간 데이터)
 from fastapi import WebSocket
 import json
+
+@app.post("/set-api-keys", response_model=SuccessResponse)
+async def set_api_keys(request: ApiKeysRequest):
+    """API 키 설정"""
+    try:
+        trading_state.api_keys['upbit_access_key'] = request.upbit_access_key
+        trading_state.api_keys['upbit_secret_key'] = request.upbit_secret_key
+        trading_state.api_keys['anthropic_api_key'] = request.anthropic_api_key
+        
+        # 환경 변수로도 설정
+        os.environ['UPBIT_ACCESS_KEY'] = request.upbit_access_key
+        os.environ['UPBIT_SECRET_KEY'] = request.upbit_secret_key
+        if request.anthropic_api_key:
+            os.environ['ANTHROPIC_API_KEY'] = request.anthropic_api_key
+        
+        return SuccessResponse(success=True, message="API keys set successfully")
+    except Exception as e:
+        return SuccessResponse(success=False, message=str(e))
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

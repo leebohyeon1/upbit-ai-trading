@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, safeStorage } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import apiClient from './api-client';
 
@@ -165,6 +166,14 @@ class TradingApp {
 
     ipcMain.handle('minimize-to-tray', () => {
       this.mainWindow?.hide();
+    });
+
+    ipcMain.handle('save-api-keys', async (event, keys) => {
+      return await this.saveApiKeys(keys);
+    });
+
+    ipcMain.handle('get-api-keys', async () => {
+      return await this.getApiKeys();
     });
   }
 
@@ -335,6 +344,73 @@ class TradingApp {
     ]);
 
     this.tray?.setContextMenu(contextMenu);
+  }
+
+  private getApiKeysPath(): string {
+    return path.join(app.getPath('userData'), 'api-keys.json');
+  }
+
+  private async saveApiKeys(keys: any): Promise<boolean> {
+    try {
+      // 암호화된 키 저장
+      const encryptedKeys = {
+        upbitAccessKey: safeStorage.encryptString(keys.upbitAccessKey),
+        upbitSecretKey: safeStorage.encryptString(keys.upbitSecretKey),
+        anthropicApiKey: keys.anthropicApiKey ? safeStorage.encryptString(keys.anthropicApiKey) : null
+      };
+
+      fs.writeFileSync(
+        this.getApiKeysPath(), 
+        JSON.stringify(encryptedKeys, null, 2)
+      );
+
+      // API 서버에 키 설정 전송
+      try {
+        await apiClient.setApiKeys({
+          upbit_access_key: keys.upbitAccessKey,
+          upbit_secret_key: keys.upbitSecretKey,
+          anthropic_api_key: keys.anthropicApiKey
+        });
+      } catch (error) {
+        console.error('Failed to send API keys to server:', error);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to save API keys:', error);
+      return false;
+    }
+  }
+
+  private async getApiKeys(): Promise<any> {
+    try {
+      const keysPath = this.getApiKeysPath();
+      
+      if (!fs.existsSync(keysPath)) {
+        return {
+          upbitAccessKey: '',
+          upbitSecretKey: '',
+          anthropicApiKey: ''
+        };
+      }
+
+      const encryptedKeys = JSON.parse(fs.readFileSync(keysPath, 'utf-8'));
+      
+      return {
+        upbitAccessKey: safeStorage.decryptString(Buffer.from(encryptedKeys.upbitAccessKey)),
+        upbitSecretKey: safeStorage.decryptString(Buffer.from(encryptedKeys.upbitSecretKey)),
+        anthropicApiKey: encryptedKeys.anthropicApiKey 
+          ? safeStorage.decryptString(Buffer.from(encryptedKeys.anthropicApiKey))
+          : ''
+      };
+    } catch (error) {
+      console.error('Failed to load API keys:', error);
+      return {
+        upbitAccessKey: '',
+        upbitSecretKey: '',
+        anthropicApiKey: ''
+      };
+    }
   }
 }
 

@@ -64,6 +64,16 @@ class TradingAPIClient {
       return true; // 개발 중이므로 성공으로 처리
     }
   }
+
+  async setApiKeys(keys: { upbit_access_key: string; upbit_secret_key: string; anthropic_api_key?: string }): Promise<boolean> {
+    try {
+      const response = await this.axiosInstance.post('/set-api-keys', keys);
+      return response.data.success;
+    } catch (error) {
+      console.error('Failed to set API keys:', error);
+      return false;
+    }
+  }
 }
 
 export default new TradingAPIClient();

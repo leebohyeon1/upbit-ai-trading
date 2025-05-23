@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopTrading: () => ipcRenderer.invoke('stop-trading'),
   toggleAI: (enabled) => ipcRenderer.invoke('toggle-ai', enabled),
   minimizeToTray: () => ipcRenderer.invoke('minimize-to-tray'),
+  saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
+  getApiKeys: () => ipcRenderer.invoke('get-api-keys'),
   
   onTradingStateChanged: (callback) => {
     ipcRenderer.on('trading-state-changed', (event, state) => callback(state));
