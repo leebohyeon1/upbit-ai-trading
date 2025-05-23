@@ -1,0 +1,46 @@
+{
+  "name": "upbit-ai-trading-desktop",
+  "version": "1.0.0",
+  "description": "Upbit AI Trading Desktop Application",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "npm run build && electron .",
+    "build": "webpack",
+    "dev": "webpack --watch & electron .",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win"
+  },
+  "keywords": [
+    "trading",
+    "upbit",
+    "cryptocurrency",
+    "ai"
+  ],
+  "author": "Lee Bohyeon",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "copy-webpack-plugin": "^13.0.0",
+    "css-loader": "^7.1.2",
+    "electron": "^36.3.1",
+    "electron-builder": "^26.0.12",
+    "html-webpack-plugin": "^5.6.3",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.99.9",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.1.0",
+    "@mui/material": "^7.1.0",
+    "@types/react": "^19.1.5",
+    "@types/react-dom": "^19.1.5",
+    "axios": "^1.9.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}
