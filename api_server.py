@@ -20,7 +20,7 @@ from src.api.upbit_api import UpbitAPI
 from src.api.claude_api import ClaudeAPI
 from src.indicators.market import MarketIndicators
 from src.indicators.technical import TechnicalIndicators
-from src.utils.logger import setup_logger
+from src.utils.logger import Logger
 from config.trading_config import *
 from config.app_config import load_environment
 import time
@@ -95,7 +95,8 @@ def run_trading_bot():
         load_environment()
         
         # 로거 설정
-        trading_state.logger = setup_logger()
+        logger_instance = Logger()
+        trading_state.logger = logger_instance
         
         # API 인스턴스 생성
         upbit_api = UpbitAPI()
@@ -125,7 +126,7 @@ def run_trading_bot():
             technical_indicators=technical_indicators,
             upbit_api=upbit_api,
             claude_api=claude_api,
-            logger=trading_state.logger
+            logger=logger_instance
         )
         
         # 트레이딩 엔진 생성
@@ -136,7 +137,7 @@ def run_trading_bot():
         )
         
         # 트레이딩 루프 실행
-        trading_state.logger.info(f"자동매매 시작 - 티커: {trading_state.ticker}, AI: {trading_state.ai_enabled}")
+        logger_instance.log_app(f"자동매매 시작 - 티커: {trading_state.ticker}, AI: {trading_state.ai_enabled}")
         while not trading_state.stop_flag:
             try:
                 # analyze_market 메서드 실행
@@ -154,13 +155,13 @@ def run_trading_bot():
                 # 대기
                 time.sleep(60)  # 1분 대기
             except Exception as e:
-                trading_state.logger.error(f"트레이딩 사이클 오류: {e}")
+                logger_instance.log_error(f"트레이딩 사이클 오류: {e}")
                 time.sleep(60)
                 
     except Exception as e:
-        if trading_state.logger:
-            trading_state.logger.error(f"트레이딩 봇 실행 오류: {e}")
         print(f"트레이딩 봇 실행 오류: {e}")
+        if 'logger_instance' in locals():
+            logger_instance.log_error(f"트레이딩 봇 실행 오류: {e}")
     finally:
         trading_state.is_running = False
         trading_state.stop_flag = False
@@ -204,8 +205,7 @@ async def stop_trading():
         
         trading_state.is_running = False
         
-        if trading_state.logger:
-            trading_state.logger.info("자동매매 중지")
+        print("자동매매 중지")
         
         return SuccessResponse(success=True, message="Trading stopped")
     except Exception as e:
