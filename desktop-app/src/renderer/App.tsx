@@ -11,6 +11,10 @@ import {
   Alert,
   CircularProgress,
   Chip,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -30,7 +34,7 @@ declare global {
   interface Window {
     electronAPI: {
       getTradingState: () => Promise<TradingState>;
-      startTrading: () => Promise<boolean>;
+      startTrading: (ticker: string) => Promise<boolean>;
       stopTrading: () => Promise<boolean>;
       toggleAI: (enabled: boolean) => Promise<boolean>;
       minimizeToTray: () => Promise<void>;
@@ -47,6 +51,21 @@ const App: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTicker, setSelectedTicker] = useState('KRW-BTC');
+  
+  // 인기 코인 목록
+  const popularCoins = [
+    { value: 'KRW-BTC', label: '비트코인 (BTC)' },
+    { value: 'KRW-ETH', label: '이더리움 (ETH)' },
+    { value: 'KRW-XRP', label: '리플 (XRP)' },
+    { value: 'KRW-DOGE', label: '도지코인 (DOGE)' },
+    { value: 'KRW-SOL', label: '솔라나 (SOL)' },
+    { value: 'KRW-MATIC', label: '폴리곤 (MATIC)' },
+    { value: 'KRW-ADA', label: '카르다노 (ADA)' },
+    { value: 'KRW-AVAX', label: '아발란체 (AVAX)' },
+    { value: 'KRW-DOT', label: '폴카닷 (DOT)' },
+    { value: 'KRW-LINK', label: '체인링크 (LINK)' },
+  ];
 
   useEffect(() => {
     // 초기 상태 로드
@@ -71,7 +90,7 @@ const App: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const success = await window.electronAPI.startTrading();
+      const success = await window.electronAPI.startTrading(selectedTicker);
       if (!success) {
         setError('자동매매 시작에 실패했습니다.');
       }
@@ -135,14 +154,43 @@ const App: React.FC = () => {
           </Alert>
         )}
 
+        <Box mb={3}>
+          <FormControl fullWidth>
+            <InputLabel id="coin-select-label">거래할 코인 선택</InputLabel>
+            <Select
+              labelId="coin-select-label"
+              value={selectedTicker}
+              label="거래할 코인 선택"
+              onChange={(e) => setSelectedTicker(e.target.value)}
+              disabled={tradingState.isRunning}
+            >
+              {popularCoins.map((coin) => (
+                <MenuItem key={coin.value} value={coin.value}>
+                  {coin.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+
         <Box mb={4}>
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
             <Typography variant="subtitle1">자동매매 상태</Typography>
-            <Chip
-              label={tradingState.isRunning ? '실행중' : '중지됨'}
-              color={tradingState.isRunning ? 'success' : 'default'}
-              size="small"
-            />
+            <Box display="flex" gap={1}>
+              {tradingState.isRunning && (
+                <Chip
+                  label={selectedTicker.replace('KRW-', '')}
+                  color="primary"
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+              <Chip
+                label={tradingState.isRunning ? '실행중' : '중지됨'}
+                color={tradingState.isRunning ? 'success' : 'default'}
+                size="small"
+              />
+            </Box>
           </Box>
           
           <Box display="flex" gap={2} mb={3}>

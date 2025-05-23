@@ -121,3 +121,17 @@ NOTIFICATION_SETTINGS = {
     "notify_on_error": True,        # 오류 발생 시 알림
     "min_signal_strength_for_notification": 0.7  # 알림 발생 최소 신호 강도
 }
+
+# TradingConfig 클래스 추가
+class TradingConfig:
+    def __init__(self, ticker="KRW-BTC"):
+        self.ticker = ticker
+        self.decision_thresholds = DECISION_THRESHOLDS
+        self.investment_ratios = INVESTMENT_RATIOS
+        self.signal_strengths = SIGNAL_STRENGTHS
+        self.indicator_weights = INDICATOR_WEIGHTS
+        self.indicator_usage = INDICATOR_USAGE
+        self.trading_settings = TRADING_SETTINGS
+        self.claude_settings = CLAUDE_SETTINGS
+        self.historical_settings = HISTORICAL_SETTINGS
+        self.notification_settings = NOTIFICATION_SETTINGS

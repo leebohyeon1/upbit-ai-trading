@@ -151,8 +151,8 @@ class TradingApp {
       return this.tradingState;
     });
 
-    ipcMain.handle('start-trading', async () => {
-      return await this.startTrading();
+    ipcMain.handle('start-trading', async (event, ticker: string) => {
+      return await this.startTrading(ticker);
     });
 
     ipcMain.handle('stop-trading', async () => {
@@ -213,10 +213,10 @@ class TradingApp {
     }
   }
 
-  private async startTrading(): Promise<boolean> {
+  private async startTrading(ticker: string = 'KRW-BTC'): Promise<boolean> {
     try {
       // API 서버에 자동매매 시작 요청
-      const success = await apiClient.startTrading(this.tradingState.aiEnabled);
+      const success = await apiClient.startTrading(this.tradingState.aiEnabled, ticker);
       
       if (success) {
         this.tradingState.isRunning = true;

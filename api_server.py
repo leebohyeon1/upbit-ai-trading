@@ -45,12 +45,14 @@ class TradingState:
         self.trading_engine = None
         self.stop_flag = False
         self.logger = None
+        self.ticker = "KRW-BTC"
         
 trading_state = TradingState()
 
 # 요청/응답 모델
 class StartTradingRequest(BaseModel):
     ai_enabled: bool = False
+    ticker: str = "KRW-BTC"
 
 class ToggleAIRequest(BaseModel):
     enabled: bool
@@ -58,6 +60,7 @@ class ToggleAIRequest(BaseModel):
 class TradingStatusResponse(BaseModel):
     is_running: bool
     ai_enabled: bool
+    ticker: str = "KRW-BTC"
     current_price: Optional[float] = None
     position: Optional[str] = None
     profit_rate: Optional[float] = None
@@ -77,6 +80,7 @@ async def get_status():
     return TradingStatusResponse(
         is_running=trading_state.is_running,
         ai_enabled=trading_state.ai_enabled,
+        ticker=trading_state.ticker,
         # 실제 구현시 봇에서 데이터 가져오기
         current_price=None,
         position=None,
@@ -107,7 +111,7 @@ def run_trading_bot():
             market_analyzer=market_analyzer,
             technical_indicators=technical_indicators,
             logger=trading_state.logger,
-            config=TradingConfig()
+            config=TradingConfig(ticker=trading_state.ticker)
         )
         
         # 트레이딩 루프 실행
@@ -137,6 +141,7 @@ async def start_trading(request: StartTradingRequest, background_tasks: Backgrou
     try:
         trading_state.is_running = True
         trading_state.ai_enabled = request.ai_enabled
+        trading_state.ticker = request.ticker
         trading_state.stop_flag = False
         trading_state.last_update = datetime.now()
         
