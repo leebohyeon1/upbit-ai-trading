@@ -1,5 +1,34 @@
 # Upbit AI Trading Bot
 
+## 실행 방법
+
+### 방법 1: 전체 시스템 한번에 실행 (권장)
+```bash
+run-all.bat
+```
+
+### 방법 2: 개별 실행
+1. API 서버 실행:
+```bash
+start-api-server.bat
+```
+
+2. 데스크탑 앱 실행:
+```bash
+cd desktop-app
+run.bat
+```
+
+### 개발 모드
+```bash
+# API 서버 (터미널 1)
+python api_server.py
+
+# 데스크탑 앱 (터미널 2)
+cd desktop-app
+npm run dev
+```
+
 업비트 거래소에서 비트코인 자동매매를 수행하는 AI 트레이딩 봇입니다.
 
 ## 주요 기능

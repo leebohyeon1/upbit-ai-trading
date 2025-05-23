@@ -38,7 +38,13 @@ class TradingApp {
       this.createWindow();
       this.createTray();
       this.setupIPC();
-      this.startPythonBackend();
+      // API 서버는 별도로 실행하도록 변경
+      // this.startPythonBackend();
+      
+      // 3초 후 API 서버 연결 시도
+      setTimeout(() => {
+        this.loadInitialState();
+      }, 3000);
     });
 
     app.on('window-all-closed', () => {
@@ -163,32 +169,45 @@ class TradingApp {
   }
 
   private startPythonBackend() {
-    const apiServerPath = path.join(__dirname, '..', '..', '..', 'api_server.py');
+    // Windows에서는 실행 파일이 dist 폴더에 있으므로 경로 조정
+    const isDev = !app.isPackaged;
+    const apiServerPath = isDev 
+      ? path.join(__dirname, '..', '..', '..', 'api_server.py')
+      : path.join(process.resourcesPath, '..', '..', 'api_server.py');
     
     try {
       // FastAPI 서버 자동 시작
-      console.log('Starting API server...');
-      this.pythonProcess = spawn('python', [apiServerPath], {
-        cwd: path.join(__dirname, '..', '..', '..'),
-        shell: true
+      console.log('Starting API server at:', apiServerPath);
+      
+      // Windows에서 Python 가상환경 확인
+      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+      
+      this.pythonProcess = spawn(pythonCmd, [apiServerPath], {
+        cwd: path.dirname(apiServerPath),
+        shell: true,
+        env: { ...process.env }
       });
       
       this.pythonProcess.stdout?.on('data', (data) => {
-        console.log(`API Server: ${data}`);
+        console.log(`API Server: ${data.toString()}`);
       });
       
       this.pythonProcess.stderr?.on('data', (data) => {
-        console.error(`API Server Error: ${data}`);
+        console.error(`API Server Error: ${data.toString()}`);
+      });
+      
+      this.pythonProcess.on('error', (error) => {
+        console.error('Failed to start API server:', error);
       });
       
       this.pythonProcess.on('close', (code) => {
         console.log(`API Server exited with code ${code}`);
       });
       
-      // API 서버가 시작될 때까지 잠시 대기
+      // API 서버가 시작될 때까지 더 길게 대기
       setTimeout(() => {
         this.loadInitialState();
-      }, 2000);
+      }, 5000);
     } catch (error) {
       console.error('Failed to start Python backend:', error);
     }
