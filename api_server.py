@@ -15,12 +15,13 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.strategy.decision import TradingEngine
+from src.strategy.analyzer import SignalAnalyzer
 from src.api.upbit_api import UpbitAPI
 from src.api.claude_api import ClaudeAPI
-from src.indicators.market import MarketAnalyzer
+from src.indicators.market import MarketIndicators
 from src.indicators.technical import TechnicalIndicators
 from src.utils.logger import setup_logger
-from config.trading_config import TradingConfig
+from config.trading_config import *
 from config.app_config import load_environment
 import time
 
@@ -101,24 +102,56 @@ def run_trading_bot():
         claude_api = ClaudeAPI() if trading_state.ai_enabled else None
         
         # 분석기 인스턴스 생성
-        market_analyzer = MarketAnalyzer(upbit_api)
+        market_indicators = MarketIndicators(upbit_api)
         technical_indicators = TechnicalIndicators()
+        
+        # 설정 딕셔너리 생성
+        config = {
+            "DECISION_THRESHOLDS": DECISION_THRESHOLDS,
+            "INVESTMENT_RATIOS": INVESTMENT_RATIOS,
+            "SIGNAL_STRENGTHS": SIGNAL_STRENGTHS,
+            "INDICATOR_WEIGHTS": INDICATOR_WEIGHTS,
+            "INDICATOR_USAGE": INDICATOR_USAGE,
+            "TRADING_SETTINGS": TRADING_SETTINGS,
+            "CLAUDE_SETTINGS": CLAUDE_SETTINGS,
+            "HISTORICAL_SETTINGS": HISTORICAL_SETTINGS,
+            "NOTIFICATION_SETTINGS": NOTIFICATION_SETTINGS
+        }
+        
+        # SignalAnalyzer 생성
+        signal_analyzer = SignalAnalyzer(
+            config=config,
+            market_indicators=market_indicators,
+            technical_indicators=technical_indicators,
+            upbit_api=upbit_api,
+            claude_api=claude_api,
+            logger=trading_state.logger
+        )
         
         # 트레이딩 엔진 생성
         trading_state.trading_engine = TradingEngine(
+            config=config,
             upbit_api=upbit_api,
-            claude_api=claude_api,
-            market_analyzer=market_analyzer,
-            technical_indicators=technical_indicators,
-            logger=trading_state.logger,
-            config=TradingConfig(ticker=trading_state.ticker)
+            signal_analyzer=signal_analyzer
         )
         
         # 트레이딩 루프 실행
-        trading_state.logger.info("자동매매 시작")
+        trading_state.logger.info(f"자동매매 시작 - 티커: {trading_state.ticker}, AI: {trading_state.ai_enabled}")
         while not trading_state.stop_flag:
             try:
-                trading_state.trading_engine.run_trading_cycle()
+                # analyze_market 메서드 실행
+                analysis_result = signal_analyzer.analyze_market(trading_state.ticker)
+                
+                # 거래 실행
+                if analysis_result['decision'] != 'hold':
+                    trading_state.trading_engine.execute_trade(
+                        ticker=trading_state.ticker,
+                        decision=analysis_result['decision'],
+                        confidence=analysis_result['confidence'],
+                        analysis_result=analysis_result
+                    )
+                
+                # 대기
                 time.sleep(60)  # 1분 대기
             except Exception as e:
                 trading_state.logger.error(f"트레이딩 사이클 오류: {e}")
