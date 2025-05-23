@@ -6,7 +6,9 @@
   "scripts": {
     "start": "npm run build && electron .",
     "build": "webpack",
-    "dev": "webpack --watch & electron .",
+    "dev": "concurrently \"webpack --watch\" \"electron .\"",
+    "dev:build": "webpack --watch",
+    "dev:electron": "electron .",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win"
   },
@@ -21,6 +23,7 @@
   "type": "commonjs",
   "devDependencies": {
     "@types/node": "^22.15.21",
+    "concurrently": "^8.2.2",
     "copy-webpack-plugin": "^13.0.0",
     "css-loader": "^7.1.2",
     "electron": "^36.3.1",
