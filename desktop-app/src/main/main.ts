@@ -70,8 +70,8 @@ class TradingApp {
 
   private createWindow() {
     this.mainWindow = new BrowserWindow({
-      width: 800,
-      height: 600,
+      width: 1000,
+      height: 700,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -151,8 +151,8 @@ class TradingApp {
       return this.tradingState;
     });
 
-    ipcMain.handle('start-trading', async (event, ticker: string) => {
-      return await this.startTrading(ticker);
+    ipcMain.handle('start-trading', async (event, tickers: string[]) => {
+      return await this.startTrading(tickers);
     });
 
     ipcMain.handle('stop-trading', async () => {
@@ -213,10 +213,10 @@ class TradingApp {
     }
   }
 
-  private async startTrading(ticker: string = 'KRW-BTC'): Promise<boolean> {
+  private async startTrading(tickers: string[] = ['KRW-BTC']): Promise<boolean> {
     try {
-      // API 서버에 자동매매 시작 요청
-      const success = await apiClient.startTrading(this.tradingState.aiEnabled, ticker);
+      // API 서버에 자동매매 시작 요청 (첫 번째 티커만 전송 - 백엔드 수정 필요)
+      const success = await apiClient.startTrading(this.tradingState.aiEnabled, tickers[0]);
       
       if (success) {
         this.tradingState.isRunning = true;
