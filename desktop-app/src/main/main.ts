@@ -39,9 +39,6 @@ class TradingApp {
       this.createTray();
       this.setupIPC();
       this.startPythonBackend();
-      
-      // API 서버에서 초기 상태 로드
-      await this.loadInitialState();
     });
 
     app.on('window-all-closed', () => {
@@ -52,6 +49,10 @@ class TradingApp {
 
     app.on('before-quit', () => {
       this.isQuitting = true;
+      // 앱 종료시 Python 프로세스도 종료
+      if (this.pythonProcess) {
+        this.pythonProcess.kill();
+      }
     });
 
     app.on('activate', () => {
@@ -162,14 +163,32 @@ class TradingApp {
   }
 
   private startPythonBackend() {
-    const pythonPath = path.join(__dirname, '..', '..', '..', 'src', 'main.py');
+    const apiServerPath = path.join(__dirname, '..', '..', '..', 'api_server.py');
     
     try {
-      // Python 프로세스 시작 (실제로는 FastAPI 서버를 시작해야 함)
-      console.log('Python backend would start here:', pythonPath);
-      // this.pythonProcess = spawn('python', [pythonPath]);
+      // FastAPI 서버 자동 시작
+      console.log('Starting API server...');
+      this.pythonProcess = spawn('python', [apiServerPath], {
+        cwd: path.join(__dirname, '..', '..', '..'),
+        shell: true
+      });
       
-      // 실제 구현시에는 FastAPI 서버와 통신
+      this.pythonProcess.stdout?.on('data', (data) => {
+        console.log(`API Server: ${data}`);
+      });
+      
+      this.pythonProcess.stderr?.on('data', (data) => {
+        console.error(`API Server Error: ${data}`);
+      });
+      
+      this.pythonProcess.on('close', (code) => {
+        console.log(`API Server exited with code ${code}`);
+      });
+      
+      // API 서버가 시작될 때까지 잠시 대기
+      setTimeout(() => {
+        this.loadInitialState();
+      }, 2000);
     } catch (error) {
       console.error('Failed to start Python backend:', error);
     }
