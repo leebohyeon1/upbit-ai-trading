@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } from 'electron';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
+import apiClient from './api-client';
 
 class TradingApp {
   private mainWindow: BrowserWindow | null = null;
@@ -33,11 +34,14 @@ class TradingApp {
       }
     });
 
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
       this.createWindow();
       this.createTray();
       this.setupIPC();
       this.startPythonBackend();
+      
+      // API 서버에서 초기 상태 로드
+      await this.loadInitialState();
     });
 
     app.on('window-all-closed', () => {
@@ -173,17 +177,21 @@ class TradingApp {
 
   private async startTrading(): Promise<boolean> {
     try {
-      // Python 백엔드에 자동매매 시작 요청
-      this.tradingState.isRunning = true;
-      this.tradingState.lastUpdate = new Date().toISOString();
+      // API 서버에 자동매매 시작 요청
+      const success = await apiClient.startTrading(this.tradingState.aiEnabled);
       
-      // 트레이 메뉴 업데이트
-      this.updateTrayMenu();
+      if (success) {
+        this.tradingState.isRunning = true;
+        this.tradingState.lastUpdate = new Date().toISOString();
+        
+        // 트레이 메뉴 업데이트
+        this.updateTrayMenu();
+        
+        // 렌더러에 상태 업데이트 알림
+        this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      }
       
-      // 렌더러에 상태 업데이트 알림
-      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
-      
-      return true;
+      return success;
     } catch (error) {
       console.error('Failed to start trading:', error);
       return false;
@@ -192,17 +200,21 @@ class TradingApp {
 
   private async stopTrading(): Promise<boolean> {
     try {
-      // Python 백엔드에 자동매매 중지 요청
-      this.tradingState.isRunning = false;
-      this.tradingState.lastUpdate = new Date().toISOString();
+      // API 서버에 자동매매 중지 요청
+      const success = await apiClient.stopTrading();
       
-      // 트레이 메뉴 업데이트
-      this.updateTrayMenu();
+      if (success) {
+        this.tradingState.isRunning = false;
+        this.tradingState.lastUpdate = new Date().toISOString();
+        
+        // 트레이 메뉴 업데이트
+        this.updateTrayMenu();
+        
+        // 렌더러에 상태 업데이트 알림
+        this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      }
       
-      // 렌더러에 상태 업데이트 알림
-      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
-      
-      return true;
+      return success;
     } catch (error) {
       console.error('Failed to stop trading:', error);
       return false;
@@ -211,17 +223,35 @@ class TradingApp {
 
   private async toggleAI(enabled: boolean): Promise<boolean> {
     try {
-      // Python 백엔드에 AI 설정 변경 요청
-      this.tradingState.aiEnabled = enabled;
-      this.tradingState.lastUpdate = new Date().toISOString();
+      // API 서버에 AI 설정 변경 요청
+      const success = await apiClient.toggleAI(enabled);
       
-      // 렌더러에 상태 업데이트 알림
-      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      if (success) {
+        this.tradingState.aiEnabled = enabled;
+        this.tradingState.lastUpdate = new Date().toISOString();
+        
+        // 렌더러에 상태 업데이트 알림
+        this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      }
       
-      return true;
+      return success;
     } catch (error) {
       console.error('Failed to toggle AI:', error);
       return false;
+    }
+  }
+
+  private async loadInitialState() {
+    try {
+      const status = await apiClient.getStatus();
+      this.tradingState.isRunning = status.is_running;
+      this.tradingState.aiEnabled = status.ai_enabled;
+      this.tradingState.lastUpdate = new Date().toISOString();
+      
+      this.updateTrayMenu();
+      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+    } catch (error) {
+      console.error('Failed to load initial state:', error);
     }
   }
 
