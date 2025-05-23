@@ -9,9 +9,20 @@ import asyncio
 import threading
 from datetime import datetime
 
-# 기존 모듈 임포트 (실제 구현시)
-# from src.main import TradingBot
-# from src.main_dual import DualTradingBot
+# 기존 모듈 임포트
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src.strategy.decision import TradingEngine
+from src.api.upbit_api import UpbitAPI
+from src.api.claude_api import ClaudeAPI
+from src.indicators.market import MarketAnalyzer
+from src.indicators.technical import TechnicalIndicators
+from src.utils.logger import setup_logger
+from config.trading_config import TradingConfig
+from config.app_config import load_environment
+import time
 
 app = FastAPI(title="Upbit AI Trading API")
 
@@ -31,6 +42,9 @@ class TradingState:
         self.ai_enabled = False
         self.bot_thread = None
         self.last_update = datetime.now()
+        self.trading_engine = None
+        self.stop_flag = False
+        self.logger = None
         
 trading_state = TradingState()
 
@@ -69,6 +83,51 @@ async def get_status():
         profit_rate=None
     )
 
+def run_trading_bot():
+    """트레이딩 봇 실행 함수"""
+    try:
+        # 환경 설정 로드
+        load_environment()
+        
+        # 로거 설정
+        trading_state.logger = setup_logger()
+        
+        # API 인스턴스 생성
+        upbit_api = UpbitAPI()
+        claude_api = ClaudeAPI() if trading_state.ai_enabled else None
+        
+        # 분석기 인스턴스 생성
+        market_analyzer = MarketAnalyzer(upbit_api)
+        technical_indicators = TechnicalIndicators()
+        
+        # 트레이딩 엔진 생성
+        trading_state.trading_engine = TradingEngine(
+            upbit_api=upbit_api,
+            claude_api=claude_api,
+            market_analyzer=market_analyzer,
+            technical_indicators=technical_indicators,
+            logger=trading_state.logger,
+            config=TradingConfig()
+        )
+        
+        # 트레이딩 루프 실행
+        trading_state.logger.info("자동매매 시작")
+        while not trading_state.stop_flag:
+            try:
+                trading_state.trading_engine.run_trading_cycle()
+                time.sleep(60)  # 1분 대기
+            except Exception as e:
+                trading_state.logger.error(f"트레이딩 사이클 오류: {e}")
+                time.sleep(60)
+                
+    except Exception as e:
+        if trading_state.logger:
+            trading_state.logger.error(f"트레이딩 봇 실행 오류: {e}")
+        print(f"트레이딩 봇 실행 오류: {e}")
+    finally:
+        trading_state.is_running = False
+        trading_state.stop_flag = False
+
 @app.post("/start", response_model=SuccessResponse)
 async def start_trading(request: StartTradingRequest, background_tasks: BackgroundTasks):
     """자동매매 시작"""
@@ -78,16 +137,13 @@ async def start_trading(request: StartTradingRequest, background_tasks: Backgrou
     try:
         trading_state.is_running = True
         trading_state.ai_enabled = request.ai_enabled
+        trading_state.stop_flag = False
         trading_state.last_update = datetime.now()
         
-        # 실제 구현시 봇 시작
-        # if request.ai_enabled:
-        #     bot = DualTradingBot()
-        # else:
-        #     bot = TradingBot()
-        # 
-        # trading_state.bot_thread = threading.Thread(target=bot.run)
-        # trading_state.bot_thread.start()
+        # 별도 스레드에서 트레이딩 봇 실행
+        trading_state.bot_thread = threading.Thread(target=run_trading_bot)
+        trading_state.bot_thread.daemon = True
+        trading_state.bot_thread.start()
         
         return SuccessResponse(success=True, message="Trading started")
     except Exception as e:
@@ -101,12 +157,17 @@ async def stop_trading():
         return SuccessResponse(success=False, message="Not running")
     
     try:
-        trading_state.is_running = False
+        trading_state.stop_flag = True
         trading_state.last_update = datetime.now()
         
-        # 실제 구현시 봇 중지
-        # if trading_state.bot_thread:
-        #     trading_state.bot_thread.join(timeout=5)
+        # 봇 스레드 종료 대기
+        if trading_state.bot_thread:
+            trading_state.bot_thread.join(timeout=5)
+        
+        trading_state.is_running = False
+        
+        if trading_state.logger:
+            trading_state.logger.info("자동매매 중지")
         
         return SuccessResponse(success=True, message="Trading stopped")
     except Exception as e:
@@ -121,8 +182,16 @@ async def toggle_ai(request: ToggleAIRequest):
         
         # 실행 중이면 봇 재시작
         if trading_state.is_running:
-            # 실제 구현시 봇 재시작 로직
-            pass
+            # 현재 봇 중지
+            trading_state.stop_flag = True
+            if trading_state.bot_thread:
+                trading_state.bot_thread.join(timeout=5)
+            
+            # 새로운 설정으로 재시작
+            trading_state.stop_flag = False
+            trading_state.bot_thread = threading.Thread(target=run_trading_bot)
+            trading_state.bot_thread.daemon = True
+            trading_state.bot_thread.start()
         
         return SuccessResponse(success=True, message=f"AI {'enabled' if request.enabled else 'disabled'}")
     except Exception as e:

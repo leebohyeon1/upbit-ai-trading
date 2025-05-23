@@ -1,5 +1,19 @@
 # Upbit AI Trading Bot
 
+## 초기 설정
+
+1. `.env` 파일 생성:
+   - `.env.example` 파일을 복사하여 `.env` 파일 생성
+   - Upbit API 키 입력 (https://upbit.com/mypage/open_api_management 에서 발급)
+   - AI 기능 사용시 Anthropic API 키 입력
+
+2. Python 가상환경 설정 (권장):
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+```
+
 ## 실행 방법
 
 ### 방법 1: 전체 시스템 한번에 실행 (권장)
