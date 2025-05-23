@@ -4,28 +4,38 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import App from './App';
 
-const darkTheme = createTheme({
+console.log('Renderer process started');
+
+const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     primary: {
       main: '#1976d2',
     },
     secondary: {
       main: '#dc004e',
     },
-    background: {
-      default: '#121212',
-      paper: '#1e1e1e',
-    },
   },
 });
 
-const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
-root.render(
-  <React.StrictMode>
-    <ThemeProvider theme={darkTheme}>
-      <CssBaseline />
-      <App />
-    </ThemeProvider>
-  </React.StrictMode>
-);
+try {
+  const rootElement = document.getElementById('root');
+  console.log('Root element:', rootElement);
+  
+  if (!rootElement) {
+    console.error('Root element not found!');
+  } else {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <App />
+        </ThemeProvider>
+      </React.StrictMode>
+    );
+    console.log('React app rendered');
+  }
+} catch (error) {
+  console.error('Error rendering app:', error);
+}

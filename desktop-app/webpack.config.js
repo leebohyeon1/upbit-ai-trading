@@ -30,6 +30,7 @@ module.exports = [
     mode: 'development',
     entry: './src/renderer/index.tsx',
     target: 'electron-renderer',
+    devtool: 'source-map',
     module: {
       rules: [
         {
