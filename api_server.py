@@ -22,8 +22,8 @@ from src.indicators.market import MarketIndicators
 from src.indicators.technical import TechnicalIndicators
 from src.utils.logger import Logger
 from config.trading_config import *
-from config.app_config import load_environment
 import time
+from dotenv import load_dotenv
 
 app = FastAPI(title="Upbit AI Trading API")
 
@@ -92,7 +92,7 @@ def run_trading_bot():
     """트레이딩 봇 실행 함수"""
     try:
         # 환경 설정 로드
-        load_environment()
+        load_dotenv()
         
         # 로거 설정
         logger_instance = Logger()
