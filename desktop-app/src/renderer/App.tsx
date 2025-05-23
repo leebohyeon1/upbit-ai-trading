@@ -22,11 +22,11 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Checkbox,
-  Grid,
   Card,
   CardContent,
   Divider,
 } from '@mui/material';
+import Grid from '@mui/material/Grid2';
 import {
   PlayArrow,
   Stop,
@@ -253,7 +253,7 @@ const App: React.FC = () => {
 
         <TabPanel value={tabValue} index={0}>
           <Grid container spacing={3}>
-            <Grid item xs={12}>
+            <Grid size={12}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -306,7 +306,7 @@ const App: React.FC = () => {
               </Card>
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid size={12}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -340,7 +340,7 @@ const App: React.FC = () => {
 
         <TabPanel value={tabValue} index={1}>
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -375,7 +375,7 @@ const App: React.FC = () => {
               </Card>
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid size={12}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
