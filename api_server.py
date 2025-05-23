@@ -144,23 +144,46 @@ def run_trading_bot_for_ticker(ticker: str):
         logger_instance.log_app(f"자동매매 시작 - 티커: {ticker}, AI: {trading_state.ai_enabled}")
         while not trading_state.stop_flag and ticker in trading_state.active_tickers:
             try:
-                # analyze 메서드 실행 (MarketAnalyzer의 analyze 메서드 호출)
-                analysis_result = signal_analyzer.analyze(ticker)
+                # 현재 시장 데이터 가져오기
+                market_data = {
+                    "ticker": ticker,
+                    "current_price": upbit_api.get_current_price(ticker),
+                    "orderbook": upbit_api.get_orderbook(ticker)
+                }
+                
+                # analyze 메서드 실행
+                # SignalAnalyzer.analyze(market_data, ticker) 형태로 호출
+                analysis_result = signal_analyzer.analyze(market_data, ticker)
+                
+                # analysis_result가 None인지 확인
+                if analysis_result is None:
+                    logger_instance.log_error(f"[{ticker}] 분석 결과가 None입니다.")
+                    time.sleep(60)
+                    continue
                 
                 # 거래 실행
-                if analysis_result['decision'] != 'hold':
+                if analysis_result.get('decision') != 'hold':
                     trading_engine.execute_trade(
                         ticker=ticker,
-                        decision=analysis_result['decision'],
-                        confidence=analysis_result['confidence'],
+                        decision=analysis_result.get('decision'),
+                        confidence=analysis_result.get('confidence', 0),
                         analysis_result=analysis_result
                     )
                 
-                # 대기
-                time.sleep(60)  # 1분 대기
+                # 대기 (중지 플래그 확인을 위해 짧은 간격으로 나누어 대기)
+                for _ in range(60):  # 1초씩 60번 = 1분
+                    if trading_state.stop_flag or ticker not in trading_state.active_tickers:
+                        break
+                    time.sleep(1)
             except Exception as e:
                 logger_instance.log_error(f"[{ticker}] 트레이딩 사이클 오류: {e}")
-                time.sleep(60)
+                import traceback
+                traceback.print_exc()
+                # 오류 발생 시에도 짧은 간격으로 대기
+                for _ in range(60):
+                    if trading_state.stop_flag or ticker not in trading_state.active_tickers:
+                        break
+                    time.sleep(1)
                 
     except Exception as e:
         print(f"[{ticker}] 트레이딩 봇 실행 오류: {e}")
@@ -228,15 +251,15 @@ async def stop_trading():
         trading_state.stop_flag = True
         trading_state.last_update = datetime.now()
         
-        # 모든 봇 스레드 종료 대기
-        stopped_tickers = []
-        for ticker, thread in list(trading_state.bot_threads.items()):
-            thread.join(timeout=5)
-            if not thread.is_alive():
-                stopped_tickers.append(ticker)
-        
-        # 활성 티커 목록 초기화
+        # 활성 티커 목록을 먼저 비우기 (스레드 루프 종료 신호)
+        stopped_tickers = trading_state.active_tickers.copy()
         trading_state.active_tickers = []
+        
+        # 모든 봇 스레드 종료 대기
+        for ticker, thread in list(trading_state.bot_threads.items()):
+            thread.join(timeout=2)  # 타임아웃 단축
+        
+        # 정리
         trading_state.bot_threads.clear()
         trading_state.trading_engines.clear()
         trading_state.is_running = False
