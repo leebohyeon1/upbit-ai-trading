@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Paper,
   Box,
   Typography,
@@ -121,7 +120,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ p: 3, height: 'calc(100vh - 180px)', overflow: 'auto' }}>{children}</Box>}
     </div>
   );
 }
@@ -435,10 +434,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 2, height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* 상단 고정 영역 */}
-      <Paper elevation={3} sx={{ position: 'sticky', top: 0, zIndex: 1100, mb: 2 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" p={2}>
+      <Paper elevation={3} sx={{ position: 'sticky', top: 0, zIndex: 1100 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" px={3} py={2}>
           <Box display="flex" alignItems="center" gap={2}>
             <TrendingUp fontSize="large" color="primary" />
             <Typography variant="h5" component="h1">
@@ -491,7 +490,7 @@ const App: React.FC = () => {
           </Box>
         </Box>
 
-        <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
           <Tab icon={<Dashboard />} label="대시보드" />
           <Tab icon={<AccountBalance />} label="포트폴리오" />
           <Tab icon={<Tune />} label="분석설정" />
@@ -500,21 +499,21 @@ const App: React.FC = () => {
       </Paper>
 
       {/* 메인 콘텐츠 영역 - 스크롤 가능 */}
-      <Paper elevation={3} sx={{ flex: 1, overflow: 'auto' }}>
+      <Paper elevation={0} sx={{ flex: 1, overflow: 'auto', borderRadius: 0, height: 'calc(100vh - 120px)' }}>
         {error && (
-          <Alert severity="error" sx={{ mx: 2, mt: 2, mb: 2 }} onClose={() => setError(null)}>
+          <Alert severity="error" sx={{ mx: 3, mt: 2, mb: 2 }} onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
 
         {successMessage && (
-          <Alert severity="success" sx={{ mx: 2, mt: 2, mb: 2 }} onClose={() => setSuccessMessage(null)}>
+          <Alert severity="success" sx={{ mx: 3, mt: 2, mb: 2 }} onClose={() => setSuccessMessage(null)}>
             {successMessage}
           </Alert>
         )}
 
         <TabPanel value={tabValue} index={0}>
-          <Box sx={{ display: 'flex', height: '100%', gap: 2 }}>
+          <Box sx={{ display: 'flex', height: 'calc(100vh - 240px)', gap: 2 }}>
             {/* Left Sidebar */}
             <Box sx={{ width: 280, display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* Portfolio Summary Card */}
@@ -941,7 +940,7 @@ const App: React.FC = () => {
           </Typography>
         </Box>
       </Paper>
-    </Container>
+    </Box>
   );
 };
 
