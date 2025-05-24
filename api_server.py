@@ -379,7 +379,8 @@ async def broadcast_analysis_update(analysis_data):
     
     # 연결이 끊긴 클라이언트 제거
     for websocket in disconnected:
-        trading_state.websocket_clients.remove(websocket)
+        if websocket in trading_state.websocket_clients:
+            trading_state.websocket_clients.remove(websocket)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -403,8 +404,14 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
-        trading_state.websocket_clients.remove(websocket)
-        await websocket.close()
+        # 클라이언트 목록에서 제거
+        if websocket in trading_state.websocket_clients:
+            trading_state.websocket_clients.remove(websocket)
+        # WebSocket이 이미 닫혔는지 확인
+        try:
+            await websocket.close()
+        except:
+            pass  # 이미 닫혀있으면 무시
 
 if __name__ == "__main__":
     import uvicorn
