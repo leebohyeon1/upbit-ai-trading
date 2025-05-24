@@ -36,6 +36,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 앱 종료 시 정리 작업
+@app.on_event("shutdown")
+async def shutdown_event():
+    """앱 종료 시 모든 트레이딩 봇 정리"""
+    print("Shutting down trading bots...")
+    
+    # 모든 봇 중지
+    trading_state.stop_flag = True
+    
+    # WebSocket 클라이언트 정리
+    for websocket in list(trading_state.websocket_clients):
+        try:
+            await websocket.close()
+        except:
+            pass
+    trading_state.websocket_clients.clear()
+    
+    # 봇 스레드 종료 대기
+    for ticker, thread in list(trading_state.bot_threads.items()):
+        thread.join(timeout=1)
+    
+    print("Shutdown complete")
+
 # 전역 상태 관리
 class TradingState:
     def __init__(self):
@@ -405,8 +428,12 @@ async def websocket_endpoint(websocket: WebSocket):
             }
             await websocket.send_text(json.dumps(data))
             await asyncio.sleep(5)  # 5초마다 상태 업데이트
+    except asyncio.CancelledError:
+        # 정상적인 종료
+        pass
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        if not isinstance(e, (ConnectionResetError, ConnectionAbortedError)):
+            print(f"WebSocket error: {e}")
     finally:
         # 클라이언트 목록에서 제거
         if websocket in trading_state.websocket_clients:
@@ -419,4 +446,22 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import signal
+    import sys
+    
+    def signal_handler(sig, frame):
+        print("\nShutting down gracefully...")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    try:
+        uvicorn.run(
+            app, 
+            host="0.0.0.0", 
+            port=8000,
+            loop="asyncio",
+            access_log=False  # 액세스 로그 비활성화로 깔끔한 출력
+        )
+    except KeyboardInterrupt:
+        print("\nServer stopped by user")
