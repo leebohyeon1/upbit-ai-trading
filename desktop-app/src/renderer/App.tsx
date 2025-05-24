@@ -441,7 +441,23 @@ const App: React.FC = () => {
               Upbit AI Trading
             </Typography>
           </Box>
-          <Box display="flex" alignItems="center" gap={2}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={tradingState.aiEnabled}
+                  onChange={handleToggleAI}
+                  size="small"
+                />
+              }
+              label={
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <Psychology fontSize="small" />
+                  <Typography variant="body2">AI</Typography>
+                </Box>
+              }
+              sx={{ mr: 1 }}
+            />
             {tradingState.isRunning ? (
               <Button
                 variant="contained"
@@ -526,33 +542,6 @@ const App: React.FC = () => {
                 </CardContent>
               </Card>
 
-              {/* AI Settings Card */}
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    AI 설정
-                  </Typography>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={tradingState.aiEnabled}
-                        onChange={handleToggleAI}
-                      />
-                    }
-                    label={
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Psychology />
-                        <Typography>AI 분석 기능</Typography>
-                        <Chip
-                          label={tradingState.aiEnabled ? 'ON' : 'OFF'}
-                          color={tradingState.aiEnabled ? 'primary' : 'default'}
-                          size="small"
-                        />
-                      </Box>
-                    }
-                  />
-                </CardContent>
-              </Card>
             </Box>
 
             {/* Right Main Content Area */}
