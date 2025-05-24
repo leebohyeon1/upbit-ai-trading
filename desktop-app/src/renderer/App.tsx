@@ -179,7 +179,11 @@ const App: React.FC = () => {
 
     // 분석 업데이트 리스너 등록
     window.electronAPI.onAnalysisUpdate((analysis) => {
-      setRecentAnalyses(prev => [analysis, ...prev.slice(0, 9)]); // 최근 10개만 유지
+      setRecentAnalyses(prev => {
+        // 각 코인별로 최신 분석만 유지
+        const filtered = prev.filter(a => a.ticker !== analysis.ticker);
+        return [analysis, ...filtered];
+      });
       setNextAnalysisTime(60); // 타이머 리셋
     });
 
@@ -548,7 +552,7 @@ const App: React.FC = () => {
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <Card sx={{ flex: 1 }}>
                 <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                     <Typography variant="h6">
                       최근 분석
                     </Typography>
@@ -561,6 +565,7 @@ const App: React.FC = () => {
                       />
                     )}
                   </Box>
+                  <Divider sx={{ mb: 3 }} />
                   
                   <Box sx={{ flex: 1, overflow: 'auto' }}>
                     {!tradingState.isRunning ? (
@@ -572,45 +577,49 @@ const App: React.FC = () => {
                         첫 분석을 기다리고 있습니다...
                       </Typography>
                     ) : (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {recentAnalyses.map((analysis) => (
-                          <Box 
-                            key={`${analysis.ticker}-${analysis.timestamp}`} 
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {recentAnalyses
+                          .sort((a, b) => a.ticker.localeCompare(b.ticker))
+                          .map((analysis) => (
+                          <Card
+                            key={analysis.ticker}
                             sx={{ 
-                              p: 3, 
-                              bgcolor: 'background.default', 
-                              borderRadius: 2,
-                              border: '1px solid',
-                              borderColor: 'divider',
-                              '&:hover': {
-                                boxShadow: 1
-                              }
+                              border: 2,
+                              borderColor: getDecisionColor(analysis.decision) === 'success' ? 'success.main' :
+                                          getDecisionColor(analysis.decision) === 'error' ? 'error.main' : 'info.main',
                             }}
                           >
-                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                              <Box display="flex" alignItems="center" gap={1.5}>
-                                <Chip
-                                  label={analysis.ticker.replace('KRW-', '')}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                                <Chip
-                                  label={getDecisionText(analysis.decision)}
-                                  color={getDecisionColor(analysis.decision) as any}
-                                  size="small"
-                                />
-                                <Typography variant="caption" color="text.secondary">
-                                  신뢰도: {(analysis.confidence * 100).toFixed(1)}%
-                                </Typography>
+                            <CardContent>
+                              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                                <Box display="flex" alignItems="center" gap={2}>
+                                  <Typography variant="h4" fontWeight="bold">
+                                    {analysis.ticker.replace('KRW-', '')}
+                                  </Typography>
+                                  <Chip
+                                    label={getDecisionText(analysis.decision)}
+                                    color={getDecisionColor(analysis.decision) as any}
+                                    variant="filled"
+                                    size="medium"
+                                  />
+                                </Box>
+                                <Box textAlign="right">
+                                  <Typography variant="h5" color={getDecisionColor(analysis.decision) as any} fontWeight="bold">
+                                    {(analysis.confidence * 100).toFixed(0)}%
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    신뢰도
+                                  </Typography>
+                                </Box>
                               </Box>
-                              <Typography variant="caption" color="text.secondary">
-                                {new Date(analysis.timestamp).toLocaleTimeString('ko-KR')}
+                              <Divider sx={{ mb: 2 }} />
+                              <Typography variant="body1" sx={{ lineHeight: 1.8, mb: 2 }}>
+                                {analysis.reason}
                               </Typography>
-                            </Box>
-                            <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
-                              {analysis.reason}
-                            </Typography>
-                          </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                최근 분석: {new Date(analysis.timestamp).toLocaleString('ko-KR')}
+                              </Typography>
+                            </CardContent>
+                          </Card>
                         ))}
                       </Box>
                     )}
