@@ -494,90 +494,10 @@ const App: React.FC = () => {
         )}
 
         <TabPanel value={tabValue} index={0}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box>
-              <Card>
-                <CardContent>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="h6">
-                      최근 분석
-                    </Typography>
-                    {tradingState.isRunning && (
-                      <Chip
-                        icon={<CircularProgress size={16} />}
-                        label={`다음 분석까지: ${nextAnalysisTime}초`}
-                        color="primary"
-                        variant="outlined"
-                      />
-                    )}
-                  </Box>
-                  
-                  {!tradingState.isRunning ? (
-                    <Typography variant="body2" color="text.secondary">
-                      자동매매를 시작하면 분석 결과가 표시됩니다.
-                    </Typography>
-                  ) : recentAnalyses.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      첫 분석을 기다리고 있습니다...
-                    </Typography>
-                  ) : (
-                    <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                      {recentAnalyses.map((analysis, index) => (
-                        <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                            <Box display="flex" alignItems="center" gap={1}>
-                              <Chip
-                                label={analysis.ticker.replace('KRW-', '')}
-                                size="small"
-                                variant="outlined"
-                              />
-                              <Chip
-                                label={getDecisionText(analysis.decision)}
-                                color={getDecisionColor(analysis.decision) as any}
-                                size="small"
-                              />
-                              <Typography variant="caption" color="text.secondary">
-                                신뢰도: {(analysis.confidence * 100).toFixed(1)}%
-                              </Typography>
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                              {new Date(analysis.timestamp).toLocaleTimeString('ko-KR')}
-                            </Typography>
-                          </Box>
-                          <Typography variant="body2">
-                            {analysis.reason}
-                          </Typography>
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-                  
-                  <Divider sx={{ my: 2 }} />
-                  
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={tradingState.aiEnabled}
-                        onChange={handleToggleAI}
-                      />
-                    }
-                    label={
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Psychology />
-                        <Typography>AI 분석 기능</Typography>
-                        <Chip
-                          label={tradingState.aiEnabled ? 'ON' : 'OFF'}
-                          color={tradingState.aiEnabled ? 'primary' : 'default'}
-                          size="small"
-                        />
-                      </Box>
-                    }
-                  />
-                </CardContent>
-              </Card>
-            </Box>
-
-            <Box>
+          <Box sx={{ display: 'flex', height: '100%', gap: 2 }}>
+            {/* Left Sidebar */}
+            <Box sx={{ width: 280, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Portfolio Summary Card */}
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -605,8 +525,110 @@ const App: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {/* AI Settings Card */}
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    AI 설정
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={tradingState.aiEnabled}
+                        onChange={handleToggleAI}
+                      />
+                    }
+                    label={
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Psychology />
+                        <Typography>AI 분석 기능</Typography>
+                        <Chip
+                          label={tradingState.aiEnabled ? 'ON' : 'OFF'}
+                          color={tradingState.aiEnabled ? 'primary' : 'default'}
+                          size="small"
+                        />
+                      </Box>
+                    }
+                  />
+                </CardContent>
+              </Card>
             </Box>
 
+            {/* Right Main Content Area */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <Card sx={{ flex: 1 }}>
+                <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                    <Typography variant="h6">
+                      최근 분석
+                    </Typography>
+                    {tradingState.isRunning && (
+                      <Chip
+                        icon={<CircularProgress size={16} />}
+                        label={`다음 분석까지: ${nextAnalysisTime}초`}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    )}
+                  </Box>
+                  
+                  <Box sx={{ flex: 1, overflow: 'auto' }}>
+                    {!tradingState.isRunning ? (
+                      <Typography variant="body2" color="text.secondary">
+                        자동매매를 시작하면 분석 결과가 표시됩니다.
+                      </Typography>
+                    ) : recentAnalyses.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        첫 분석을 기다리고 있습니다...
+                      </Typography>
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {recentAnalyses.map((analysis) => (
+                          <Box 
+                            key={`${analysis.ticker}-${analysis.timestamp}`} 
+                            sx={{ 
+                              p: 3, 
+                              bgcolor: 'background.default', 
+                              borderRadius: 2,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              '&:hover': {
+                                boxShadow: 1
+                              }
+                            }}
+                          >
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                              <Box display="flex" alignItems="center" gap={1.5}>
+                                <Chip
+                                  label={analysis.ticker.replace('KRW-', '')}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  label={getDecisionText(analysis.decision)}
+                                  color={getDecisionColor(analysis.decision) as any}
+                                  size="small"
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                  신뢰도: {(analysis.confidence * 100).toFixed(1)}%
+                                </Typography>
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(analysis.timestamp).toLocaleTimeString('ko-KR')}
+                              </Typography>
+                            </Box>
+                            <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
+                              {analysis.reason}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Box>
           </Box>
         </TabPanel>
 

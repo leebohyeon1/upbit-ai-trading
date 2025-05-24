@@ -190,7 +190,11 @@ def run_trading_bot_for_ticker(ticker: str):
                 }
                 
                 # 모든 WebSocket 클라이언트에 전송
-                asyncio.run(broadcast_analysis_update(analysis_update))
+                # 새로운 태스크로 생성하여 비동기 실행
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(broadcast_analysis_update(analysis_update))
+                loop.close()
                 
                 # 거래 실행
                 if analysis_result.get('decision') != 'hold':
