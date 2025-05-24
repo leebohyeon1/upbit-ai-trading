@@ -42,6 +42,8 @@ import {
   Visibility,
   VisibilityOff,
   Save,
+  Tune,
+  PowerSettingsNew,
 } from '@mui/icons-material';
 
 interface TradingState {
@@ -79,6 +81,15 @@ interface ApiKeys {
   anthropicApiKey: string;
 }
 
+interface AnalysisConfig {
+  ticker: string;
+  analysisInterval: number; // 분 단위
+  buyThreshold: number; // 0-100
+  sellThreshold: number; // 0-100
+  stopLoss: number; // %
+  takeProfit: number; // %
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -93,6 +104,8 @@ declare global {
       getApiKeys: () => Promise<ApiKeys>;
       savePortfolio: (portfolio: PortfolioCoin[]) => Promise<boolean>;
       getPortfolio: () => Promise<PortfolioCoin[]>;
+      saveAnalysisConfigs: (configs: AnalysisConfig[]) => Promise<boolean>;
+      getAnalysisConfigs: () => Promise<AnalysisConfig[]>;
     };
   }
 }
@@ -136,6 +149,7 @@ const App: React.FC = () => {
   const [recentAnalyses, setRecentAnalyses] = useState<TradingAnalysis[]>([]);
   const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(60);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
+  const [analysisConfigs, setAnalysisConfigs] = useState<AnalysisConfig[]>([]);
   
   // 인기 코인 목록
   const popularCoins = [
@@ -156,6 +170,7 @@ const App: React.FC = () => {
     loadTradingState();
     loadApiKeys();
     loadPortfolio();
+    loadAnalysisConfigs();
 
     // 상태 변경 리스너 등록
     window.electronAPI.onTradingStateChanged((state) => {
@@ -371,6 +386,50 @@ const App: React.FC = () => {
     }
   };
 
+  const loadAnalysisConfigs = async () => {
+    try {
+      const configs = await window.electronAPI.getAnalysisConfigs();
+      setAnalysisConfigs(configs);
+    } catch (err) {
+      console.error('Failed to load analysis configs:', err);
+    }
+  };
+
+  const saveAnalysisConfigs = async () => {
+    try {
+      await window.electronAPI.saveAnalysisConfigs(analysisConfigs);
+      setSuccessMessage('분석 설정이 저장되었습니다.');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError('분석 설정 저장에 실패했습니다.');
+    }
+  };
+
+  const getConfigForTicker = (ticker: string): AnalysisConfig => {
+    const config = analysisConfigs.find(c => c.ticker === ticker);
+    return config || {
+      ticker,
+      analysisInterval: 1, // 기본 1분
+      buyThreshold: 70,
+      sellThreshold: 30,
+      stopLoss: 5,
+      takeProfit: 10
+    };
+  };
+
+  const updateConfigForTicker = (ticker: string, updates: Partial<AnalysisConfig>) => {
+    const newConfigs = [...analysisConfigs];
+    const index = newConfigs.findIndex(c => c.ticker === ticker);
+    
+    if (index >= 0) {
+      newConfigs[index] = { ...newConfigs[index], ...updates };
+    } else {
+      newConfigs.push({ ...getConfigForTicker(ticker), ...updates });
+    }
+    
+    setAnalysisConfigs(newConfigs);
+  };
+
   return (
     <Container maxWidth="md" sx={{ py: 2 }}>
       <Paper elevation={3}>
@@ -382,10 +441,29 @@ const App: React.FC = () => {
             </Typography>
           </Box>
           <Box display="flex" alignItems="center" gap={2}>
-            <Chip
-              label={tradingState.isRunning ? '자동매매 실행중' : '자동매매 중지됨'}
-              color={tradingState.isRunning ? 'success' : 'default'}
-            />
+            {tradingState.isRunning ? (
+              <Button
+                variant="contained"
+                color="error"
+                size="small"
+                startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <Stop />}
+                onClick={handleStopTrading}
+                disabled={loading}
+              >
+                자동매매 중지
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                color="success"
+                size="small"
+                startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <PlayArrow />}
+                onClick={handleStartTrading}
+                disabled={loading || portfolio.filter(c => c.enabled).length === 0}
+              >
+                자동매매 시작
+              </Button>
+            )}
             <IconButton onClick={handleMinimize} size="small">
               <Minimize />
             </IconButton>
@@ -407,6 +485,7 @@ const App: React.FC = () => {
         <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab icon={<Dashboard />} label="대시보드" />
           <Tab icon={<AccountBalance />} label="포트폴리오" />
+          <Tab icon={<Tune />} label="분석설정" />
           <Tab icon={<Settings />} label="환경설정" />
         </Tabs>
 
@@ -415,33 +494,62 @@ const App: React.FC = () => {
             <Box>
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    자동매매 제어
-                  </Typography>
-                  <Box display="flex" gap={2} mb={3}>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      size="large"
-                      startIcon={loading ? <CircularProgress size={20} /> : <PlayArrow />}
-                      onClick={handleStartTrading}
-                      disabled={tradingState.isRunning || loading || portfolio.filter(c => c.enabled).length === 0}
-                      fullWidth
-                    >
-                      자동매매 시작
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      size="large"
-                      startIcon={loading ? <CircularProgress size={20} /> : <Stop />}
-                      onClick={handleStopTrading}
-                      disabled={!tradingState.isRunning || loading}
-                      fullWidth
-                    >
-                      자동매매 중지
-                    </Button>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6">
+                      최근 분석
+                    </Typography>
+                    {tradingState.isRunning && (
+                      <Chip
+                        icon={<CircularProgress size={16} />}
+                        label={`다음 분석까지: ${nextAnalysisTime}초`}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    )}
                   </Box>
+                  
+                  {!tradingState.isRunning ? (
+                    <Typography variant="body2" color="text.secondary">
+                      자동매매를 시작하면 분석 결과가 표시됩니다.
+                    </Typography>
+                  ) : recentAnalyses.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      첫 분석을 기다리고 있습니다...
+                    </Typography>
+                  ) : (
+                    <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                      {recentAnalyses.map((analysis, index) => (
+                        <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Chip
+                                label={analysis.ticker.replace('KRW-', '')}
+                                size="small"
+                                variant="outlined"
+                              />
+                              <Chip
+                                label={getDecisionText(analysis.decision)}
+                                color={getDecisionColor(analysis.decision) as any}
+                                size="small"
+                              />
+                              <Typography variant="caption" color="text.secondary">
+                                신뢰도: {(analysis.confidence * 100).toFixed(1)}%
+                              </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(analysis.timestamp).toLocaleTimeString('ko-KR')}
+                            </Typography>
+                          </Box>
+                          <Typography variant="body2">
+                            {analysis.reason}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                  
+                  <Divider sx={{ my: 2 }} />
+                  
                   <FormControlLabel
                     control={
                       <Switch
@@ -495,61 +603,6 @@ const App: React.FC = () => {
               </Card>
             </Box>
 
-            {tradingState.isRunning && (
-              <Box>
-                <Card>
-                  <CardContent>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Typography variant="h6">
-                        분석 상태
-                      </Typography>
-                      <Chip
-                        icon={<CircularProgress size={16} />}
-                        label={`다음 분석까지: ${nextAnalysisTime}초`}
-                        color="primary"
-                        variant="outlined"
-                      />
-                    </Box>
-                    
-                    {recentAnalyses.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        첫 분석을 기다리고 있습니다...
-                      </Typography>
-                    ) : (
-                      <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                        {recentAnalyses.map((analysis, index) => (
-                          <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                              <Box display="flex" alignItems="center" gap={1}>
-                                <Chip
-                                  label={analysis.ticker.replace('KRW-', '')}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                                <Chip
-                                  label={getDecisionText(analysis.decision)}
-                                  color={getDecisionColor(analysis.decision) as any}
-                                  size="small"
-                                />
-                                <Typography variant="caption" color="text.secondary">
-                                  신뢰도: {(analysis.confidence * 100).toFixed(1)}%
-                                </Typography>
-                              </Box>
-                              <Typography variant="caption" color="text.secondary">
-                                {new Date(analysis.timestamp).toLocaleTimeString('ko-KR')}
-                              </Typography>
-                            </Box>
-                            <Typography variant="body2">
-                              {analysis.reason}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              </Box>
-            )}
           </Box>
         </TabPanel>
 
@@ -647,6 +700,99 @@ const App: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    분석 설정
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    각 코인별로 분석 주기와 거래 임계값을 설정할 수 있습니다.
+                  </Typography>
+                  
+                  {portfolio.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      포트폴리오에 코인을 추가하면 분석 설정을 할 수 있습니다.
+                    </Typography>
+                  ) : (
+                    <Box mt={3}>
+                      {portfolio.map((coin) => {
+                        const config = getConfigForTicker(coin.ticker);
+                        return (
+                          <Box key={coin.ticker} mb={4} p={2} sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                            <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                              {coin.name}
+                            </Typography>
+                            
+                            <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2} mt={2}>
+                              <TextField
+                                label="분석 주기 (분)"
+                                type="number"
+                                value={config.analysisInterval}
+                                onChange={(e) => updateConfigForTicker(coin.ticker, { analysisInterval: parseInt(e.target.value) || 1 })}
+                                InputProps={{ inputProps: { min: 1, max: 60 } }}
+                                size="small"
+                              />
+                              
+                              <TextField
+                                label="매수 임계값 (%)"
+                                type="number"
+                                value={config.buyThreshold}
+                                onChange={(e) => updateConfigForTicker(coin.ticker, { buyThreshold: parseInt(e.target.value) || 70 })}
+                                InputProps={{ inputProps: { min: 50, max: 100 } }}
+                                size="small"
+                              />
+                              
+                              <TextField
+                                label="매도 임계값 (%)"
+                                type="number"
+                                value={config.sellThreshold}
+                                onChange={(e) => updateConfigForTicker(coin.ticker, { sellThreshold: parseInt(e.target.value) || 30 })}
+                                InputProps={{ inputProps: { min: 0, max: 50 } }}
+                                size="small"
+                              />
+                              
+                              <TextField
+                                label="손절 라인 (%)"
+                                type="number"
+                                value={config.stopLoss}
+                                onChange={(e) => updateConfigForTicker(coin.ticker, { stopLoss: parseFloat(e.target.value) || 5 })}
+                                InputProps={{ inputProps: { min: 1, max: 20, step: 0.5 } }}
+                                size="small"
+                              />
+                              
+                              <TextField
+                                label="익절 라인 (%)"
+                                type="number"
+                                value={config.takeProfit}
+                                onChange={(e) => updateConfigForTicker(coin.ticker, { takeProfit: parseFloat(e.target.value) || 10 })}
+                                InputProps={{ inputProps: { min: 5, max: 50, step: 0.5 } }}
+                                size="small"
+                              />
+                            </Box>
+                          </Box>
+                        );
+                      })}
+                      
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Save />}
+                        onClick={saveAnalysisConfigs}
+                        fullWidth
+                      >
+                        분석 설정 저장
+                      </Button>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Box>
+          </Box>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Box>
               <Card>

@@ -190,6 +190,14 @@ class TradingApp {
     ipcMain.handle('get-portfolio', async () => {
       return await this.getPortfolio();
     });
+
+    ipcMain.handle('save-analysis-configs', async (event, configs) => {
+      return await this.saveAnalysisConfigs(configs);
+    });
+
+    ipcMain.handle('get-analysis-configs', async () => {
+      return await this.getAnalysisConfigs();
+    });
   }
 
   private startPythonBackend() {
@@ -369,6 +377,10 @@ class TradingApp {
     return path.join(app.getPath('userData'), 'portfolio.json');
   }
 
+  private getAnalysisConfigsPath(): string {
+    return path.join(app.getPath('userData'), 'analysis-configs.json');
+  }
+
   private async saveApiKeys(keys: any): Promise<boolean> {
     try {
       // 암호화된 키 저장
@@ -463,6 +475,34 @@ class TradingApp {
   // WebSocket 또는 API를 통해 분석 업데이트 받기
   public sendAnalysisUpdate(analysis: any) {
     this.mainWindow?.webContents.send('analysis-update', analysis);
+  }
+
+  private async saveAnalysisConfigs(configs: any[]): Promise<boolean> {
+    try {
+      fs.writeFileSync(
+        this.getAnalysisConfigsPath(),
+        JSON.stringify(configs, null, 2)
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to save analysis configs:', error);
+      return false;
+    }
+  }
+
+  private async getAnalysisConfigs(): Promise<any[]> {
+    try {
+      const configsPath = this.getAnalysisConfigsPath();
+      
+      if (!fs.existsSync(configsPath)) {
+        return [];
+      }
+
+      return JSON.parse(fs.readFileSync(configsPath, 'utf-8'));
+    } catch (error) {
+      console.error('Failed to load analysis configs:', error);
+      return [];
+    }
   }
 }
 
