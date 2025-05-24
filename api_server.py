@@ -52,6 +52,7 @@ class TradingState:
             'upbit_secret_key': None,
             'anthropic_api_key': None
         }
+        self.websocket_clients = set()  # WebSocket 클라이언트 관리
         
 trading_state = TradingState()
 
@@ -178,6 +179,18 @@ def run_trading_bot_for_ticker(ticker: str):
                     logger_instance.log_error(f"[{ticker}] 분석 결과가 None입니다.")
                     time.sleep(60)
                     continue
+                
+                # 분석 결과를 WebSocket으로 전송
+                analysis_update = {
+                    "ticker": ticker,
+                    "decision": analysis_result.get('decision', 'hold'),
+                    "confidence": analysis_result.get('confidence', 0),
+                    "reason": analysis_result.get('reason', '분석 중...'),
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                # 모든 WebSocket 클라이언트에 전송
+                asyncio.run(broadcast_analysis_update(analysis_update))
                 
                 # 거래 실행
                 if analysis_result.get('decision') != 'hold':
@@ -351,25 +364,48 @@ async def set_api_keys(request: ApiKeysRequest):
     except Exception as e:
         return SuccessResponse(success=False, message=str(e))
 
+# WebSocket 브로드캐스트 함수
+async def broadcast_analysis_update(analysis_data):
+    """WebSocket 클라이언트들에게 분석 업데이트 전송"""
+    message = json.dumps({
+        "type": "analysis_update",
+        "data": analysis_data
+    })
+    
+    disconnected = set()
+    for websocket in trading_state.websocket_clients:
+        try:
+            await websocket.send_text(message)
+        except:
+            disconnected.add(websocket)
+    
+    # 연결이 끊긴 클라이언트 제거
+    for websocket in disconnected:
+        trading_state.websocket_clients.remove(websocket)
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    trading_state.websocket_clients.add(websocket)
+    
     try:
         while True:
-            # 실시간 데이터 전송
+            # 실시간 상태 업데이트 전송
             data = {
                 "type": "status_update",
                 "data": {
                     "is_running": trading_state.is_running,
                     "ai_enabled": trading_state.ai_enabled,
+                    "active_tickers": trading_state.active_tickers,
                     "timestamp": datetime.now().isoformat()
                 }
             }
             await websocket.send_text(json.dumps(data))
-            await asyncio.sleep(1)  # 1초마다 업데이트
+            await asyncio.sleep(5)  # 5초마다 상태 업데이트
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
+        trading_state.websocket_clients.remove(websocket)
         await websocket.close()
 
 if __name__ == "__main__":

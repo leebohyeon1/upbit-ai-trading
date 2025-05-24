@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, safeStorag
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
-import apiClient from './api-client';
+import apiClient, { wsClient } from './api-client';
 
 class TradingApp {
   private mainWindow: BrowserWindow | null = null;
@@ -45,6 +45,11 @@ class TradingApp {
       // 3초 후 API 서버 연결 시도
       setTimeout(() => {
         this.loadInitialState();
+        
+        // WebSocket 연결 설정
+        wsClient.connect((analysis) => {
+          this.sendAnalysisUpdate(analysis);
+        });
       }, 3000);
     });
 
@@ -60,6 +65,8 @@ class TradingApp {
       if (this.pythonProcess) {
         this.pythonProcess.kill();
       }
+      // WebSocket 연결 종료
+      wsClient.disconnect();
     });
 
     app.on('activate', () => {
@@ -174,6 +181,14 @@ class TradingApp {
 
     ipcMain.handle('get-api-keys', async () => {
       return await this.getApiKeys();
+    });
+
+    ipcMain.handle('save-portfolio', async (event, portfolio) => {
+      return await this.savePortfolio(portfolio);
+    });
+
+    ipcMain.handle('get-portfolio', async () => {
+      return await this.getPortfolio();
     });
   }
 
@@ -350,6 +365,10 @@ class TradingApp {
     return path.join(app.getPath('userData'), 'api-keys.json');
   }
 
+  private getPortfolioPath(): string {
+    return path.join(app.getPath('userData'), 'portfolio.json');
+  }
+
   private async saveApiKeys(keys: any): Promise<boolean> {
     try {
       // 암호화된 키 저장
@@ -411,6 +430,39 @@ class TradingApp {
         anthropicApiKey: ''
       };
     }
+  }
+
+  private async savePortfolio(portfolio: any[]): Promise<boolean> {
+    try {
+      fs.writeFileSync(
+        this.getPortfolioPath(),
+        JSON.stringify(portfolio, null, 2)
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to save portfolio:', error);
+      return false;
+    }
+  }
+
+  private async getPortfolio(): Promise<any[]> {
+    try {
+      const portfolioPath = this.getPortfolioPath();
+      
+      if (!fs.existsSync(portfolioPath)) {
+        return [];
+      }
+
+      return JSON.parse(fs.readFileSync(portfolioPath, 'utf-8'));
+    } catch (error) {
+      console.error('Failed to load portfolio:', error);
+      return [];
+    }
+  }
+
+  // WebSocket 또는 API를 통해 분석 업데이트 받기
+  public sendAnalysisUpdate(analysis: any) {
+    this.mainWindow?.webContents.send('analysis-update', analysis);
   }
 }
 

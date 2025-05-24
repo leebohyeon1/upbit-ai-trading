@@ -8,8 +8,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeToTray: () => ipcRenderer.invoke('minimize-to-tray'),
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
   getApiKeys: () => ipcRenderer.invoke('get-api-keys'),
+  savePortfolio: (portfolio) => ipcRenderer.invoke('save-portfolio', portfolio),
+  getPortfolio: () => ipcRenderer.invoke('get-portfolio'),
   
   onTradingStateChanged: (callback) => {
     ipcRenderer.on('trading-state-changed', (event, state) => callback(state));
+  },
+  
+  onAnalysisUpdate: (callback) => {
+    ipcRenderer.on('analysis-update', (event, analysis) => callback(analysis));
   }
 });

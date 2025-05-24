@@ -1,4 +1,5 @@
 import axios from 'axios';
+import WebSocket from 'ws';
 
 const API_BASE_URL = 'http://localhost:8000'; // FastAPI 서버 주소
 
@@ -76,4 +77,73 @@ class TradingAPIClient {
   }
 }
 
+class WebSocketClient {
+  private ws: WebSocket | null = null;
+  private reconnectInterval: NodeJS.Timeout | null = null;
+  private onAnalysisCallback: ((analysis: any) => void) | null = null;
+
+  connect(onAnalysis: (analysis: any) => void) {
+    this.onAnalysisCallback = onAnalysis;
+    this.establishConnection();
+  }
+
+  private establishConnection() {
+    try {
+      this.ws = new WebSocket('ws://localhost:8000/ws');
+
+      this.ws.on('open', () => {
+        console.log('WebSocket connected');
+        if (this.reconnectInterval) {
+          clearInterval(this.reconnectInterval);
+          this.reconnectInterval = null;
+        }
+      });
+
+      this.ws.on('message', (data: string) => {
+        try {
+          const message = JSON.parse(data);
+          if (message.type === 'analysis_update' && this.onAnalysisCallback) {
+            this.onAnalysisCallback(message.data);
+          }
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      });
+
+      this.ws.on('close', () => {
+        console.log('WebSocket disconnected');
+        this.reconnect();
+      });
+
+      this.ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+      });
+    } catch (error) {
+      console.error('Failed to establish WebSocket connection:', error);
+      this.reconnect();
+    }
+  }
+
+  private reconnect() {
+    if (!this.reconnectInterval) {
+      this.reconnectInterval = setInterval(() => {
+        console.log('Attempting to reconnect WebSocket...');
+        this.establishConnection();
+      }, 5000);
+    }
+  }
+
+  disconnect() {
+    if (this.reconnectInterval) {
+      clearInterval(this.reconnectInterval);
+      this.reconnectInterval = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
+
+export const wsClient = new WebSocketClient();
 export default new TradingAPIClient();

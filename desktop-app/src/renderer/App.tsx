@@ -50,6 +50,14 @@ interface TradingState {
   lastUpdate: string;
 }
 
+interface TradingAnalysis {
+  ticker: string;
+  decision: 'buy' | 'sell' | 'hold';
+  confidence: number;
+  reason: string;
+  timestamp: string;
+}
+
 interface PortfolioCoin {
   ticker: string;
   name: string;
@@ -80,8 +88,11 @@ declare global {
       toggleAI: (enabled: boolean) => Promise<boolean>;
       minimizeToTray: () => Promise<void>;
       onTradingStateChanged: (callback: (state: TradingState) => void) => void;
+      onAnalysisUpdate: (callback: (analysis: TradingAnalysis) => void) => void;
       saveApiKeys: (keys: ApiKeys) => Promise<boolean>;
       getApiKeys: () => Promise<ApiKeys>;
+      savePortfolio: (portfolio: PortfolioCoin[]) => Promise<boolean>;
+      getPortfolio: () => Promise<PortfolioCoin[]>;
     };
   }
 }
@@ -122,6 +133,9 @@ const App: React.FC = () => {
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [recentAnalyses, setRecentAnalyses] = useState<TradingAnalysis[]>([]);
+  const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(60);
+  const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
   
   // 인기 코인 목록
   const popularCoins = [
@@ -141,11 +155,24 @@ const App: React.FC = () => {
     // 초기 상태 로드
     loadTradingState();
     loadApiKeys();
+    loadPortfolio();
 
     // 상태 변경 리스너 등록
     window.electronAPI.onTradingStateChanged((state) => {
       setTradingState(state);
     });
+
+    // 분석 업데이트 리스너 등록
+    window.electronAPI.onAnalysisUpdate((analysis) => {
+      setRecentAnalyses(prev => [analysis, ...prev.slice(0, 9)]); // 최근 10개만 유지
+      setNextAnalysisTime(60); // 타이머 리셋
+    });
+
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    };
   }, []);
 
   const loadTradingState = async () => {
@@ -175,6 +202,9 @@ const App: React.FC = () => {
       const success = await window.electronAPI.startTrading(activeTickers);
       if (!success) {
         setError('자동매매 시작에 실패했습니다.');
+      } else {
+        // 타이머 시작
+        startAnalysisTimer();
       }
     } catch (err) {
       setError('자동매매 시작 중 오류가 발생했습니다.');
@@ -190,6 +220,9 @@ const App: React.FC = () => {
       const success = await window.electronAPI.stopTrading();
       if (!success) {
         setError('자동매매 중지에 실패했습니다.');
+      } else {
+        // 타이머 중지
+        stopAnalysisTimer();
       }
     } catch (err) {
       setError('자동매매 중지 중 오류가 발생했습니다.');
@@ -219,27 +252,33 @@ const App: React.FC = () => {
     setTabValue(newValue);
   };
 
-  const handleAddToPortfolio = () => {
+  const handleAddToPortfolio = async () => {
     const selectedCoin = popularCoins.find(coin => coin.ticker === selectedTicker);
     if (selectedCoin && !portfolio.find(p => p.ticker === selectedCoin.ticker)) {
-      setPortfolio([...portfolio, {
+      const newPortfolio = [...portfolio, {
         ...selectedCoin,
         enabled: true,
         currentPrice: 0,
         change24h: 0,
         balance: 0
-      }]);
+      }];
+      setPortfolio(newPortfolio);
+      await savePortfolio();
     }
   };
 
-  const handleRemoveFromPortfolio = (ticker: string) => {
-    setPortfolio(portfolio.filter(coin => coin.ticker !== ticker));
+  const handleRemoveFromPortfolio = async (ticker: string) => {
+    const newPortfolio = portfolio.filter(coin => coin.ticker !== ticker);
+    setPortfolio(newPortfolio);
+    await window.electronAPI.savePortfolio(newPortfolio);
   };
 
-  const handleToggleCoin = (ticker: string) => {
-    setPortfolio(portfolio.map(coin => 
+  const handleToggleCoin = async (ticker: string) => {
+    const newPortfolio = portfolio.map(coin => 
       coin.ticker === ticker ? { ...coin, enabled: !coin.enabled } : coin
-    ));
+    );
+    setPortfolio(newPortfolio);
+    await window.electronAPI.savePortfolio(newPortfolio);
   };
 
   const loadApiKeys = async () => {
@@ -267,6 +306,68 @@ const App: React.FC = () => {
       setError('API 키 저장 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPortfolio = async () => {
+    try {
+      const savedPortfolio = await window.electronAPI.getPortfolio();
+      if (savedPortfolio && savedPortfolio.length > 0) {
+        setPortfolio(savedPortfolio);
+      }
+    } catch (err) {
+      console.error('Failed to load portfolio:', err);
+    }
+  };
+
+  const savePortfolio = async () => {
+    try {
+      await window.electronAPI.savePortfolio(portfolio);
+    } catch (err) {
+      console.error('Failed to save portfolio:', err);
+    }
+  };
+
+  const startAnalysisTimer = () => {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+    }
+    
+    const interval = setInterval(() => {
+      setNextAnalysisTime(prev => {
+        if (prev <= 1) {
+          return 60; // 리셋
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    setTimerInterval(interval);
+  };
+
+  const stopAnalysisTimer = () => {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      setTimerInterval(null);
+    }
+    setNextAnalysisTime(60);
+  };
+
+  const getDecisionColor = (decision: string) => {
+    switch (decision) {
+      case 'buy': return 'success';
+      case 'sell': return 'error';
+      case 'hold': return 'info';
+      default: return 'default';
+    }
+  };
+
+  const getDecisionText = (decision: string) => {
+    switch (decision) {
+      case 'buy': return '매수';
+      case 'sell': return '매도';
+      case 'hold': return '대기';
+      default: return decision;
     }
   };
 
@@ -393,6 +494,62 @@ const App: React.FC = () => {
                 </CardContent>
               </Card>
             </Box>
+
+            {tradingState.isRunning && (
+              <Box>
+                <Card>
+                  <CardContent>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Typography variant="h6">
+                        분석 상태
+                      </Typography>
+                      <Chip
+                        icon={<CircularProgress size={16} />}
+                        label={`다음 분석까지: ${nextAnalysisTime}초`}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
+                    
+                    {recentAnalyses.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        첫 분석을 기다리고 있습니다...
+                      </Typography>
+                    ) : (
+                      <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                        {recentAnalyses.map((analysis, index) => (
+                          <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <Chip
+                                  label={analysis.ticker.replace('KRW-', '')}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  label={getDecisionText(analysis.decision)}
+                                  color={getDecisionColor(analysis.decision) as any}
+                                  size="small"
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                  신뢰도: {(analysis.confidence * 100).toFixed(1)}%
+                                </Typography>
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(analysis.timestamp).toLocaleTimeString('ko-KR')}
+                              </Typography>
+                            </Box>
+                            <Typography variant="body2">
+                              {analysis.reason}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Box>
+            )}
           </Box>
         </TabPanel>
 
