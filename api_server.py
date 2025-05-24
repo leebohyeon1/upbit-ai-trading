@@ -185,7 +185,7 @@ def run_trading_bot_for_ticker(ticker: str):
                     "ticker": ticker,
                     "decision": analysis_result.get('decision', 'hold'),
                     "confidence": analysis_result.get('confidence', 0),
-                    "reason": analysis_result.get('reason', '분석 중...'),
+                    "reason": analysis_result.get('reasoning', analysis_result.get('reason', '분석 중...')),
                     "timestamp": datetime.now().isoformat()
                 }
                 
@@ -195,10 +195,8 @@ def run_trading_bot_for_ticker(ticker: str):
                 # 거래 실행
                 if analysis_result.get('decision') != 'hold':
                     trading_engine.execute_trade(
-                        ticker=ticker,
-                        decision=analysis_result.get('decision'),
-                        confidence=analysis_result.get('confidence', 0),
-                        analysis_result=analysis_result
+                        analysis_result=analysis_result,
+                        ticker=ticker
                     )
                 
                 # 대기 (중지 플래그 확인을 위해 짧은 간격으로 나누어 대기)
