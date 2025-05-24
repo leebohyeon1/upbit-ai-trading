@@ -7,7 +7,7 @@ start "API Server" cmd /k python api_server.py
 
 REM Wait for API server to start
 echo Waiting for API server to initialize...
-timeout /t 5 /nobreak > nul
+timeout /t 1 /nobreak > nul
 
 REM Start desktop app
 echo Starting Desktop App...
