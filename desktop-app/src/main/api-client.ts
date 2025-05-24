@@ -115,7 +115,7 @@ class WebSocketClient {
         this.reconnect();
       });
 
-      this.ws.on('error', (error) => {
+      this.ws.on('error', (error: Error) => {
         console.error('WebSocket error:', error);
       });
     } catch (error) {
