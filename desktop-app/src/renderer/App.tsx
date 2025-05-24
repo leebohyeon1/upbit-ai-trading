@@ -431,8 +431,9 @@ const App: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 2 }}>
-      <Paper elevation={3}>
+    <Container maxWidth="md" sx={{ py: 2, height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* 상단 고정 영역 */}
+      <Paper elevation={3} sx={{ position: 'sticky', top: 0, zIndex: 1100, mb: 2 }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" p={2}>
           <Box display="flex" alignItems="center" gap={2}>
             <TrendingUp fontSize="large" color="primary" />
@@ -470,24 +471,27 @@ const App: React.FC = () => {
           </Box>
         </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mx: 2, mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-
-        {successMessage && (
-          <Alert severity="success" sx={{ mx: 2, mb: 2 }} onClose={() => setSuccessMessage(null)}>
-            {successMessage}
-          </Alert>
-        )}
-
         <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab icon={<Dashboard />} label="대시보드" />
           <Tab icon={<AccountBalance />} label="포트폴리오" />
           <Tab icon={<Tune />} label="분석설정" />
           <Tab icon={<Settings />} label="환경설정" />
         </Tabs>
+      </Paper>
+
+      {/* 메인 콘텐츠 영역 - 스크롤 가능 */}
+      <Paper elevation={3} sx={{ flex: 1, overflow: 'auto' }}>
+        {error && (
+          <Alert severity="error" sx={{ mx: 2, mt: 2, mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        {successMessage && (
+          <Alert severity="success" sx={{ mx: 2, mt: 2, mb: 2 }} onClose={() => setSuccessMessage(null)}>
+            {successMessage}
+          </Alert>
+        )}
 
         <TabPanel value={tabValue} index={0}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
