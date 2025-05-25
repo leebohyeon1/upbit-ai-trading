@@ -56,6 +56,10 @@ import {
   NotificationImportant,
   Star,
   Upgrade,
+  Menu,
+  Close,
+  ChevronLeft,
+  ChevronRight,
 } from '@mui/icons-material';
 
 interface TradingState {
@@ -169,7 +173,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3, height: 'calc(100vh - 180px)', overflow: 'auto' }}>{children}</Box>}
+      {value === index && <Box sx={{ p: 3, height: 'calc(100vh - 80px)', overflow: 'auto' }}>{children}</Box>}
     </div>
   );
 }
@@ -222,6 +226,8 @@ const App: React.FC = () => {
   });
   const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
   const [advancedConfigTab, setAdvancedConfigTab] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   
   // 기술적 지표 목록
   const indicators = [
@@ -668,17 +674,19 @@ const App: React.FC = () => {
 
   const renderSidebar = () => (
     <Box sx={{ 
-      width: 200, 
+      width: sidebarOpen ? 200 : 0, 
       height: '100vh', 
       bgcolor: 'background.paper', 
-      borderRight: 1, 
+      borderRight: sidebarOpen ? 1 : 0, 
       borderColor: 'divider',
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
       left: 0,
       top: 0,
-      zIndex: 1000
+      zIndex: 1000,
+      overflow: 'hidden',
+      transition: 'width 0.3s ease-in-out'
     }}>
       {/* Logo */}
       <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
@@ -741,10 +749,10 @@ const App: React.FC = () => {
 
   const renderRightSidebar = () => (
     <Box sx={{ 
-      width: 300, 
+      width: rightPanelOpen ? 300 : 0, 
       height: '100vh', 
       bgcolor: 'background.paper', 
-      borderLeft: 1, 
+      borderLeft: rightPanelOpen ? 1 : 0, 
       borderColor: 'divider',
       display: 'flex',
       flexDirection: 'column',
@@ -752,7 +760,8 @@ const App: React.FC = () => {
       right: 0,
       top: 0,
       zIndex: 1000,
-      overflow: 'auto'
+      overflow: rightPanelOpen ? 'auto' : 'hidden',
+      transition: 'width 0.3s ease-in-out'
     }}>
       {/* User Profile */}
       <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
@@ -865,15 +874,71 @@ const App: React.FC = () => {
 
   const renderMainContent = () => (
     <Box sx={{ 
-      ml: '200px', 
-      mr: '300px', 
+      ml: sidebarOpen ? '200px' : 0, 
+      mr: rightPanelOpen ? '300px' : 0, 
       minHeight: '100vh',
       bgcolor: 'grey.50',
-      p: 3
+      p: 3,
+      transition: 'margin 0.3s ease-in-out'
     }}>
       {/* Top Controls */}
-      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
-        <Box display="flex" gap={2}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        {/* Left Side - Navigation Controls */}
+        <Box display="flex" gap={1} alignItems="center">
+          <IconButton
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            sx={{ 
+              bgcolor: sidebarOpen ? 'primary.50' : 'transparent',
+              '&:hover': { bgcolor: sidebarOpen ? 'primary.100' : 'grey.100' }
+            }}
+          >
+            <Menu />
+          </IconButton>
+          
+          {/* Logo when sidebar is closed */}
+          {!sidebarOpen && (
+            <Box display="flex" alignItems="center" gap={1} sx={{ mr: 2 }}>
+              <TrendingUp color="primary" />
+              <Typography variant="h6" fontWeight="bold" color="primary">
+                Upbit AI
+              </Typography>
+            </Box>
+          )}
+          
+          {/* Tab Navigation when sidebar is closed */}
+          {!sidebarOpen && (
+            <Box display="flex" gap={1} sx={{ flexWrap: 'wrap' }}>
+              {[
+                { label: '대시보드', icon: <Dashboard />, value: 0 },
+                { label: '포트폴리오', icon: <AccountBalance />, value: 1 },
+                { label: '분석설정', icon: <ShowChart />, value: 2 },
+                { label: '환경설정', icon: <Settings />, value: 3 },
+              ].map((item) => (
+                <Button
+                  key={item.value}
+                  variant={tabValue === item.value ? 'contained' : 'outlined'}
+                  size="small"
+                  startIcon={item.icon}
+                  onClick={() => setTabValue(item.value)}
+                  sx={{ 
+                    minWidth: { xs: 100, sm: 120 },
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                  }}
+                >
+                  <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                    {item.label}
+                  </Box>
+                  <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
+                    {item.icon}
+                  </Box>
+                </Button>
+              ))}
+            </Box>
+          )}
+        </Box>
+        
+        {/* Right Side - Action Controls */}
+        <Box display="flex" gap={2} alignItems="center">
           <FormControlLabel
             control={
               <Switch
@@ -904,6 +969,15 @@ const App: React.FC = () => {
               자동매매 시작
             </Button>
           )}
+          <IconButton
+            onClick={() => setRightPanelOpen(!rightPanelOpen)}
+            sx={{ 
+              bgcolor: rightPanelOpen ? 'info.50' : 'transparent',
+              '&:hover': { bgcolor: rightPanelOpen ? 'info.100' : 'grey.100' }
+            }}
+          >
+            <Timeline />
+          </IconButton>
           <IconButton onClick={handleMinimize}>
             <Minimize />
           </IconButton>
@@ -925,7 +999,7 @@ const App: React.FC = () => {
 
       {/* Stats Cards */}
       {tabValue === 0 && (
-        <Grid container spacing={3} mb={3}>
+        <Grid container spacing={2} mb={3}>
           <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent>
@@ -1027,11 +1101,11 @@ const App: React.FC = () => {
             </CardContent>
           </Card>
         ) : (
-          <Grid container spacing={3}>
+          <Grid container spacing={2}>
             {portfolio.map((coin) => {
               const analysis = recentAnalyses.find(a => a.ticker === coin.ticker);
               return (
-                <Grid item xs={12} sm={6} md={4} key={coin.ticker}>
+                <Grid item xs={12} sm={6} lg={4} xl={3} key={coin.ticker}>
                   <Card 
                     sx={{ 
                       border: coin.enabled ? 2 : 1,
