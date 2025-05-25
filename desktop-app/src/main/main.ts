@@ -44,9 +44,10 @@ class TradingApp {
       // API 서버는 별도로 실행하도록 변경
       // this.startPythonBackend();
       
-      // 3초 후 API 서버 연결 시도
-      setTimeout(() => {
+      // 3초 후 초기화 작업 수행
+      setTimeout(async () => {
         this.loadInitialState();
+        await this.loadSavedApiKeys();
         
         // WebSocket 연결 설정
         wsClient.connect((analysis) => {
@@ -358,7 +359,7 @@ class TradingApp {
 
       // 내장 거래 엔진에 키 설정
       try {
-        tradingEngine.setApiKeys(keys.upbitAccessKey, keys.upbitSecretKey);
+        tradingEngine.setApiKeys(keys.upbitAccessKey, keys.upbitSecretKey, keys.anthropicApiKey);
         tradingEngine.setConfig({
           enableRealTrading: keys.enableRealTrade || false
         });
@@ -637,6 +638,21 @@ class TradingApp {
   private sendStatusUpdate() {
     if (this.mainWindow) {
       this.mainWindow.webContents.send('status-update', this.tradingState);
+    }
+  }
+
+  private async loadSavedApiKeys() {
+    try {
+      const keys = await this.getApiKeys();
+      if (keys.upbitAccessKey && keys.upbitSecretKey) {
+        tradingEngine.setApiKeys(keys.upbitAccessKey, keys.upbitSecretKey, keys.anthropicApiKey);
+        tradingEngine.setConfig({
+          enableRealTrading: keys.enableRealTrade || false
+        });
+        console.log('Saved API keys loaded to trading engine');
+      }
+    } catch (error) {
+      console.error('Failed to load saved API keys:', error);
     }
   }
 }

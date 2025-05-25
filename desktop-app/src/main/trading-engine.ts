@@ -1,5 +1,6 @@
 import upbitService, { UpbitTicker } from './upbit-service';
 import analysisService, { TechnicalAnalysis } from './analysis-service';
+import aiService from './ai-service';
 import { EventEmitter } from 'events';
 
 export interface TradingConfig {
@@ -49,8 +50,11 @@ class TradingEngine extends EventEmitter {
     super();
   }
 
-  setApiKeys(accessKey: string, secretKey: string) {
+  setApiKeys(accessKey: string, secretKey: string, anthropicApiKey?: string) {
     upbitService.setApiKeys(accessKey, secretKey);
+    if (anthropicApiKey) {
+      aiService.setApiKey(anthropicApiKey);
+    }
   }
 
   setConfig(config: Partial<TradingConfig>) {
@@ -135,10 +139,10 @@ class TradingEngine extends EventEmitter {
           // 기술적 분석 수행
           const technicalAnalysis = analysisService.analyzeTechnicals(candles);
           
-          // AI 분석 (간단한 규칙 기반)
+          // AI 분석 (실제 Claude API 사용)
           const aiAnalysis = this.aiEnabled 
-            ? analysisService.generateAIAnalysis(technicalAnalysis)
-            : '기본 기술적 분석만 수행됨';
+            ? await aiService.generateTradingAnalysis(technicalAnalysis, { currentPrice, market })
+            : aiService.generateAdvancedFallbackAnalysis(technicalAnalysis);
 
           // 결과 저장
           const coinAnalysis: CoinAnalysis = {
