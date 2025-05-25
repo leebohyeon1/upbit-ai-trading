@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+from src.utils.logger import Logger
 
 class TradingEngine:
     """
@@ -24,7 +25,11 @@ class TradingEngine:
         # 설정값 추출
         self.trading_settings = config.get("TRADING_SETTINGS", {})
         self.investment_ratios = config.get("INVESTMENT_RATIOS", {})
-        self.enable_trade = os.getenv("ENABLE_TRADE", "false").lower() == "true"
+        self.enable_trade = os.getenv("ENABLE_REAL_TRADE", "false").lower() == "true"
+        self.logger = Logger()
+        
+        # 실제 거래 설정 로그
+        self.logger.log_app(f"실제 거래 활성화: {self.enable_trade}")
         
         # 거래 기록
         self.trade_history = []

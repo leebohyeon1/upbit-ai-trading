@@ -247,10 +247,15 @@ def run_trading_bot_for_ticker(ticker: str):
                 
                 # 거래 실행
                 if analysis_result.get('decision') != 'hold':
-                    trading_engine.execute_trade(
+                    logger_instance.log_app(f"[{ticker}] 거래 신호 감지 - 결정: {analysis_result.get('decision')}, 신뢰도: {analysis_result.get('confidence', 0):.2f}")
+                    trade_result = trading_engine.execute_trade(
                         analysis_result=analysis_result,
                         ticker=ticker
                     )
+                    if trade_result:
+                        logger_instance.log_app(f"[{ticker}] 거래 결과: {trade_result}")
+                else:
+                    logger_instance.log_app(f"[{ticker}] 홀드 결정 - 신뢰도: {analysis_result.get('confidence', 0):.2f}")
                 
                 # 대기 (중지 플래그 확인을 위해 짧은 간격으로 나누어 대기)
                 for _ in range(60):  # 1초씩 60번 = 1분
