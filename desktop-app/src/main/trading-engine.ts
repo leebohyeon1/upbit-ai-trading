@@ -10,6 +10,9 @@ export interface TradingConfig {
   takeProfitPercent: number;
   rsiOverbought: number;
   rsiOversold: number;
+  buyingCooldown: number; // 매수 쿨타임 (분)
+  sellingCooldown: number; // 매도 쿨타임 (분)
+  minConfidenceForTrade: number; // 거래 최소 신뢰도
 }
 
 export interface TradingStatus {
@@ -39,10 +42,14 @@ class TradingEngine extends EventEmitter {
     stopLossPercent: 5,
     takeProfitPercent: 10,
     rsiOverbought: 70,
-    rsiOversold: 30
+    rsiOversold: 30,
+    buyingCooldown: 30, // 30분 매수 쿨타임
+    sellingCooldown: 20, // 20분 매도 쿨타임
+    minConfidenceForTrade: 60 // 60% 이상 신뢰도에서만 거래
   };
   
   private analysisResults: Map<string, CoinAnalysis> = new Map();
+  private lastTradeTime: Map<string, { buy?: number; sell?: number }> = new Map();
   private analysisInterval: NodeJS.Timeout | null = null;
   private statusInterval: NodeJS.Timeout | null = null;
 
@@ -201,19 +208,35 @@ class TradingEngine extends EventEmitter {
     const { market, analysis: technical } = analysis;
     
     try {
+      // 신뢰도 체크
+      if (technical.confidence < this.config.minConfidenceForTrade) {
+        console.log(`${market} confidence ${technical.confidence.toFixed(1)}% below threshold ${this.config.minConfidenceForTrade}%`);
+        return;
+      }
+
       // 계좌 정보 확인
       const accounts = await upbitService.getAccounts();
       const krwAccount = accounts.find(acc => acc.currency === 'KRW');
       const coinAccount = accounts.find(acc => acc.currency === market.split('-')[1]);
 
-      if (technical.signal === 'BUY' && technical.confidence > 60) {
+      if (technical.signal === 'BUY') {
+        // 매수 쿨타임 체크
+        if (this.isInCooldown(market, 'buy')) {
+          return;
+        }
+
         // 매수 로직
         if (krwAccount && parseFloat(krwAccount.balance) > this.config.maxInvestmentPerCoin) {
-          console.log(`Buy signal for ${market} - attempting purchase`);
+          console.log(`Buy signal for ${market} - confidence: ${technical.confidence.toFixed(1)}%`);
+          
           // 실제 거래 실행 (테스트 모드에서는 로그만)
           if (this.config.enableRealTrading) {
             await upbitService.buyOrder(market, this.config.maxInvestmentPerCoin.toString());
           }
+          
+          // 거래 시간 기록
+          this.recordTradeTime(market, 'buy');
+          
           this.emit('tradeExecuted', {
             type: 'BUY',
             market,
@@ -221,14 +244,24 @@ class TradingEngine extends EventEmitter {
             confidence: technical.confidence
           });
         }
-      } else if (technical.signal === 'SELL' && technical.confidence > 60) {
+      } else if (technical.signal === 'SELL') {
+        // 매도 쿨타임 체크
+        if (this.isInCooldown(market, 'sell')) {
+          return;
+        }
+
         // 매도 로직
         if (coinAccount && parseFloat(coinAccount.balance) > 0) {
-          console.log(`Sell signal for ${market} - attempting sale`);
+          console.log(`Sell signal for ${market} - confidence: ${technical.confidence.toFixed(1)}%`);
+          
           // 실제 거래 실행 (테스트 모드에서는 로그만)
           if (this.config.enableRealTrading) {
             await upbitService.sellOrder(market, coinAccount.balance);
           }
+          
+          // 거래 시간 기록
+          this.recordTradeTime(market, 'sell');
+          
           this.emit('tradeExecuted', {
             type: 'SELL',
             market,
@@ -272,6 +305,33 @@ class TradingEngine extends EventEmitter {
 
   getAnalysisForMarket(market: string): CoinAnalysis | undefined {
     return this.analysisResults.get(market);
+  }
+
+  private isInCooldown(market: string, action: 'buy' | 'sell'): boolean {
+    const lastTrade = this.lastTradeTime.get(market);
+    if (!lastTrade) return false;
+
+    const lastTime = action === 'buy' ? lastTrade.buy : lastTrade.sell;
+    if (!lastTime) return false;
+
+    const cooldownMinutes = action === 'buy' ? this.config.buyingCooldown : this.config.sellingCooldown;
+    const cooldownMs = cooldownMinutes * 60 * 1000;
+    const now = Date.now();
+
+    const isInCooldown = (now - lastTime) < cooldownMs;
+    
+    if (isInCooldown) {
+      const remainingMinutes = Math.ceil((cooldownMs - (now - lastTime)) / (60 * 1000));
+      console.log(`${market} ${action} cooldown: ${remainingMinutes} minutes remaining`);
+    }
+
+    return isInCooldown;
+  }
+
+  private recordTradeTime(market: string, action: 'buy' | 'sell'): void {
+    const existing = this.lastTradeTime.get(market) || {};
+    existing[action] = Date.now();
+    this.lastTradeTime.set(market, existing);
   }
 }
 
