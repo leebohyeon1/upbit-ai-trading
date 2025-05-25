@@ -33,7 +33,7 @@ export interface CoinAnalysis {
 }
 
 class TradingEngine extends EventEmitter {
-  private isRunning = false;
+  private _isRunning = false;
   private aiEnabled = false;
   private activeMarkets: string[] = ['KRW-BTC', 'KRW-ETH', 'KRW-XRP', 'KRW-DOGE'];
   private config: TradingConfig = {
@@ -78,11 +78,20 @@ class TradingEngine extends EventEmitter {
     this.emit('aiToggled', enabled);
   }
 
+  updateConfig(newConfig: Partial<TradingConfig>) {
+    this.config = { ...this.config, ...newConfig };
+    console.log('Trading config updated:', this.config);
+  }
+
+  isRunning(): boolean {
+    return this._isRunning;
+  }
+
   async start(): Promise<boolean> {
-    if (this.isRunning) return false;
+    if (this._isRunning) return false;
 
     try {
-      this.isRunning = true;
+      this._isRunning = true;
       
       // 즉시 첫 분석 실행
       await this.performAnalysis();
@@ -102,15 +111,15 @@ class TradingEngine extends EventEmitter {
       return true;
     } catch (error) {
       console.error('Failed to start trading engine:', error);
-      this.isRunning = false;
+      this._isRunning = false;
       return false;
     }
   }
 
   async stop(): Promise<boolean> {
-    if (!this.isRunning) return false;
+    if (!this._isRunning) return false;
 
-    this.isRunning = false;
+    this._isRunning = false;
     
     if (this.analysisInterval) {
       clearInterval(this.analysisInterval);
@@ -128,7 +137,7 @@ class TradingEngine extends EventEmitter {
   }
 
   private async performAnalysis() {
-    if (!this.isRunning) return;
+    if (!this._isRunning) return;
 
     try {
       console.log('Performing market analysis...');
@@ -277,7 +286,7 @@ class TradingEngine extends EventEmitter {
 
   private emitStatus() {
     const status: TradingStatus = {
-      isRunning: this.isRunning,
+      isRunning: this._isRunning,
       aiEnabled: this.aiEnabled,
       activeCoins: this.activeMarkets,
       analyzedCoins: this.analysisResults.size,
@@ -290,7 +299,7 @@ class TradingEngine extends EventEmitter {
 
   getStatus(): TradingStatus {
     return {
-      isRunning: this.isRunning,
+      isRunning: this._isRunning,
       aiEnabled: this.aiEnabled,
       activeCoins: this.activeMarkets,
       analyzedCoins: this.analysisResults.size,

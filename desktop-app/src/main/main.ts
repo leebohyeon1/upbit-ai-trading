@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, safeStorag
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
-import apiClient, { wsClient } from './api-client';
 import tradingEngine from './trading-engine';
 
 class TradingApp {
@@ -49,10 +48,7 @@ class TradingApp {
         this.loadInitialState();
         await this.loadSavedApiKeys();
         
-        // WebSocket 연결 설정
-        wsClient.connect((analysis) => {
-          this.sendAnalysisUpdate(analysis);
-        });
+        // 독립적인 거래 엔진 이벤트 연결은 이미 setupTradingEngine()에서 설정됨
       }, 3000);
     });
 
@@ -68,8 +64,8 @@ class TradingApp {
       if (this.pythonProcess) {
         this.pythonProcess.kill();
       }
-      // WebSocket 연결 종료
-      wsClient.disconnect();
+      // 거래 엔진 종료
+      tradingEngine.stop();
     });
 
     app.on('activate', () => {
@@ -270,9 +266,9 @@ class TradingApp {
 
   private async loadInitialState() {
     try {
-      const status = await apiClient.getStatus();
-      this.tradingState.isRunning = status.is_running;
-      this.tradingState.aiEnabled = status.ai_enabled;
+      // 독립적인 상태 관리 - 더 이상 외부 API 서버에 의존하지 않음
+      this.tradingState.isRunning = tradingEngine.isRunning();
+      this.tradingState.aiEnabled = true; // AI 분석 항상 활성화
       this.tradingState.lastUpdate = new Date().toISOString();
       
       this.updateTrayMenu();
@@ -476,11 +472,12 @@ class TradingApp {
         JSON.stringify(config, null, 2)
       );
 
-      // API 서버에 설정 전송
+      // 독립적인 거래 엔진에 설정 적용
       try {
-        await apiClient.updateTradingConfig(config);
+        tradingEngine.updateConfig(config);
+        console.log('Trading config updated successfully');
       } catch (error) {
-        console.error('Failed to send trading config to server:', error);
+        console.error('Failed to update trading engine config:', error);
       }
 
       return true;
