@@ -1192,9 +1192,19 @@ const App: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={tabValue} index={2}>
-        <Typography variant="h6" fontWeight="bold" mb={3}>
-          분석 설정
-        </Typography>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h6" fontWeight="bold">
+            분석 설정
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<Tune />}
+            onClick={() => setAdvancedConfigOpen(true)}
+            size="large"
+          >
+            고급 설정
+          </Button>
+        </Box>
         
         {/* 코인 선택 섹션 */}
         <Card sx={{ mb: 3 }}>
@@ -1608,6 +1618,327 @@ const App: React.FC = () => {
             </DialogActions>
           </>
         )}
+      </Dialog>
+
+      {/* 고급 설정 다이얼로그 */}
+      <Dialog
+        open={advancedConfigOpen}
+        onClose={() => setAdvancedConfigOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Tune color="primary" />
+            <Typography variant="h6">고급 분석 설정</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Tabs value={0} sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tab label="결정 임계값" />
+            <Tab label="신호 강도" />
+            <Tab label="지표 가중치" />
+            <Tab label="거래 설정" />
+          </Tabs>
+
+          {/* 결정 임계값 설정 */}
+          <Box>
+            <Typography variant="h6" gutterBottom>결정 임계값</Typography>
+            <Grid container spacing={3} mb={4}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="매수 임계값"
+                  type="number"
+                  value={tradingConfig.decisionThresholds.buyThreshold}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    decisionThresholds: {
+                      ...tradingConfig.decisionThresholds,
+                      buyThreshold: parseFloat(e.target.value) || 0.15
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 0, max: 1, step: 0.05 } }}
+                  helperText="평균 신호가 이 값보다 크면 매수"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="매도 임계값"
+                  type="number"
+                  value={tradingConfig.decisionThresholds.sellThreshold}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    decisionThresholds: {
+                      ...tradingConfig.decisionThresholds,
+                      sellThreshold: parseFloat(e.target.value) || -0.2
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: -1, max: 0, step: 0.05 } }}
+                  helperText="평균 신호가 이 값보다 작으면 매도"
+                />
+              </Grid>
+            </Grid>
+
+            <Typography variant="h6" gutterBottom>투자 비율</Typography>
+            <Grid container spacing={3} mb={4}>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="최소 투자 비율 (%)"
+                  type="number"
+                  value={(tradingConfig.investmentRatios.minRatio * 100).toFixed(0)}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    investmentRatios: {
+                      ...tradingConfig.investmentRatios,
+                      minRatio: parseFloat(e.target.value) / 100 || 0.15
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 5, max: 50 } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="최대 투자 비율 (%)"
+                  type="number"
+                  value={(tradingConfig.investmentRatios.maxRatio * 100).toFixed(0)}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    investmentRatios: {
+                      ...tradingConfig.investmentRatios,
+                      maxRatio: parseFloat(e.target.value) / 100 || 0.5
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 10, max: 100 } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="코인별 최대 비율 (%)"
+                  type="number"
+                  value={(tradingConfig.investmentRatios.perCoinMaxRatio * 100).toFixed(0)}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    investmentRatios: {
+                      ...tradingConfig.investmentRatios,
+                      perCoinMaxRatio: parseFloat(e.target.value) / 100 || 0.2
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 5, max: 50 } }}
+                />
+              </Grid>
+            </Grid>
+
+            <Typography variant="h6" gutterBottom>신호 강도 설정</Typography>
+            <Grid container spacing={2}>
+              {signalStrengthKeys.map((signal) => (
+                <Grid item xs={12} sm={6} md={4} key={signal.key}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label={signal.name}
+                    type="number"
+                    value={tradingConfig.signalStrengths[signal.key] || 0.5}
+                    onChange={(e) => setTradingConfig({
+                      ...tradingConfig,
+                      signalStrengths: {
+                        ...tradingConfig.signalStrengths,
+                        [signal.key]: parseFloat(e.target.value) || 0.5
+                      }
+                    })}
+                    InputProps={{ inputProps: { min: signal.min, max: signal.max, step: signal.step } }}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+
+            <Typography variant="h6" gutterBottom mt={4}>지표 가중치 및 사용 여부</Typography>
+            <Grid container spacing={2}>
+              {indicators.map((indicator) => (
+                <Grid item xs={12} sm={6} md={4} key={indicator.key}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2" fontWeight="bold">{indicator.name}</Typography>
+                      <Switch
+                        checked={tradingConfig.indicatorUsage[indicator.key] || false}
+                        onChange={(e) => setTradingConfig({
+                          ...tradingConfig,
+                          indicatorUsage: {
+                            ...tradingConfig.indicatorUsage,
+                            [indicator.key]: e.target.checked
+                          }
+                        })}
+                        size="small"
+                      />
+                    </Box>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="가중치"
+                      type="number"
+                      value={tradingConfig.indicatorWeights[indicator.key] || 1.0}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        indicatorWeights: {
+                          ...tradingConfig.indicatorWeights,
+                          [indicator.key]: parseFloat(e.target.value) || 1.0
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 0.1, max: 2.0, step: 0.1 } }}
+                      disabled={!tradingConfig.indicatorUsage[indicator.key]}
+                    />
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Typography variant="h6" gutterBottom mt={4}>거래 설정</Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="최소 주문 금액 (원)"
+                  type="number"
+                  value={tradingConfig.tradingSettings.minOrderAmount}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    tradingSettings: {
+                      ...tradingConfig.tradingSettings,
+                      minOrderAmount: parseInt(e.target.value) || 5000
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 1000, max: 100000 } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="최대 슬리피지 (%)"
+                  type="number"
+                  value={(tradingConfig.tradingSettings.maxSlippage * 100).toFixed(2)}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    tradingSettings: {
+                      ...tradingConfig.tradingSettings,
+                      maxSlippage: parseFloat(e.target.value) / 100 || 0.005
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 0.1, max: 5.0, step: 0.1 } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="거래 간격 (분)"
+                  type="number"
+                  value={tradingConfig.tradingSettings.tradingInterval}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    tradingSettings: {
+                      ...tradingConfig.tradingSettings,
+                      tradingInterval: parseInt(e.target.value) || 1
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 1, max: 60 } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={tradingConfig.tradingSettings.cooldown.enabled}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          cooldown: {
+                            ...tradingConfig.tradingSettings.cooldown,
+                            enabled: e.target.checked
+                          }
+                        }
+                      })}
+                    />
+                  }
+                  label="거래 쿨다운 활성화"
+                />
+              </Grid>
+              {tradingConfig.tradingSettings.cooldown.enabled && (
+                <>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="매수 후 대기 시간 (분)"
+                      type="number"
+                      value={tradingConfig.tradingSettings.cooldown.buyMinutes}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          cooldown: {
+                            ...tradingConfig.tradingSettings.cooldown,
+                            buyMinutes: parseInt(e.target.value) || 30
+                          }
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 1, max: 120 } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="매도 후 대기 시간 (분)"
+                      type="number"
+                      value={tradingConfig.tradingSettings.cooldown.sellMinutes}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          cooldown: {
+                            ...tradingConfig.tradingSettings.cooldown,
+                            sellMinutes: parseInt(e.target.value) || 20
+                          }
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 1, max: 120 } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="쿨다운 무시 신뢰도 (%)"
+                      type="number"
+                      value={(tradingConfig.tradingSettings.cooldown.minConfidenceOverride * 100).toFixed(0)}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          cooldown: {
+                            ...tradingConfig.tradingSettings.cooldown,
+                            minConfidenceOverride: parseFloat(e.target.value) / 100 || 0.85
+                          }
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 50, max: 100 } }}
+                      helperText="이 신뢰도 이상이면 쿨다운 무시"
+                    />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAdvancedConfigOpen(false)}>
+            취소
+          </Button>
+          <Button onClick={saveTradingConfig} variant="contained">
+            설정 저장
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );
