@@ -13,6 +13,7 @@ export interface TradingConfig {
   buyingCooldown: number; // 매수 쿨타임 (분)
   sellingCooldown: number; // 매도 쿨타임 (분)
   minConfidenceForTrade: number; // 거래 최소 신뢰도
+  sellRatio: number; // 매도 비율 (0.1 = 10%, 1.0 = 100%)
 }
 
 export interface TradingStatus {
@@ -45,7 +46,8 @@ class TradingEngine extends EventEmitter {
     rsiOversold: 30,
     buyingCooldown: 30, // 30분 매수 쿨타임
     sellingCooldown: 20, // 20분 매도 쿨타임
-    minConfidenceForTrade: 60 // 60% 이상 신뢰도에서만 거래
+    minConfidenceForTrade: 60, // 60% 이상 신뢰도에서만 거래
+    sellRatio: 0.5 // 50% 매도 (기본값)
   };
   
   private analysisResults: Map<string, CoinAnalysis> = new Map();
@@ -261,11 +263,34 @@ class TradingEngine extends EventEmitter {
 
         // 매도 로직
         if (coinAccount && parseFloat(coinAccount.balance) > 0) {
+          // 신뢰도 기반 매도 비율 조정
+          let adjustedSellRatio = this.config.sellRatio;
+          
+          // 신뢰도가 90% 이상이면 더 많이 매도 (최대 100%)
+          if (technical.confidence >= 0.9) {
+            adjustedSellRatio = Math.min(1.0, this.config.sellRatio * 1.5);
+          }
+          // 신뢰도가 80% 이상이면 조금 더 매도
+          else if (technical.confidence >= 0.8) {
+            adjustedSellRatio = Math.min(1.0, this.config.sellRatio * 1.2);
+          }
+          // 신뢰도가 낮으면 (60-70%) 더 적게 매도
+          else if (technical.confidence < 0.7) {
+            adjustedSellRatio = this.config.sellRatio * 0.7;
+          }
+          
+          // 매도할 수량 계산
+          const totalBalance = parseFloat(coinAccount.balance);
+          const sellAmount = totalBalance * adjustedSellRatio;
+          const sellAmountStr = sellAmount.toFixed(8); // 소수점 8자리까지
+          
           console.log(`Sell signal for ${market} - confidence: ${technical.confidence.toFixed(1)}%`);
+          console.log(`Base ratio: ${(this.config.sellRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedSellRatio * 100).toFixed(1)}%`);
+          console.log(`Total balance: ${totalBalance}, Sell amount: ${sellAmount}`);
           
           // 실제 거래 실행 (테스트 모드에서는 로그만)
           if (this.config.enableRealTrading) {
-            await upbitService.sellOrder(market, coinAccount.balance);
+            await upbitService.sellOrder(market, sellAmountStr);
           }
           
           // 거래 시간 기록
