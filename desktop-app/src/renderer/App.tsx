@@ -811,16 +811,16 @@ const App: React.FC = () => {
                 <CardContent sx={{ p: 2 }}>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                     <Typography variant="caption" fontWeight="bold">
-                      {analysis.ticker.replace('KRW-', '')}
+                      {analysis.ticker?.replace('KRW-', '') || 'Unknown'}
                     </Typography>
                     <Chip
-                      label={getDecisionText(analysis.decision)}
-                      color={getDecisionColor(analysis.decision) as any}
+                      label={getDecisionText(analysis.decision || 'HOLD')}
+                      color={getDecisionColor(analysis.decision || 'HOLD') as any}
                       size="small"
                     />
                   </Box>
                   <Typography variant="caption" color="text.secondary" display="block">
-                    신뢰도: {(analysis.confidence * 100).toFixed(0)}%
+                    신뢰도: {((analysis.confidence || 0) * 100).toFixed(0)}%
                   </Typography>
                   {tradingState.aiEnabled && analysis.reason && (
                     <Typography 
@@ -1036,7 +1036,7 @@ const App: React.FC = () => {
                     <CardContent>
                       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                         <Typography variant="h6" fontWeight="bold">
-                          {coin.ticker.replace('KRW-', '')}
+                          {coin.ticker?.replace('KRW-', '') || 'Unknown'}
                         </Typography>
                         <Chip
                           label={coin.enabled ? '활성' : '비활성'}
@@ -1063,7 +1063,7 @@ const App: React.FC = () => {
                             sx={{ mb: 1 }}
                           />
                           <Typography variant="caption" color="text.secondary" display="block">
-                            신뢰도: {(analysis.confidence * 100).toFixed(0)}%
+                            신뢰도: {((analysis.confidence || 0) * 100).toFixed(0)}%
                           </Typography>
                           {tradingState.aiEnabled && analysis.reason && (
                             <Box sx={{ 
@@ -1244,7 +1244,7 @@ const App: React.FC = () => {
                   <>
                     <Box display="flex" alignItems="center" gap={2} mb={3}>
                       <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        {selectedCoin.ticker.replace('KRW-', '').charAt(0)}
+                        {selectedCoin.ticker?.replace('KRW-', '').charAt(0) || 'U'}
                       </Avatar>
                       <Box>
                         <Typography variant="h6" fontWeight="bold">
@@ -1533,7 +1533,7 @@ const App: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box display="flex" alignItems="center" gap={2}>
                   <Typography variant="h6">
-                    {selectedAnalysisDetail.ticker.replace('KRW-', '')} 분석 상세 정보
+                    {selectedAnalysisDetail.ticker?.replace('KRW-', '') || 'Unknown'} 분석 상세 정보
                   </Typography>
                   <Chip
                     label={getDecisionText(selectedAnalysisDetail.decision)}
