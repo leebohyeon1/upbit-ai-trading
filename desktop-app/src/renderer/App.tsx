@@ -221,6 +221,7 @@ const App: React.FC = () => {
     }
   });
   const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
+  const [advancedConfigTab, setAdvancedConfigTab] = useState(0);
   
   // 기술적 지표 목록
   const indicators = [
@@ -1634,15 +1635,20 @@ const App: React.FC = () => {
           </Box>
         </DialogTitle>
         <DialogContent dividers>
-          <Tabs value={0} sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs 
+            value={advancedConfigTab} 
+            onChange={(e, newValue) => setAdvancedConfigTab(newValue)}
+            sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+          >
             <Tab label="결정 임계값" />
             <Tab label="신호 강도" />
             <Tab label="지표 가중치" />
             <Tab label="거래 설정" />
           </Tabs>
 
-          {/* 결정 임계값 설정 */}
-          <Box>
+          {/* Tab 0: 결정 임계값 설정 */}
+          {advancedConfigTab === 0 && (
+            <Box>
             <Typography variant="h6" gutterBottom>결정 임계값</Typography>
             <Grid container spacing={3} mb={4}>
               <Grid item xs={12} md={6}>
@@ -1682,7 +1688,7 @@ const App: React.FC = () => {
             </Grid>
 
             <Typography variant="h6" gutterBottom>투자 비율</Typography>
-            <Grid container spacing={3} mb={4}>
+            <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
@@ -1732,8 +1738,16 @@ const App: React.FC = () => {
                 />
               </Grid>
             </Grid>
+            </Box>
+          )}
 
+          {/* Tab 1: 신호 강도 설정 */}
+          {advancedConfigTab === 1 && (
+            <Box>
             <Typography variant="h6" gutterBottom>신호 강도 설정</Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>
+              각 신호의 강도를 0.0~1.0 범위에서 조정합니다. 높을수록 해당 신호의 영향력이 커집니다.
+            </Typography>
             <Grid container spacing={2}>
               {signalStrengthKeys.map((signal) => (
                 <Grid item xs={12} sm={6} md={4} key={signal.key}>
@@ -1755,8 +1769,16 @@ const App: React.FC = () => {
                 </Grid>
               ))}
             </Grid>
+            </Box>
+          )}
 
-            <Typography variant="h6" gutterBottom mt={4}>지표 가중치 및 사용 여부</Typography>
+          {/* Tab 2: 지표 가중치 및 사용 여부 */}
+          {advancedConfigTab === 2 && (
+            <Box>
+            <Typography variant="h6" gutterBottom>지표 가중치 및 사용 여부</Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>
+              각 기술적 지표의 사용 여부와 가중치를 설정합니다. 가중치가 높을수록 해당 지표의 영향력이 커집니다.
+            </Typography>
             <Grid container spacing={2}>
               {indicators.map((indicator) => (
                 <Grid item xs={12} sm={6} md={4} key={indicator.key}>
@@ -1929,7 +1951,8 @@ const App: React.FC = () => {
                 </>
               )}
             </Grid>
-          </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAdvancedConfigOpen(false)}>

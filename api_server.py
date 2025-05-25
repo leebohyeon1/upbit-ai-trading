@@ -32,24 +32,28 @@ async def lifespan(app: FastAPI):
     # Startup
     yield
     # Shutdown
-    print("Shutting down trading bots...")
-    
-    # 모든 봇 중지
-    trading_state.stop_flag = True
-    
-    # WebSocket 클라이언트 정리
-    for websocket in list(trading_state.websocket_clients):
-        try:
-            await websocket.close()
-        except:
-            pass
-    trading_state.websocket_clients.clear()
-    
-    # 봇 스레드 종료 대기 (non-blocking)
-    import asyncio
-    await asyncio.sleep(0.1)  # 약간의 대기 시간
-    
-    print("Shutdown complete")
+    try:
+        print("Shutting down trading bots...")
+        
+        # 모든 봇 중지
+        trading_state.stop_flag = True
+        
+        # WebSocket 클라이언트 정리
+        for websocket in list(trading_state.websocket_clients):
+            try:
+                await websocket.close()
+            except Exception:
+                pass
+        trading_state.websocket_clients.clear()
+        
+        # 약간의 대기 시간 후 종료
+        await asyncio.sleep(0.1)
+        print("Server shutdown complete")
+    except Exception as e:
+        print(f"Error during shutdown: {e}")
+    finally:
+        # 강제로 모든 작업 정리
+        pass
 
 app = FastAPI(title="Upbit AI Trading API", lifespan=lifespan)
 

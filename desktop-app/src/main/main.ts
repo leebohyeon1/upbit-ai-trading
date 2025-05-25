@@ -583,6 +583,11 @@ class TradingApp {
         return false;
       }
     });
+
+    // AI 모드 토글
+    ipcMain.handle('toggle-ai', async (event, enabled: boolean) => {
+      return await this.toggleAI(enabled);
+    });
   }
 }
 
