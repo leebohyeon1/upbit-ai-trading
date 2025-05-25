@@ -34,23 +34,26 @@ class UpbitService {
       throw new Error('API keys not set');
     }
 
-    const payload = {
+    const payload: any = {
       access_key: this.accessKey,
-      nonce: Date.now().toString(),
+      nonce: crypto.randomUUID(),
     };
 
     if (query) {
       const queryHash = crypto.createHash('sha512').update(query, 'utf-8').digest('hex');
-      (payload as any).query_hash = queryHash;
-      (payload as any).query_hash_alg = 'SHA512';
+      payload.query_hash = queryHash;
+      payload.query_hash_alg = 'SHA512';
     }
 
-    const token = crypto
-      .createSign('sha256')
-      .update(JSON.stringify(payload))
-      .sign(this.secretKey, 'base64');
+    // JWT 생성
+    const header = Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'HS256' })).toString('base64url');
+    const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = crypto
+      .createHmac('sha256', this.secretKey)
+      .update(`${header}.${payloadStr}`)
+      .digest('base64url');
 
-    return `Bearer ${token}`;
+    return `Bearer ${header}.${payloadStr}.${signature}`;
   }
 
   // 마켓 정보 조회 (공개 API)
