@@ -129,34 +129,37 @@ class AnalysisService {
     let signal: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
     let confidence = 0;
 
-    // 매수 신호 조건들
+    // 매수 신호 조건들 (조건 완화)
     const buySignals = [
-      rsi < 30, // RSI 과매도
-      currentPrice < bollinger.lower, // 볼린저 밴드 하단 돌파
+      rsi < 40, // RSI 과매도 (완화)
+      currentPrice < bollinger.middle, // 볼린저 밴드 중간선 아래
       sma20 > sma50, // 골든크로스
-      macd.histogram > 0 // MACD 히스토그램 양수
+      macd.histogram > 0, // MACD 히스토그램 양수
+      rsi < 50 && macd.macd > macd.signal // RSI 중립 이하 + MACD 상승
     ];
 
-    // 매도 신호 조건들
+    // 매도 신호 조건들 (조건 완화)
     const sellSignals = [
-      rsi > 70, // RSI 과매수
-      currentPrice > bollinger.upper, // 볼린저 밴드 상단 돌파
+      rsi > 60, // RSI 과매수 (완화)
+      currentPrice > bollinger.middle, // 볼린저 밴드 중간선 위
       sma20 < sma50, // 데드크로스
-      macd.histogram < 0 // MACD 히스토그램 음수
+      macd.histogram < 0, // MACD 히스토그램 음수
+      rsi > 50 && macd.macd < macd.signal // RSI 중립 이상 + MACD 하락
     ];
 
     const buyCount = buySignals.filter(Boolean).length;
     const sellCount = sellSignals.filter(Boolean).length;
 
-    if (buyCount >= 2) {
+    // 더 민감한 신호 결정
+    if (buyCount >= 2 || (buyCount > sellCount && buyCount >= 1)) {
       signal = 'BUY';
-      confidence = Math.min(50 + (buyCount * 15), 85); // 50-85% 범위
-    } else if (sellCount >= 2) {
+      confidence = Math.min(40 + (buyCount * 12), 80); // 40-80% 범위
+    } else if (sellCount >= 2 || (sellCount > buyCount && sellCount >= 1)) {
       signal = 'SELL';
-      confidence = Math.min(50 + (sellCount * 15), 85); // 50-85% 범위
+      confidence = Math.min(40 + (sellCount * 12), 80); // 40-80% 범위
     } else {
       signal = 'HOLD';
-      confidence = Math.max(30, 50 - Math.abs(buyCount - sellCount) * 10); // 30-50% 범위
+      confidence = Math.max(25, 45 - Math.abs(buyCount - sellCount) * 8); // 25-45% 범위
     }
 
     return {

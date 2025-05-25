@@ -266,7 +266,6 @@ const App: React.FC = () => {
     { ticker: 'KRW-XRP', name: '리플 (XRP)' },
     { ticker: 'KRW-DOGE', name: '도지코인 (DOGE)' },
     { ticker: 'KRW-SOL', name: '솔라나 (SOL)' },
-    { ticker: 'KRW-MATIC', name: '폴리곤 (MATIC)' },
     { ticker: 'KRW-ADA', name: '카르다노 (ADA)' },
     { ticker: 'KRW-AVAX', name: '아발란체 (AVAX)' },
     { ticker: 'KRW-DOT', name: '폴카닷 (DOT)' },

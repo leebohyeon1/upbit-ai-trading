@@ -130,7 +130,10 @@ class TradingEngine extends EventEmitter {
         try {
           // 캔들 데이터 가져오기
           const candles = await upbitService.getCandles(market, 200);
-          if (candles.length === 0) continue;
+          if (candles.length === 0) {
+            console.log(`No candle data available for ${market}, skipping...`);
+            continue;
+          }
 
           // 현재가 가져오기
           const tickers = await upbitService.getTickers([market]);
@@ -174,7 +177,7 @@ class TradingEngine extends EventEmitter {
           console.log(`Analysis completed for ${market}: ${technicalAnalysis.signal} (${technicalAnalysis.confidence.toFixed(1)}%)`);
           
         } catch (error) {
-          console.error(`Failed to analyze ${market}:`, error);
+          console.log(`Failed to analyze ${market}: ${(error as Error).message}`);
         }
       }
 
