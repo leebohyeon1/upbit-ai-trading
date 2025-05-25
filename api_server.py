@@ -53,9 +53,9 @@ async def shutdown_event():
             pass
     trading_state.websocket_clients.clear()
     
-    # 봇 스레드 종료 대기
-    for ticker, thread in list(trading_state.bot_threads.items()):
-        thread.join(timeout=1)
+    # 봇 스레드 종료 대기 (non-blocking)
+    import asyncio
+    await asyncio.sleep(0.1)  # 약간의 대기 시간
     
     print("Shutdown complete")
 
@@ -476,14 +476,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    import signal
-    import sys
-    
-    def signal_handler(sig, frame):
-        print("\nShutting down gracefully...")
-        sys.exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)
     
     try:
         uvicorn.run(
