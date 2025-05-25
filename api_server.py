@@ -187,10 +187,24 @@ def run_trading_bot_for_ticker(ticker: str):
         while not trading_state.stop_flag and ticker in trading_state.active_tickers:
             try:
                 # 현재 시장 데이터 가져오기
+                current_price = upbit_api.get_current_price(ticker)
+                orderbook = upbit_api.get_orderbook(ticker)
+                
+                # 데이터 유효성 검사
+                if current_price is None:
+                    logger_instance.log_error(f"[{ticker}] 현재가 조회 실패")
+                    time.sleep(60)
+                    continue
+                    
+                if orderbook is None:
+                    logger_instance.log_error(f"[{ticker}] 오더북 조회 실패")
+                    time.sleep(60)
+                    continue
+                
                 market_data = {
                     "ticker": ticker,
-                    "current_price": upbit_api.get_current_price(ticker),
-                    "orderbook": upbit_api.get_orderbook(ticker)
+                    "current_price": current_price,
+                    "orderbook": orderbook
                 }
                 
                 # analyze 메서드 실행

@@ -74,6 +74,10 @@ class MarketAnalyzer:
     def get_current_price(self, ticker="KRW-BTC"):
         """현재 가격 조회"""
         try:
+            # 저장된 현재가 데이터가 있으면 사용
+            if hasattr(self, '_current_price') and self._current_price is not None:
+                return [{"market": ticker, "trade_price": self._current_price}]
+            
             # get_ticker 대신 get_current_price 사용
             current_price = pyupbit.get_current_price(ticker)
             if current_price is None:
@@ -133,15 +137,19 @@ class MarketAnalyzer:
     def analyze_orderbook(self, ticker="KRW-BTC"):
         """호가창 분석"""
         try:
-            # 호가창 데이터 조회
-            orderbook = pyupbit.get_orderbook(ticker)
+            # 저장된 호가창 데이터가 있으면 사용
+            if hasattr(self, '_orderbook') and self._orderbook is not None:
+                orderbook = self._orderbook
+            else:
+                # 호가창 데이터 조회
+                orderbook = pyupbit.get_orderbook(ticker)
             
-            if not orderbook or len(orderbook) == 0:
+            if not orderbook:
                 logger.error("호가창 데이터가 비어있습니다.")
                 return 1.0
                 
             # 데이터 구조 확인 (list 형태인 경우)
-            if isinstance(orderbook, list):
+            if isinstance(orderbook, list) and len(orderbook) > 0:
                 orderbook_data = orderbook[0]
             else:
                 orderbook_data = orderbook
@@ -786,7 +794,13 @@ class SignalAnalyzer(MarketAnalyzer):
     def analyze(self, market_data, ticker="KRW-BTC"):
         """시장 분석 및 매매 신호 생성"""
         try:
-            # 기존 로직...
+            # market_data가 전달된 경우 현재가와 호가창 정보를 사용
+            if market_data and isinstance(market_data, dict):
+                # 현재가와 호가창 정보를 저장
+                self._current_price = market_data.get("current_price")
+                self._orderbook = market_data.get("orderbook")
+                
+            # 기존 MarketAnalyzer의 analyze 메서드 사용
             market_analysis = super().analyze(ticker)
             
             # market_analysis가 None이거나 비어있는 경우 기본값 설정
@@ -800,12 +814,9 @@ class SignalAnalyzer(MarketAnalyzer):
                     "signals": [],
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "signal_counts": {"buy": 0, "sell": 0, "hold": 0},
-                    "current_price": market_data.get("current_price"),
-                    "price_change_24h": market_data.get("price_change_24h", "N/A")
+                    "current_price": market_data.get("current_price") if market_data else None,
+                    "price_change_24h": market_data.get("price_change_24h", "N/A") if market_data else "N/A"
                 }
-        
-            # 기존 MarketAnalyzer의 analyze 메서드 사용
-            market_analysis = super().analyze(ticker)
             
             # Claude AI 분석 통합 (설정된 경우)
             claude_settings = self.config.get("CLAUDE_SETTINGS", {})
