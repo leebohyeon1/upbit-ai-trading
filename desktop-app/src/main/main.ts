@@ -154,51 +154,6 @@ class TradingApp {
     return path.join(__dirname, 'icon.png');
   }
 
-  private setupIPC() {
-    ipcMain.handle('get-trading-state', () => {
-      return this.tradingState;
-    });
-
-    ipcMain.handle('start-trading', async (event, tickers: string[]) => {
-      return await this.startTrading(tickers);
-    });
-
-    ipcMain.handle('stop-trading', async () => {
-      return await this.stopTrading();
-    });
-
-    ipcMain.handle('toggle-ai', async (event, enabled: boolean) => {
-      return await this.toggleAI(enabled);
-    });
-
-    ipcMain.handle('minimize-to-tray', () => {
-      this.mainWindow?.hide();
-    });
-
-    ipcMain.handle('save-api-keys', async (event, keys) => {
-      return await this.saveApiKeys(keys);
-    });
-
-    ipcMain.handle('get-api-keys', async () => {
-      return await this.getApiKeys();
-    });
-
-    ipcMain.handle('save-portfolio', async (event, portfolio) => {
-      return await this.savePortfolio(portfolio);
-    });
-
-    ipcMain.handle('get-portfolio', async () => {
-      return await this.getPortfolio();
-    });
-
-    ipcMain.handle('save-analysis-configs', async (event, configs) => {
-      return await this.saveAnalysisConfigs(configs);
-    });
-
-    ipcMain.handle('get-analysis-configs', async () => {
-      return await this.getAnalysisConfigs();
-    });
-  }
 
   private startPythonBackend() {
     // Windows에서는 실행 파일이 dist 폴더에 있으므로 경로 조정
