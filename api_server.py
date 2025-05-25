@@ -202,6 +202,10 @@ def run_trading_bot_for_ticker(ticker: str):
         # 트레이딩 루프 실행
         logger_instance.log_app(f"자동매매 시작 - 티커: {ticker}, AI: {trading_state.ai_enabled}")
         while not trading_state.stop_flag and ticker in trading_state.active_tickers:
+            # 루프 시작 시 종료 조건 재확인
+            if trading_state.stop_flag or ticker not in trading_state.active_tickers:
+                print(f"[{ticker}] 루프 중지 신호 감지 - stop_flag: {trading_state.stop_flag}, active: {ticker in trading_state.active_tickers}")
+                break
             try:
                 # 현재 시장 데이터 가져오기
                 current_price = upbit_api.get_current_price(ticker)
@@ -287,6 +291,10 @@ def run_trading_bot_for_ticker(ticker: str):
             logger_instance.log_error(f"[{ticker}] 트레이스백: {traceback.format_exc()}")
     finally:
         # 종료 시 정리
+        print(f"[{ticker}] 트레이딩 봇 종료됨")
+        if logger_instance:
+            logger_instance.log_app(f"[{ticker}] 트레이딩 봇 종료")
+        
         if ticker in trading_state.bot_threads:
             del trading_state.bot_threads[ticker]
         if ticker in trading_state.trading_engines:
@@ -295,6 +303,7 @@ def run_trading_bot_for_ticker(ticker: str):
         # 모든 봇이 종료되면 전체 상태도 업데이트
         if not trading_state.bot_threads:
             trading_state.is_running = False
+            print("모든 트레이딩 봇이 종료되어 전체 자동매매 상태를 중지로 변경했습니다.")
 
 @app.post("/start", response_model=SuccessResponse)
 async def start_trading(request: StartTradingRequest, background_tasks: BackgroundTasks):
@@ -379,21 +388,41 @@ async def toggle_ai(request: ToggleAIRequest):
         
         # 실행 중이면 모든 봇 재시작
         if trading_state.is_running and trading_state.active_tickers:
+            print(f"AI 모드 변경: {request.enabled} - 기존 봇들을 재시작합니다.")
+            
             # 현재 실행 중인 티커 저장
             current_tickers = trading_state.active_tickers.copy()
             
-            # 모든 봇 중지
+            # 1단계: 모든 봇에게 중지 신호 전송
             trading_state.stop_flag = True
-            for ticker, thread in list(trading_state.bot_threads.items()):
-                thread.join(timeout=5)
             
-            # 정리
+            # 2단계: active_tickers를 비워서 루프 종료 조건 만족
+            trading_state.active_tickers = []
+            
+            # 3단계: 모든 스레드가 완전히 종료될 때까지 대기 (최대 15초)
+            print("기존 트레이딩 봇 종료 대기 중...")
+            for ticker, thread in list(trading_state.bot_threads.items()):
+                print(f"  - {ticker} 봇 종료 대기...")
+                thread.join(timeout=15)  # 더 긴 대기 시간
+                if thread.is_alive():
+                    print(f"  - 경고: {ticker} 봇이 15초 내에 종료되지 않았습니다.")
+                else:
+                    print(f"  - {ticker} 봇 정상 종료 완료")
+            
+            # 4단계: 리소스 정리
             trading_state.bot_threads.clear()
             trading_state.trading_engines.clear()
             
-            # 새로운 설정으로 재시작
+            # 5단계: 잠시 대기 (완전한 정리를 위해)
+            await asyncio.sleep(1)
+            
+            # 6단계: 새로운 설정으로 재시작
+            print("새로운 AI 설정으로 트레이딩 봇 재시작...")
             trading_state.stop_flag = False
+            trading_state.active_tickers = current_tickers
+            
             for ticker in current_tickers:
+                print(f"  - {ticker} 봇 시작 중...")
                 thread = threading.Thread(
                     target=run_trading_bot_for_ticker,
                     args=(ticker,),
@@ -402,9 +431,12 @@ async def toggle_ai(request: ToggleAIRequest):
                 thread.daemon = True
                 thread.start()
                 trading_state.bot_threads[ticker] = thread
+            
+            print(f"AI 모드 변경 완료: {len(current_tickers)}개 봇이 재시작되었습니다.")
         
         return SuccessResponse(success=True, message=f"AI {'enabled' if request.enabled else 'disabled'}")
     except Exception as e:
+        print(f"AI 토글 오류: {e}")
         return SuccessResponse(success=False, message=str(e))
 
 class ToggleRealTradeRequest(BaseModel):
