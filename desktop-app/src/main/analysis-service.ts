@@ -102,7 +102,7 @@ class AnalysisService {
 
   // 종합 기술적 분석
   analyzeTechnicals(candles: CandleData[]): TechnicalAnalysis {
-    if (candles.length < 50) {
+    if (candles.length < 20) {
       return {
         market: candles[0]?.market || '',
         rsi: 50,
@@ -110,7 +110,7 @@ class AnalysisService {
         bollinger: { upper: 0, middle: 0, lower: 0 },
         sma: { sma20: 0, sma50: 0 },
         signal: 'HOLD',
-        confidence: 0,
+        confidence: 30,
         timestamp: Date.now()
       };
     }
@@ -150,13 +150,13 @@ class AnalysisService {
 
     if (buyCount >= 2) {
       signal = 'BUY';
-      confidence = (buyCount / buySignals.length) * 100;
+      confidence = Math.min(50 + (buyCount * 15), 85); // 50-85% 범위
     } else if (sellCount >= 2) {
       signal = 'SELL';
-      confidence = (sellCount / sellSignals.length) * 100;
+      confidence = Math.min(50 + (sellCount * 15), 85); // 50-85% 범위
     } else {
       signal = 'HOLD';
-      confidence = 50;
+      confidence = Math.max(30, 50 - Math.abs(buyCount - sellCount) * 10); // 30-50% 범위
     }
 
     return {

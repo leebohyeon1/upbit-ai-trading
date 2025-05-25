@@ -606,6 +606,12 @@ class TradingApp {
       }
     });
 
+    tradingEngine.on('singleAnalysisCompleted', (analysis: any) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('analysis-update', analysis);
+      }
+    });
+
     tradingEngine.on('tradeExecuted', (trade: any) => {
       if (this.mainWindow) {
         this.mainWindow.webContents.send('trade-executed', trade);

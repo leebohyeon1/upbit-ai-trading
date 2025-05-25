@@ -151,6 +151,17 @@ class TradingEngine extends EventEmitter {
 
           this.analysisResults.set(market, coinAnalysis);
 
+          // 개별 분석 결과 즉시 전송 (프론트엔드 형식으로 변환)
+          const frontendAnalysis = {
+            ticker: market,
+            decision: technicalAnalysis.signal.toLowerCase(),
+            confidence: technicalAnalysis.confidence / 100,
+            reason: aiAnalysis,
+            timestamp: new Date().toISOString()
+          };
+          
+          this.emit('singleAnalysisCompleted', frontendAnalysis);
+
           // 거래 신호 처리
           if (this.config.enableRealTrading) {
             await this.processTradeSignal(coinAnalysis);
@@ -163,8 +174,16 @@ class TradingEngine extends EventEmitter {
         }
       }
 
-      // 분석 완료 이벤트 발송
-      this.emit('analysisCompleted', Array.from(this.analysisResults.values()));
+      // 분석 완료 이벤트 발송 (프론트엔드 형식으로 변환)
+      const frontendAnalyses = Array.from(this.analysisResults.values()).map(analysis => ({
+        ticker: analysis.market,
+        decision: analysis.analysis.signal.toLowerCase(),
+        confidence: analysis.analysis.confidence / 100,
+        reason: analysis.aiAnalysis,
+        timestamp: new Date(analysis.lastUpdated).toISOString()
+      }));
+      
+      this.emit('analysisCompleted', frontendAnalyses);
       
     } catch (error) {
       console.error('Analysis failed:', error);
