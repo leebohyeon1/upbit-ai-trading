@@ -407,6 +407,30 @@ async def toggle_ai(request: ToggleAIRequest):
     except Exception as e:
         return SuccessResponse(success=False, message=str(e))
 
+class ToggleRealTradeRequest(BaseModel):
+    enabled: bool
+
+@app.post("/toggle-real-trade", response_model=SuccessResponse)
+async def toggle_real_trade(request: ToggleRealTradeRequest):
+    """실제 거래 기능 토글"""
+    try:
+        trading_state.enable_real_trade = request.enabled
+        
+        # 환경 변수로도 설정 (기존 코드와의 호환성)
+        os.environ['ENABLE_REAL_TRADE'] = 'true' if request.enabled else 'false'
+        
+        # 실행 중인 모든 트레이딩 엔진의 enable_trade 속성 업데이트
+        for ticker, engine in trading_state.trading_engines.items():
+            engine.enable_trade = request.enabled
+            engine.logger.log_app(f"실제 거래 활성화: {request.enabled}")
+        
+        return SuccessResponse(
+            success=True, 
+            message=f"Real trading {'enabled' if request.enabled else 'disabled'}"
+        )
+    except Exception as e:
+        return SuccessResponse(success=False, message=str(e))
+
 # WebSocket 엔드포인트 (실시간 데이터)
 from fastapi import WebSocket
 import json

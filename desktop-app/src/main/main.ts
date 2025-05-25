@@ -383,11 +383,12 @@ class TradingApp {
 
   private async saveApiKeys(keys: any): Promise<boolean> {
     try {
-      // 암호화된 키 저장
+      // 암호화된 키 저장 (실제 거래 설정도 포함)
       const encryptedKeys = {
         upbitAccessKey: safeStorage.encryptString(keys.upbitAccessKey),
         upbitSecretKey: safeStorage.encryptString(keys.upbitSecretKey),
-        anthropicApiKey: keys.anthropicApiKey ? safeStorage.encryptString(keys.anthropicApiKey) : null
+        anthropicApiKey: keys.anthropicApiKey ? safeStorage.encryptString(keys.anthropicApiKey) : null,
+        enableRealTrade: keys.enableRealTrade || false  // 실제 거래 설정 저장
       };
 
       fs.writeFileSync(
@@ -400,8 +401,12 @@ class TradingApp {
         await apiClient.setApiKeys({
           upbit_access_key: keys.upbitAccessKey,
           upbit_secret_key: keys.upbitSecretKey,
-          anthropic_api_key: keys.anthropicApiKey
+          anthropic_api_key: keys.anthropicApiKey,
+          enable_real_trade: keys.enableRealTrade || false
         });
+        
+        // 실제 거래 토글도 별도 호출
+        await apiClient.toggleRealTrade(keys.enableRealTrade || false);
       } catch (error) {
         console.error('Failed to send API keys to server:', error);
       }
@@ -421,7 +426,8 @@ class TradingApp {
         return {
           upbitAccessKey: '',
           upbitSecretKey: '',
-          anthropicApiKey: ''
+          anthropicApiKey: '',
+          enableRealTrade: false
         };
       }
 
@@ -432,14 +438,16 @@ class TradingApp {
         upbitSecretKey: safeStorage.decryptString(Buffer.from(encryptedKeys.upbitSecretKey)),
         anthropicApiKey: encryptedKeys.anthropicApiKey 
           ? safeStorage.decryptString(Buffer.from(encryptedKeys.anthropicApiKey))
-          : ''
+          : '',
+        enableRealTrade: encryptedKeys.enableRealTrade || false
       };
     } catch (error) {
       console.error('Failed to load API keys:', error);
       return {
         upbitAccessKey: '',
         upbitSecretKey: '',
-        anthropicApiKey: ''
+        anthropicApiKey: '',
+        enableRealTrade: false
       };
     }
   }
@@ -503,6 +511,73 @@ class TradingApp {
       console.error('Failed to load analysis configs:', error);
       return [];
     }
+  }
+
+  private setupIPC() {
+    // 거래 상태 조회
+    ipcMain.handle('get-trading-state', async () => {
+      return this.tradingState;
+    });
+
+    // 자동매매 시작
+    ipcMain.handle('start-trading', async (event, tickers: string[]) => {
+      return await this.startTrading(tickers);
+    });
+
+    // 자동매매 중지
+    ipcMain.handle('stop-trading', async () => {
+      return await this.stopTrading();
+    });
+
+    // AI 토글
+    ipcMain.handle('toggle-ai', async (event, enabled: boolean) => {
+      return await this.toggleAI(enabled);
+    });
+
+    // 트레이로 최소화
+    ipcMain.handle('minimize-to-tray', async () => {
+      this.mainWindow?.hide();
+    });
+
+    // API 키 저장
+    ipcMain.handle('save-api-keys', async (event, keys: any) => {
+      return await this.saveApiKeys(keys);
+    });
+
+    // API 키 조회
+    ipcMain.handle('get-api-keys', async () => {
+      return await this.getApiKeys();
+    });
+
+    // 포트폴리오 저장
+    ipcMain.handle('save-portfolio', async (event, portfolio: any[]) => {
+      return await this.savePortfolio(portfolio);
+    });
+
+    // 포트폴리오 조회
+    ipcMain.handle('get-portfolio', async () => {
+      return await this.getPortfolio();
+    });
+
+    // 분석 설정 저장
+    ipcMain.handle('save-analysis-configs', async (event, configs: any[]) => {
+      return await this.saveAnalysisConfigs(configs);
+    });
+
+    // 분석 설정 조회
+    ipcMain.handle('get-analysis-configs', async () => {
+      return await this.getAnalysisConfigs();
+    });
+
+    // 실제 거래 토글
+    ipcMain.handle('toggle-real-trade', async (event, enabled: boolean) => {
+      try {
+        return await apiClient.toggleRealTrade(enabled);
+      } catch (error) {
+        console.error('Failed to toggle real trade:', error);
+        return false;
+      }
+    });
   }
 }
 

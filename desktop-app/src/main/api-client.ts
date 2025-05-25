@@ -66,12 +66,24 @@ class TradingAPIClient {
     }
   }
 
-  async setApiKeys(keys: { upbit_access_key: string; upbit_secret_key: string; anthropic_api_key?: string }): Promise<boolean> {
+  async setApiKeys(keys: { upbit_access_key: string; upbit_secret_key: string; anthropic_api_key?: string; enable_real_trade?: boolean }): Promise<boolean> {
     try {
       const response = await this.axiosInstance.post('/set-api-keys', keys);
       return response.data.success;
     } catch (error) {
       console.error('Failed to set API keys:', error);
+      return false;
+    }
+  }
+
+  async toggleRealTrade(enabled: boolean): Promise<boolean> {
+    try {
+      const response = await this.axiosInstance.post('/toggle-real-trade', {
+        enabled,
+      });
+      return response.data.success;
+    } catch (error) {
+      console.error('Failed to toggle real trade:', error);
       return false;
     }
   }

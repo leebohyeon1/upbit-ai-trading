@@ -110,6 +110,7 @@ declare global {
       startTrading: (tickers: string[]) => Promise<boolean>;
       stopTrading: () => Promise<boolean>;
       toggleAI: (enabled: boolean) => Promise<boolean>;
+      toggleRealTrade: (enabled: boolean) => Promise<boolean>;
       minimizeToTray: () => Promise<void>;
       onTradingStateChanged: (callback: (state: TradingState) => void) => void;
       onAnalysisUpdate: (callback: (analysis: TradingAnalysis) => void) => void;
@@ -342,6 +343,31 @@ const App: React.FC = () => {
       setError('API 키 저장 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleRealTrade = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = event.target.checked;
+    setError(null);
+    
+    // 상태 업데이트
+    setApiKeys({...apiKeys, enableRealTrade: enabled});
+    
+    // 즉시 API 호출
+    try {
+      const success = await window.electronAPI.toggleRealTrade(enabled);
+      if (success) {
+        setSuccessMessage(`실제 거래가 ${enabled ? '활성화' : '비활성화'}되었습니다.`);
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError('실제 거래 설정 변경에 실패했습니다.');
+        // 실패시 상태 롤백
+        setApiKeys({...apiKeys, enableRealTrade: !enabled});
+      }
+    } catch (err) {
+      setError('실제 거래 설정 변경 중 오류가 발생했습니다.');
+      // 실패시 상태 롤백
+      setApiKeys({...apiKeys, enableRealTrade: !enabled});
     }
   };
 
@@ -1275,8 +1301,9 @@ const App: React.FC = () => {
                 control={
                   <Switch
                     checked={apiKeys.enableRealTrade || false}
-                    onChange={(e) => setApiKeys({...apiKeys, enableRealTrade: e.target.checked})}
+                    onChange={handleToggleRealTrade}
                     color="warning"
+                    disabled={loading}
                   />
                 }
                 label={
