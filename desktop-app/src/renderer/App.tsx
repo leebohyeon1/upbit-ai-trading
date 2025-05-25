@@ -26,6 +26,9 @@ import {
   Divider,
   TextField,
   InputAdornment,
+  Avatar,
+  Grid,
+  LinearProgress,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -43,6 +46,12 @@ import {
   Save,
   Tune,
   PowerSettingsNew,
+  ShowChart,
+  Timeline,
+  AccountCircle,
+  NotificationImportant,
+  Star,
+  Upgrade,
 } from '@mui/icons-material';
 
 interface TradingState {
@@ -433,513 +442,731 @@ const App: React.FC = () => {
     setAnalysisConfigs(newConfigs);
   };
 
-  return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* 상단 고정 영역 */}
-      <Paper elevation={3} sx={{ position: 'sticky', top: 0, zIndex: 1100 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" px={3} py={2}>
-          <Box display="flex" alignItems="center" gap={2}>
-            <TrendingUp fontSize="large" color="primary" />
-            <Typography variant="h5" component="h1">
-              Upbit AI Trading
+  const renderSidebar = () => (
+    <Box sx={{ 
+      width: 200, 
+      height: '100vh', 
+      bgcolor: 'background.paper', 
+      borderRight: 1, 
+      borderColor: 'divider',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'fixed',
+      left: 0,
+      top: 0,
+      zIndex: 1000
+    }}>
+      {/* Logo */}
+      <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
+        <Box display="flex" alignItems="center" gap={1}>
+          <TrendingUp color="primary" />
+          <Typography variant="h6" fontWeight="bold">
+            Upbit AI
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Navigation */}
+      <Box sx={{ flex: 1, py: 2 }}>
+        {[
+          { label: '대시보드', icon: <Dashboard />, value: 0 },
+          { label: '포트폴리오', icon: <AccountBalance />, value: 1 },
+          { label: '분석설정', icon: <ShowChart />, value: 2 },
+          { label: '환경설정', icon: <Settings />, value: 3 },
+        ].map((item) => (
+          <Button
+            key={item.value}
+            fullWidth
+            startIcon={item.icon}
+            onClick={() => setTabValue(item.value)}
+            sx={{
+              justifyContent: 'flex-start',
+              px: 3,
+              py: 1.5,
+              mb: 0.5,
+              color: tabValue === item.value ? 'primary.main' : 'text.secondary',
+              bgcolor: tabValue === item.value ? 'primary.50' : 'transparent',
+              '&:hover': {
+                bgcolor: tabValue === item.value ? 'primary.100' : 'grey.50'
+              }
+            }}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </Box>
+
+      {/* Status/Upgrade Section */}
+      <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Card sx={{ bgcolor: 'primary.50', border: 1, borderColor: 'primary.200' }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <Star color="primary" fontSize="small" />
+              <Typography variant="body2" fontWeight="bold">
+                AI 상태
+              </Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              {tradingState.aiEnabled ? 'AI 활성화됨' : 'AI 비활성화됨'}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
+    </Box>
+  );
+
+  const renderRightSidebar = () => (
+    <Box sx={{ 
+      width: 300, 
+      height: '100vh', 
+      bgcolor: 'background.paper', 
+      borderLeft: 1, 
+      borderColor: 'divider',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'fixed',
+      right: 0,
+      top: 0,
+      zIndex: 1000,
+      overflow: 'auto'
+    }}>
+      {/* User Profile */}
+      <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Avatar sx={{ bgcolor: 'primary.main' }}>
+            <AccountCircle />
+          </Avatar>
+          <Box>
+            <Typography variant="subtitle2" fontWeight="bold">
+              트레이더
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              AI 자동매매 시스템
             </Typography>
           </Box>
-          <Box display="flex" alignItems="center" gap={1}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={tradingState.aiEnabled}
-                  onChange={handleToggleAI}
-                  size="small"
-                />
-              }
-              label={
-                <Box display="flex" alignItems="center" gap={0.5}>
-                  <Psychology fontSize="small" />
-                  <Typography variant="body2">AI</Typography>
-                </Box>
-              }
-              sx={{ mr: 1 }}
+        </Box>
+      </Box>
+
+      {/* Quick Stats */}
+      <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
+        <Typography variant="subtitle2" fontWeight="bold" mb={2}>
+          빠른 통계
+        </Typography>
+        <Box display="flex" flexDirection="column" gap={2}>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">
+              활성 코인
+            </Typography>
+            <Typography variant="body2" fontWeight="bold">
+              {portfolio.filter(c => c.enabled).length}개
+            </Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">
+              거래 상태
+            </Typography>
+            <Chip
+              label={tradingState.isRunning ? '실행중' : '중지됨'}
+              color={tradingState.isRunning ? 'success' : 'default'}
+              size="small"
             />
-            {tradingState.isRunning ? (
-              <Button
-                variant="contained"
-                color="error"
-                size="small"
-                startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <Stop />}
-                onClick={handleStopTrading}
-                disabled={loading}
-              >
-                자동매매 중지
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                color="success"
-                size="small"
-                startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <PlayArrow />}
-                onClick={handleStartTrading}
-                disabled={loading || portfolio.filter(c => c.enabled).length === 0}
-              >
-                자동매매 시작
-              </Button>
-            )}
-            <IconButton onClick={handleMinimize} size="small">
-              <Minimize />
-            </IconButton>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">
+              AI 상태
+            </Typography>
+            <Chip
+              label={tradingState.aiEnabled ? '활성' : '비활성'}
+              color={tradingState.aiEnabled ? 'primary' : 'default'}
+              size="small"
+            />
           </Box>
         </Box>
+      </Box>
 
-        <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
-          <Tab icon={<Dashboard />} label="대시보드" />
-          <Tab icon={<AccountBalance />} label="포트폴리오" />
-          <Tab icon={<Tune />} label="분석설정" />
-          <Tab icon={<Settings />} label="환경설정" />
-        </Tabs>
-      </Paper>
-
-      {/* 메인 콘텐츠 영역 - 스크롤 가능 */}
-      <Paper elevation={0} sx={{ flex: 1, overflow: 'auto', borderRadius: 0, height: 'calc(100vh - 120px)' }}>
-        {error && (
-          <Alert severity="error" sx={{ mx: 3, mt: 2, mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-
-        {successMessage && (
-          <Alert severity="success" sx={{ mx: 3, mt: 2, mb: 2 }} onClose={() => setSuccessMessage(null)}>
-            {successMessage}
-          </Alert>
-        )}
-
-        <TabPanel value={tabValue} index={0}>
-          <Box sx={{ display: 'flex', height: 'calc(100vh - 240px)', gap: 2 }}>
-            {/* Left Sidebar */}
-            <Box sx={{ width: 280, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* Portfolio Summary Card */}
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    포트폴리오 요약
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    활성 코인: {portfolio.filter(c => c.enabled).length}개 / 
-                    전체: {portfolio.length}개
-                  </Typography>
-                  {portfolio.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      포트폴리오 탭에서 코인을 추가해주세요.
+      {/* Recent Activities */}
+      <Box sx={{ flex: 1, p: 3 }}>
+        <Typography variant="subtitle2" fontWeight="bold" mb={2}>
+          최근 활동
+        </Typography>
+        {recentAnalyses.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            분석 결과가 없습니다.
+          </Typography>
+        ) : (
+          <Box display="flex" flexDirection="column" gap={1}>
+            {recentAnalyses.slice(0, 5).map((analysis, index) => (
+              <Card key={index} sx={{ bgcolor: 'grey.50' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="caption" fontWeight="bold">
+                      {analysis.ticker.replace('KRW-', '')}
                     </Typography>
-                  ) : (
-                    <Box display="flex" gap={1} flexWrap="wrap" mt={2}>
-                      {portfolio.filter(c => c.enabled).map(coin => (
+                    <Chip
+                      label={getDecisionText(analysis.decision)}
+                      color={getDecisionColor(analysis.decision) as any}
+                      size="small"
+                    />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    신뢰도: {(analysis.confidence * 100).toFixed(0)}%
+                  </Typography>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+
+  const renderMainContent = () => (
+    <Box sx={{ 
+      ml: '200px', 
+      mr: '300px', 
+      minHeight: '100vh',
+      bgcolor: 'grey.50',
+      p: 3
+    }}>
+      {/* Top Controls */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Box>
+          <Typography variant="h4" fontWeight="bold" gutterBottom>
+            안녕하세요! 👋
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            AI 기반 암호화폐 자동매매 시스템에 오신 것을 환영합니다
+          </Typography>
+        </Box>
+        <Box display="flex" gap={2}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={tradingState.aiEnabled}
+                onChange={handleToggleAI}
+              />
+            }
+            label="AI 모드"
+          />
+          {tradingState.isRunning ? (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <Stop />}
+              onClick={handleStopTrading}
+              disabled={loading}
+            >
+              자동매매 중지
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <PlayArrow />}
+              onClick={handleStartTrading}
+              disabled={loading || portfolio.filter(c => c.enabled).length === 0}
+            >
+              자동매매 시작
+            </Button>
+          )}
+          <IconButton onClick={handleMinimize}>
+            <Minimize />
+          </IconButton>
+        </Box>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {successMessage && (
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccessMessage(null)}>
+          {successMessage}
+        </Alert>
+      )}
+
+      {/* Welcome Banner */}
+      {tabValue === 0 && (
+        <Card sx={{ 
+          mb: 3, 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white'
+        }}>
+          <CardContent sx={{ p: 4 }}>
+            <Grid container alignItems="center" spacing={3}>
+              <Grid item xs={12} md={8}>
+                <Typography variant="h5" fontWeight="bold" gutterBottom>
+                  AI 트레이딩 대시보드
+                </Typography>
+                <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                  실시간 분석과 자동매매로 더 스마트한 투자를 시작하세요
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4} textAlign="center">
+                <TrendingUp sx={{ fontSize: 80, opacity: 0.8 }} />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Cards */}
+      {tabValue === 0 && (
+        <Grid container spacing={3} mb={3}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Avatar sx={{ bgcolor: 'primary.main' }}>
+                    <AccountBalance />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" fontWeight="bold">
+                      {portfolio.filter(c => c.enabled).length}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      활성 코인
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Avatar sx={{ bgcolor: 'success.main' }}>
+                    <Timeline />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" fontWeight="bold">
+                      {recentAnalyses.length}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      분석 완료
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Avatar sx={{ bgcolor: tradingState.isRunning ? 'success.main' : 'grey.500' }}>
+                    <PowerSettingsNew />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" fontWeight="bold">
+                      {tradingState.isRunning ? '실행중' : '중지됨'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      거래 상태
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Avatar sx={{ bgcolor: tradingState.aiEnabled ? 'primary.main' : 'grey.500' }}>
+                    <Psychology />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" fontWeight="bold">
+                      {tradingState.aiEnabled ? '활성' : '비활성'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      AI 상태
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      {/* Tab Content */}
+      <TabPanel value={tabValue} index={0}>
+        {/* Coin Cards */}
+        <Typography variant="h6" fontWeight="bold" mb={3}>
+          포트폴리오 코인
+        </Typography>
+        {portfolio.length === 0 ? (
+          <Card>
+            <CardContent sx={{ textAlign: 'center', py: 6 }}>
+              <AccountBalance sx={{ fontSize: 60, color: 'grey.300', mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                포트폴리오가 비어있습니다
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                포트폴리오 탭에서 코인을 추가하여 시작하세요
+              </Typography>
+              <Button variant="contained" onClick={() => setTabValue(1)}>
+                코인 추가하기
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Grid container spacing={3}>
+            {portfolio.map((coin) => {
+              const analysis = recentAnalyses.find(a => a.ticker === coin.ticker);
+              return (
+                <Grid item xs={12} sm={6} md={4} key={coin.ticker}>
+                  <Card sx={{ 
+                    border: coin.enabled ? 2 : 1,
+                    borderColor: coin.enabled ? 'primary.main' : 'divider',
+                    opacity: coin.enabled ? 1 : 0.6
+                  }}>
+                    <CardContent>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                        <Typography variant="h6" fontWeight="bold">
+                          {coin.ticker.replace('KRW-', '')}
+                        </Typography>
                         <Chip
-                          key={coin.ticker}
-                          label={coin.ticker.replace('KRW-', '')}
-                          color="primary"
+                          label={coin.enabled ? '활성' : '비활성'}
+                          color={coin.enabled ? 'primary' : 'default'}
                           size="small"
                         />
-                      ))}
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-
-            </Box>
-
-            {/* Right Main Content Area */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Card sx={{ flex: 1 }}>
-                <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="h6">
-                      최근 분석
-                    </Typography>
-                    {tradingState.isRunning && (
-                      <Chip
-                        icon={<CircularProgress size={16} />}
-                        label={`다음 분석까지: ${nextAnalysisTime}초`}
-                        color="primary"
-                        variant="outlined"
-                      />
-                    )}
-                  </Box>
-                  <Divider sx={{ mb: 3 }} />
-                  
-                  <Box sx={{ flex: 1, overflow: 'auto' }}>
-                    {!tradingState.isRunning ? (
-                      <Typography variant="body2" color="text.secondary">
-                        자동매매를 시작하면 분석 결과가 표시됩니다.
-                      </Typography>
-                    ) : recentAnalyses.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        첫 분석을 기다리고 있습니다...
-                      </Typography>
-                    ) : (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        {recentAnalyses
-                          .sort((a, b) => a.ticker.localeCompare(b.ticker))
-                          .map((analysis) => (
-                          <Card
-                            key={analysis.ticker}
-                            sx={{ 
-                              border: 2,
-                              borderColor: getDecisionColor(analysis.decision) === 'success' ? 'success.main' :
-                                          getDecisionColor(analysis.decision) === 'error' ? 'error.main' : 'info.main',
-                            }}
-                          >
-                            <CardContent>
-                              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                                <Box display="flex" alignItems="center" gap={2}>
-                                  <Typography variant="h4" fontWeight="bold">
-                                    {analysis.ticker.replace('KRW-', '')}
-                                  </Typography>
-                                  <Chip
-                                    label={getDecisionText(analysis.decision)}
-                                    color={getDecisionColor(analysis.decision) as any}
-                                    variant="filled"
-                                    size="medium"
-                                  />
-                                </Box>
-                                <Box textAlign="right">
-                                  <Typography variant="h5" color={getDecisionColor(analysis.decision) as any} fontWeight="bold">
-                                    {(analysis.confidence * 100).toFixed(0)}%
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary">
-                                    신뢰도
-                                  </Typography>
-                                </Box>
-                              </Box>
-                              <Divider sx={{ mb: 2 }} />
-                              <Typography variant="body1" sx={{ lineHeight: 1.8, mb: 2 }}>
-                                {analysis.reason}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                최근 분석: {new Date(analysis.timestamp).toLocaleString('ko-KR')}
-                              </Typography>
-                            </CardContent>
-                          </Card>
-                        ))}
                       </Box>
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-            </Box>
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={1}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 50%' } }}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    코인 추가
-                  </Typography>
-                  <Box display="flex" gap={2}>
-                    <FormControl fullWidth>
-                      <InputLabel>코인 선택</InputLabel>
-                      <Select
-                        value={selectedTicker}
-                        label="코인 선택"
-                        onChange={(e) => setSelectedTicker(e.target.value)}
-                        disabled={tradingState.isRunning}
-                      >
-                        {popularCoins.map((coin) => (
-                          <MenuItem key={coin.ticker} value={coin.ticker}>
-                            {coin.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <Button
-                      variant="contained"
-                      startIcon={<Add />}
-                      onClick={handleAddToPortfolio}
-                      disabled={tradingState.isRunning}
-                    >
-                      추가
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Box>
-
-            <Box>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    포트폴리오 관리
-                  </Typography>
-                  {portfolio.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      포트폴리오가 비어있습니다. 코인을 추가해주세요.
-                    </Typography>
-                  ) : (
-                    <List>
-                      {portfolio.map((coin, index) => (
-                        <React.Fragment key={coin.ticker}>
-                          {index > 0 && <Divider />}
-                          <ListItem>
-                            <Checkbox
-                              checked={coin.enabled}
-                              onChange={() => handleToggleCoin(coin.ticker)}
-                              disabled={tradingState.isRunning}
+                      <Typography variant="body2" color="text.secondary" mb={2}>
+                        {coin.name}
+                      </Typography>
+                      {analysis && (
+                        <Box>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                            <Typography variant="body2">최근 분석:</Typography>
+                            <Chip
+                              label={getDecisionText(analysis.decision)}
+                              color={getDecisionColor(analysis.decision) as any}
+                              size="small"
                             />
-                            <ListItemText
-                              primary={coin.name}
-                              secondary={
-                                <Box>
-                                  <Typography variant="caption">
-                                    {coin.ticker}
-                                  </Typography>
-                                  {coin.currentPrice && (
-                                    <Typography variant="caption" sx={{ ml: 2 }}>
-                                      현재가: {coin.currentPrice.toLocaleString()}원
-                                    </Typography>
-                                  )}
-                                </Box>
-                              }
-                            />
-                            <ListItemSecondaryAction>
-                              <IconButton
-                                edge="end"
-                                onClick={() => handleRemoveFromPortfolio(coin.ticker)}
-                                disabled={tradingState.isRunning}
-                              >
-                                <Delete />
-                              </IconButton>
-                            </ListItemSecondaryAction>
-                          </ListItem>
-                        </React.Fragment>
-                      ))}
-                    </List>
-                  )}
-                </CardContent>
-              </Card>
-            </Box>
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={2}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    분석 설정
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    각 코인별로 분석 주기와 거래 임계값을 설정할 수 있습니다.
-                  </Typography>
-                  
-                  {portfolio.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      포트폴리오에 코인을 추가하면 분석 설정을 할 수 있습니다.
-                    </Typography>
-                  ) : (
-                    <Box mt={3}>
-                      {portfolio.map((coin) => {
-                        const config = getConfigForTicker(coin.ticker);
-                        return (
-                          <Box key={coin.ticker} mb={4} p={2} sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                            <Typography variant="subtitle1" gutterBottom fontWeight="bold">
-                              {coin.name}
-                            </Typography>
-                            
-                            <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2} mt={2}>
-                              <TextField
-                                label="분석 주기 (분)"
-                                type="number"
-                                value={config.analysisInterval}
-                                onChange={(e) => updateConfigForTicker(coin.ticker, { analysisInterval: parseInt(e.target.value) || 1 })}
-                                InputProps={{ inputProps: { min: 1, max: 60 } }}
-                                size="small"
-                              />
-                              
-                              <TextField
-                                label="매수 임계값 (%)"
-                                type="number"
-                                value={config.buyThreshold}
-                                onChange={(e) => updateConfigForTicker(coin.ticker, { buyThreshold: parseInt(e.target.value) || 70 })}
-                                InputProps={{ inputProps: { min: 50, max: 100 } }}
-                                size="small"
-                              />
-                              
-                              <TextField
-                                label="매도 임계값 (%)"
-                                type="number"
-                                value={config.sellThreshold}
-                                onChange={(e) => updateConfigForTicker(coin.ticker, { sellThreshold: parseInt(e.target.value) || 30 })}
-                                InputProps={{ inputProps: { min: 0, max: 50 } }}
-                                size="small"
-                              />
-                              
-                              <TextField
-                                label="손절 라인 (%)"
-                                type="number"
-                                value={config.stopLoss}
-                                onChange={(e) => updateConfigForTicker(coin.ticker, { stopLoss: parseFloat(e.target.value) || 5 })}
-                                InputProps={{ inputProps: { min: 1, max: 20, step: 0.5 } }}
-                                size="small"
-                              />
-                              
-                              <TextField
-                                label="익절 라인 (%)"
-                                type="number"
-                                value={config.takeProfit}
-                                onChange={(e) => updateConfigForTicker(coin.ticker, { takeProfit: parseFloat(e.target.value) || 10 })}
-                                InputProps={{ inputProps: { min: 5, max: 50, step: 0.5 } }}
-                                size="small"
-                              />
-                            </Box>
                           </Box>
-                        );
-                      })}
+                          <LinearProgress
+                            variant="determinate"
+                            value={analysis.confidence * 100}
+                            sx={{ mb: 1 }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            신뢰도: {(analysis.confidence * 100).toFixed(0)}%
+                          </Typography>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        )}
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={1}>
+        <Typography variant="h6" fontWeight="bold" mb={3}>
+          포트폴리오 관리
+        </Typography>
+        
+        {/* Add Coin Section */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              코인 추가
+            </Typography>
+            <Box display="flex" gap={2}>
+              <FormControl sx={{ minWidth: 200 }}>
+                <InputLabel>코인 선택</InputLabel>
+                <Select
+                  value={selectedTicker}
+                  label="코인 선택"
+                  onChange={(e) => setSelectedTicker(e.target.value)}
+                  disabled={tradingState.isRunning}
+                >
+                  {popularCoins.map((coin) => (
+                    <MenuItem key={coin.ticker} value={coin.ticker}>
+                      {coin.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={handleAddToPortfolio}
+                disabled={tradingState.isRunning}
+              >
+                추가
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* Portfolio List */}
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              현재 포트폴리오
+            </Typography>
+            {portfolio.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                포트폴리오가 비어있습니다. 코인을 추가해주세요.
+              </Typography>
+            ) : (
+              <List>
+                {portfolio.map((coin, index) => (
+                  <React.Fragment key={coin.ticker}>
+                    {index > 0 && <Divider />}
+                    <ListItem>
+                      <Checkbox
+                        checked={coin.enabled}
+                        onChange={() => handleToggleCoin(coin.ticker)}
+                        disabled={tradingState.isRunning}
+                      />
+                      <ListItemText
+                        primary={coin.name}
+                        secondary={coin.ticker}
+                      />
+                      <ListItemSecondaryAction>
+                        <IconButton
+                          edge="end"
+                          onClick={() => handleRemoveFromPortfolio(coin.ticker)}
+                          disabled={tradingState.isRunning}
+                        >
+                          <Delete />
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  </React.Fragment>
+                ))}
+              </List>
+            )}
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={2}>
+        <Typography variant="h6" fontWeight="bold" mb={3}>
+          분석 설정
+        </Typography>
+        
+        <Card>
+          <CardContent>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              각 코인별로 분석 주기와 거래 임계값을 설정할 수 있습니다.
+            </Typography>
+            
+            {portfolio.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                포트폴리오에 코인을 추가하면 분석 설정을 할 수 있습니다.
+              </Typography>
+            ) : (
+              <Box mt={3}>
+                {portfolio.map((coin) => {
+                  const config = getConfigForTicker(coin.ticker);
+                  return (
+                    <Box key={coin.ticker} mb={4} p={3} sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                      <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                        {coin.name}
+                      </Typography>
                       
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<Save />}
-                        onClick={saveAnalysisConfigs}
-                        fullWidth
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="분석 주기 (분)"
+                            type="number"
+                            value={config.analysisInterval}
+                            onChange={(e) => updateConfigForTicker(coin.ticker, { analysisInterval: parseInt(e.target.value) || 1 })}
+                            InputProps={{ inputProps: { min: 1, max: 60 } }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="매수 임계값 (%)"
+                            type="number"
+                            value={config.buyThreshold}
+                            onChange={(e) => updateConfigForTicker(coin.ticker, { buyThreshold: parseInt(e.target.value) || 70 })}
+                            InputProps={{ inputProps: { min: 50, max: 100 } }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="매도 임계값 (%)"
+                            type="number"
+                            value={config.sellThreshold}
+                            onChange={(e) => updateConfigForTicker(coin.ticker, { sellThreshold: parseInt(e.target.value) || 30 })}
+                            InputProps={{ inputProps: { min: 0, max: 50 } }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="손절 라인 (%)"
+                            type="number"
+                            value={config.stopLoss}
+                            onChange={(e) => updateConfigForTicker(coin.ticker, { stopLoss: parseFloat(e.target.value) || 5 })}
+                            InputProps={{ inputProps: { min: 1, max: 20, step: 0.5 } }}
+                          />
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  );
+                })}
+                
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<Save />}
+                  onClick={saveAnalysisConfigs}
+                  fullWidth
+                  size="large"
+                >
+                  분석 설정 저장
+                </Button>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={3}>
+        <Typography variant="h6" fontWeight="bold" mb={3}>
+          환경 설정
+        </Typography>
+        
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              API 키 설정
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              거래를 위해 필요한 API 키를 입력해주세요.
+            </Typography>
+            
+            <Box mt={3}>
+              <Typography variant="subtitle2" gutterBottom>
+                Upbit API
+              </Typography>
+              <Grid container spacing={2} mb={3}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Access Key"
+                    type={showAccessKey ? "text" : "password"}
+                    value={apiKeys.upbitAccessKey}
+                    onChange={(e) => setApiKeys({...apiKeys, upbitAccessKey: e.target.value})}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowAccessKey(!showAccessKey)}
+                            edge="end"
+                          >
+                            {showAccessKey ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Secret Key"
+                    type={showSecretKey ? "text" : "password"}
+                    value={apiKeys.upbitSecretKey}
+                    onChange={(e) => setApiKeys({...apiKeys, upbitSecretKey: e.target.value})}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowSecretKey(!showSecretKey)}
+                            edge="end"
+                          >
+                            {showSecretKey ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
+              </Grid>
+              
+              <Typography variant="subtitle2" gutterBottom>
+                Claude AI API (선택사항)
+              </Typography>
+              <TextField
+                fullWidth
+                label="API Key"
+                type={showAnthropicKey ? "text" : "password"}
+                value={apiKeys.anthropicApiKey}
+                onChange={(e) => setApiKeys({...apiKeys, anthropicApiKey: e.target.value})}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowAnthropicKey(!showAnthropicKey)}
+                        edge="end"
                       >
-                        분석 설정 저장
-                      </Button>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
+                        {showAnthropicKey ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ mb: 3 }}
+              />
+              
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<Save />}
+                onClick={handleSaveApiKeys}
+                disabled={loading || !apiKeys.upbitAccessKey || !apiKeys.upbitSecretKey}
+                fullWidth
+                size="large"
+              >
+                API 키 저장
+              </Button>
             </Box>
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    API 키 설정
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    거래를 위해 필요한 API 키를 입력해주세요.
-                  </Typography>
-                  
-                  <Box mt={3}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Upbit API
-                    </Typography>
-                    <Box mb={2}>
-                      <TextField
-                        fullWidth
-                        label="Access Key"
-                        type={showAccessKey ? "text" : "password"}
-                        value={apiKeys.upbitAccessKey}
-                        onChange={(e) => setApiKeys({...apiKeys, upbitAccessKey: e.target.value})}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton
-                                onClick={() => setShowAccessKey(!showAccessKey)}
-                                edge="end"
-                              >
-                                {showAccessKey ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Box>
-                    
-                    <Box mb={3}>
-                      <TextField
-                        fullWidth
-                        label="Secret Key"
-                        type={showSecretKey ? "text" : "password"}
-                        value={apiKeys.upbitSecretKey}
-                        onChange={(e) => setApiKeys({...apiKeys, upbitSecretKey: e.target.value})}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton
-                                onClick={() => setShowSecretKey(!showSecretKey)}
-                                edge="end"
-                              >
-                                {showSecretKey ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Box>
-                    
-                    <Typography variant="subtitle2" gutterBottom>
-                      Claude AI API (선택사항)
-                    </Typography>
-                    <Box mb={3}>
-                      <TextField
-                        fullWidth
-                        label="API Key"
-                        type={showAnthropicKey ? "text" : "password"}
-                        value={apiKeys.anthropicApiKey}
-                        onChange={(e) => setApiKeys({...apiKeys, anthropicApiKey: e.target.value})}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton
-                                onClick={() => setShowAnthropicKey(!showAnthropicKey)}
-                                edge="end"
-                              >
-                                {showAnthropicKey ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Box>
-                    
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<Save />}
-                      onClick={handleSaveApiKeys}
-                      disabled={loading || !apiKeys.upbitAccessKey || !apiKeys.upbitSecretKey}
-                      fullWidth
-                    >
-                      API 키 저장
-                    </Button>
-                  </Box>
-                  
-                  <Box mt={3}>
-                    <Alert severity="info">
-                      <Typography variant="body2">
-                        • Upbit API 키는 <a href="https://upbit.com/mypage/open_api_management" target="_blank" rel="noopener noreferrer">여기</a>에서 발급받을 수 있습니다.
-                      </Typography>
-                      <Typography variant="body2">
-                        • 거래 권한이 있는 API 키를 사용해주세요.
-                      </Typography>
-                      <Typography variant="body2">
-                        • API 키는 안전하게 암호화되어 로컬에 저장됩니다.
-                      </Typography>
-                    </Alert>
-                  </Box>
-                </CardContent>
-              </Card>
+            
+            <Box mt={3}>
+              <Alert severity="info">
+                <Typography variant="body2">
+                  • Upbit API 키는 <a href="https://upbit.com/mypage/open_api_management" target="_blank" rel="noopener noreferrer">여기</a>에서 발급받을 수 있습니다.
+                </Typography>
+                <Typography variant="body2">
+                  • 거래 권한이 있는 API 키를 사용해주세요.
+                </Typography>
+                <Typography variant="body2">
+                  • API 키는 안전하게 암호화되어 로컬에 저장됩니다.
+                </Typography>
+              </Alert>
             </Box>
-          </Box>
-        </TabPanel>
+          </CardContent>
+        </Card>
+      </TabPanel>
+    </Box>
+  );
 
-        <Box p={2} bgcolor="background.default">
-          <Typography variant="caption" color="text.secondary" align="center" display="block">
-            백그라운드 실행: 창을 닫아도 시스템 트레이에서 계속 실행됩니다
-          </Typography>
-          <Typography variant="caption" color="text.secondary" align="center" display="block">
-            마지막 업데이트: {new Date(tradingState.lastUpdate).toLocaleString('ko-KR')}
-          </Typography>
-        </Box>
-      </Paper>
+  return (
+    <Box sx={{ 
+      display: 'flex', 
+      height: '100vh', 
+      bgcolor: 'grey.50',
+      overflow: 'hidden'
+    }}>
+      {renderSidebar()}
+      {renderMainContent()}
+      {renderRightSidebar()}
     </Box>
   );
 };
