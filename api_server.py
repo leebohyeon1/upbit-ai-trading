@@ -78,6 +78,7 @@ class TradingState:
             'anthropic_api_key': None
         }
         self.websocket_clients = set()  # WebSocket 클라이언트 관리
+        self.enable_real_trade = False  # 실제 거래 활성화 상태
         
 trading_state = TradingState()
 
@@ -104,6 +105,7 @@ class ApiKeysRequest(BaseModel):
     upbit_access_key: str
     upbit_secret_key: str
     anthropic_api_key: Optional[str] = None
+    enable_real_trade: Optional[bool] = False
 
 # API 엔드포인트
 @app.get("/")
@@ -175,7 +177,8 @@ def run_trading_bot_for_ticker(ticker: str):
             "TRADING_SETTINGS": TRADING_SETTINGS,
             "CLAUDE_SETTINGS": claude_settings,
             "HISTORICAL_SETTINGS": HISTORICAL_SETTINGS,
-            "NOTIFICATION_SETTINGS": NOTIFICATION_SETTINGS
+            "NOTIFICATION_SETTINGS": NOTIFICATION_SETTINGS,
+            "enable_real_trade": trading_state.enable_real_trade
         }
         
         # SignalAnalyzer 생성
@@ -415,10 +418,12 @@ async def set_api_keys(request: ApiKeysRequest):
         trading_state.api_keys['upbit_access_key'] = request.upbit_access_key
         trading_state.api_keys['upbit_secret_key'] = request.upbit_secret_key
         trading_state.api_keys['anthropic_api_key'] = request.anthropic_api_key
+        trading_state.enable_real_trade = request.enable_real_trade
         
         # 환경 변수로도 설정
         os.environ['UPBIT_ACCESS_KEY'] = request.upbit_access_key
         os.environ['UPBIT_SECRET_KEY'] = request.upbit_secret_key
+        os.environ['ENABLE_REAL_TRADE'] = 'true' if request.enable_real_trade else 'false'
         if request.anthropic_api_key:
             os.environ['ANTHROPIC_API_KEY'] = request.anthropic_api_key
         

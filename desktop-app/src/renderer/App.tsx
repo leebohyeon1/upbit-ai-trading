@@ -91,6 +91,7 @@ interface ApiKeys {
   upbitAccessKey: string;
   upbitSecretKey: string;
   anthropicApiKey: string;
+  enableRealTrade?: boolean;
 }
 
 interface AnalysisConfig {
@@ -152,7 +153,8 @@ const App: React.FC = () => {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
     upbitAccessKey: '',
     upbitSecretKey: '',
-    anthropicApiKey: ''
+    anthropicApiKey: '',
+    enableRealTrade: false
   });
   const [showAccessKey, setShowAccessKey] = useState(false);
   const [showSecretKey, setShowSecretKey] = useState(false);
@@ -1264,6 +1266,30 @@ const App: React.FC = () => {
                 sx={{ mb: 3 }}
               />
               
+              <Divider sx={{ my: 3 }} />
+              
+              <Typography variant="subtitle2" gutterBottom>
+                거래 설정
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={apiKeys.enableRealTrade || false}
+                    onChange={(e) => setApiKeys({...apiKeys, enableRealTrade: e.target.checked})}
+                    color="warning"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">실제 거래 활성화</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      활성화하면 실제 돈으로 거래가 실행됩니다. 주의하세요!
+                    </Typography>
+                  </Box>
+                }
+                sx={{ mb: 3 }}
+              />
+              
               <Button
                 variant="contained"
                 color="primary"
@@ -1273,7 +1299,7 @@ const App: React.FC = () => {
                 fullWidth
                 size="large"
               >
-                API 키 저장
+                설정 저장
               </Button>
             </Box>
             

@@ -25,7 +25,15 @@ class TradingEngine:
         # 설정값 추출
         self.trading_settings = config.get("TRADING_SETTINGS", {})
         self.investment_ratios = config.get("INVESTMENT_RATIOS", {})
+        # 환경변수와 trading_state 모두 확인
         self.enable_trade = os.getenv("ENABLE_REAL_TRADE", "false").lower() == "true"
+        
+        # trading_state가 있으면 그것을 우선 사용
+        if hasattr(config, 'enable_real_trade'):
+            self.enable_trade = config.enable_real_trade
+        elif 'enable_real_trade' in config:
+            self.enable_trade = config['enable_real_trade']
+            
         self.logger = Logger()
         
         # 실제 거래 설정 로그
