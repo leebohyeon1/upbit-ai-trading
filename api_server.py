@@ -24,22 +24,13 @@ from src.utils.logger import Logger
 from config.trading_config import *
 import time
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Upbit AI Trading API")
-
-# CORS 설정
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:*"],  # Electron 앱 허용
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# 앱 종료 시 정리 작업
-@app.on_event("shutdown")
-async def shutdown_event():
-    """앱 종료 시 모든 트레이딩 봇 정리"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    yield
+    # Shutdown
     print("Shutting down trading bots...")
     
     # 모든 봇 중지
@@ -58,6 +49,17 @@ async def shutdown_event():
     await asyncio.sleep(0.1)  # 약간의 대기 시간
     
     print("Shutdown complete")
+
+app = FastAPI(title="Upbit AI Trading API", lifespan=lifespan)
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:*"],  # Electron 앱 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 전역 상태 관리
 class TradingState:
