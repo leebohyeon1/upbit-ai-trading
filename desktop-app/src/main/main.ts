@@ -336,6 +336,10 @@ class TradingApp {
     return path.join(app.getPath('userData'), 'analysis-configs.json');
   }
 
+  private getTradingConfigPath(): string {
+    return path.join(app.getPath('userData'), 'trading-config.json');
+  }
+
   private async saveApiKeys(keys: any): Promise<boolean> {
     try {
       // 암호화된 키 저장 (실제 거래 설정도 포함)
@@ -468,6 +472,42 @@ class TradingApp {
     }
   }
 
+  private async saveTradingConfig(config: any): Promise<boolean> {
+    try {
+      fs.writeFileSync(
+        this.getTradingConfigPath(),
+        JSON.stringify(config, null, 2)
+      );
+
+      // API 서버에 설정 전송
+      try {
+        await apiClient.updateTradingConfig(config);
+      } catch (error) {
+        console.error('Failed to send trading config to server:', error);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to save trading config:', error);
+      return false;
+    }
+  }
+
+  private async getTradingConfig(): Promise<any> {
+    try {
+      const configPath = this.getTradingConfigPath();
+      
+      if (!fs.existsSync(configPath)) {
+        return null;
+      }
+
+      return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    } catch (error) {
+      console.error('Failed to load trading config:', error);
+      return null;
+    }
+  }
+
   private setupIPC() {
     // 거래 상태 조회
     ipcMain.handle('get-trading-state', async () => {
@@ -522,6 +562,16 @@ class TradingApp {
     // 분석 설정 조회
     ipcMain.handle('get-analysis-configs', async () => {
       return await this.getAnalysisConfigs();
+    });
+
+    // 고급 트레이딩 설정 저장
+    ipcMain.handle('save-trading-config', async (event, config: any) => {
+      return await this.saveTradingConfig(config);
+    });
+
+    // 고급 트레이딩 설정 조회
+    ipcMain.handle('get-trading-config', async () => {
+      return await this.getTradingConfig();
     });
 
     // 실제 거래 토글

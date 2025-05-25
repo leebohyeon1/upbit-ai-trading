@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPortfolio: () => ipcRenderer.invoke('get-portfolio'),
   saveAnalysisConfigs: (configs) => ipcRenderer.invoke('save-analysis-configs', configs),
   getAnalysisConfigs: () => ipcRenderer.invoke('get-analysis-configs'),
+  saveTradingConfig: (config) => ipcRenderer.invoke('save-trading-config', config),
+  getTradingConfig: () => ipcRenderer.invoke('get-trading-config'),
   
   onTradingStateChanged: (callback) => {
     ipcRenderer.on('trading-state-changed', (event, state) => callback(state));

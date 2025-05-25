@@ -87,6 +87,16 @@ class TradingAPIClient {
       return false;
     }
   }
+
+  async updateTradingConfig(config: any): Promise<boolean> {
+    try {
+      const response = await this.axiosInstance.post('/update-trading-config', config);
+      return response.data.success;
+    } catch (error) {
+      console.error('Failed to update trading config:', error);
+      return false;
+    }
+  }
 }
 
 class WebSocketClient {

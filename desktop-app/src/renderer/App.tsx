@@ -103,6 +103,38 @@ interface AnalysisConfig {
   takeProfit: number; // %
 }
 
+interface TradingConfig {
+  decisionThresholds: {
+    buyThreshold: number;
+    sellThreshold: number;
+  };
+  investmentRatios: {
+    minRatio: number;
+    maxRatio: number;
+    perCoinMaxRatio: number;
+  };
+  signalStrengths: {
+    [key: string]: number;
+  };
+  indicatorWeights: {
+    [key: string]: number;
+  };
+  indicatorUsage: {
+    [key: string]: boolean;
+  };
+  tradingSettings: {
+    minOrderAmount: number;
+    maxSlippage: number;
+    tradingInterval: number;
+    cooldown: {
+      enabled: boolean;
+      buyMinutes: number;
+      sellMinutes: number;
+      minConfidenceOverride: number;
+    };
+  };
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -120,6 +152,8 @@ declare global {
       getPortfolio: () => Promise<PortfolioCoin[]>;
       saveAnalysisConfigs: (configs: AnalysisConfig[]) => Promise<boolean>;
       getAnalysisConfigs: () => Promise<AnalysisConfig[]>;
+      saveTradingConfig: (config: TradingConfig) => Promise<boolean>;
+      getTradingConfig: () => Promise<TradingConfig>;
     };
   }
 }
@@ -168,6 +202,61 @@ const App: React.FC = () => {
   const [selectedAnalysisCoin, setSelectedAnalysisCoin] = useState<string | null>(null);
   const [analysisDetailOpen, setAnalysisDetailOpen] = useState(false);
   const [selectedAnalysisDetail, setSelectedAnalysisDetail] = useState<TradingAnalysis | null>(null);
+  const [tradingConfig, setTradingConfig] = useState<TradingConfig>({
+    decisionThresholds: { buyThreshold: 0.15, sellThreshold: -0.2 },
+    investmentRatios: { minRatio: 0.15, maxRatio: 0.5, perCoinMaxRatio: 0.2 },
+    signalStrengths: {},
+    indicatorWeights: {},
+    indicatorUsage: {},
+    tradingSettings: {
+      minOrderAmount: 5000,
+      maxSlippage: 0.005,
+      tradingInterval: 1,
+      cooldown: {
+        enabled: true,
+        buyMinutes: 30,
+        sellMinutes: 20,
+        minConfidenceOverride: 0.85
+      }
+    }
+  });
+  const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
+  
+  // 기술적 지표 목록
+  const indicators = [
+    { key: 'MA', name: '이동평균선', category: 'trend' },
+    { key: 'MA60', name: '장기 이동평균선', category: 'trend' },
+    { key: 'BB', name: '볼린저 밴드', category: 'volatility' },
+    { key: 'RSI', name: 'RSI (상대강도지수)', category: 'momentum' },
+    { key: 'MACD', name: 'MACD', category: 'momentum' },
+    { key: 'Stochastic', name: '스토캐스틱', category: 'momentum' },
+    { key: 'Orderbook', name: '호가창 분석', category: 'market' },
+    { key: 'Trades', name: '체결 데이터', category: 'market' },
+    { key: 'KIMP', name: '김프(한국 프리미엄)', category: 'market' },
+    { key: 'FearGreed', name: '공포&탐욕 지수', category: 'sentiment' },
+    { key: 'SOPR', name: '온체인 SOPR', category: 'onchain' },
+    { key: 'ActiveAddr', name: '온체인 활성 주소', category: 'onchain' }
+  ];
+
+  const signalStrengthKeys = [
+    { key: 'ma_crossover', name: '이동평균선 크로스', min: 0, max: 1, step: 0.05 },
+    { key: 'ma_long_trend', name: '장기 이동평균선 추세', min: 0, max: 1, step: 0.05 },
+    { key: 'bb_extreme', name: '볼린저 밴드 돌파', min: 0, max: 1, step: 0.05 },
+    { key: 'bb_middle', name: '볼린저 밴드 내부', min: 0, max: 1, step: 0.05 },
+    { key: 'rsi_extreme', name: 'RSI 과매수/과매도', min: 0, max: 1, step: 0.05 },
+    { key: 'rsi_middle', name: 'RSI 중간 영역', min: 0, max: 1, step: 0.05 },
+    { key: 'macd_crossover', name: 'MACD 크로스', min: 0, max: 1, step: 0.05 },
+    { key: 'macd_trend', name: 'MACD 추세', min: 0, max: 1, step: 0.05 },
+    { key: 'stoch_extreme', name: '스토캐스틱 극값', min: 0, max: 1, step: 0.05 },
+    { key: 'stoch_middle', name: '스토캐스틱 반전', min: 0, max: 1, step: 0.05 },
+    { key: 'orderbook', name: '호가창 비율', min: 0, max: 1, step: 0.05 },
+    { key: 'trade_data', name: '체결 데이터', min: 0, max: 1, step: 0.05 },
+    { key: 'korea_premium', name: '김프', min: 0, max: 1, step: 0.05 },
+    { key: 'fear_greed_extreme', name: '극단적 공포/탐욕', min: 0, max: 1, step: 0.05 },
+    { key: 'fear_greed_middle', name: '보통 공포/탐욕', min: 0, max: 1, step: 0.05 },
+    { key: 'onchain_sopr', name: '온체인 SOPR', min: 0, max: 1, step: 0.05 },
+    { key: 'onchain_active_addr', name: '온체인 활성 주소', min: 0, max: 1, step: 0.05 }
+  ];
   
   // 인기 코인 목록
   const popularCoins = [
@@ -189,6 +278,7 @@ const App: React.FC = () => {
     loadApiKeys();
     loadPortfolio();
     loadAnalysisConfigs();
+    loadTradingConfig();
 
     // 상태 변경 리스너 등록
     window.electronAPI.onTradingStateChanged((state) => {
@@ -449,6 +539,65 @@ const App: React.FC = () => {
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       setError('분석 설정 저장에 실패했습니다.');
+    }
+  };
+
+  const loadTradingConfig = async () => {
+    try {
+      const config = await window.electronAPI.getTradingConfig();
+      if (config) {
+        setTradingConfig(config);
+      } else {
+        initializeTradingConfig();
+      }
+    } catch (err) {
+      console.error('Failed to load trading config:', err);
+      initializeTradingConfig();
+    }
+  };
+
+  const initializeTradingConfig = () => {
+    setTradingConfig({
+      decisionThresholds: { buyThreshold: 0.15, sellThreshold: -0.2 },
+      investmentRatios: { minRatio: 0.15, maxRatio: 0.5, perCoinMaxRatio: 0.2 },
+      signalStrengths: {
+        ma_crossover: 0.7, ma_long_trend: 0.5,
+        bb_extreme: 0.8, bb_middle: 0.3,
+        rsi_extreme: 0.95, rsi_middle: 0.4,
+        macd_crossover: 0.9, macd_trend: 0.5,
+        stoch_extreme: 0.7, stoch_middle: 0.3,
+        orderbook: 0.7, trade_data: 0.6, korea_premium: 0.7,
+        fear_greed_extreme: 0.9, fear_greed_middle: 0.6,
+        onchain_sopr: 0.7, onchain_active_addr: 0.5
+      },
+      indicatorWeights: {
+        MA: 0.8, MA60: 0.7, BB: 1.3, RSI: 1.5, MACD: 1.5, Stochastic: 1.3,
+        Orderbook: 1.1, Trades: 0.9, KIMP: 1.2, FearGreed: 1.4, SOPR: 0.6, ActiveAddr: 0.5
+      },
+      indicatorUsage: {
+        MA: true, MA60: true, BB: true, RSI: true, MACD: true, Stochastic: true,
+        Orderbook: true, Trades: true, KIMP: true, FearGreed: true, SOPR: true, ActiveAddr: true
+      },
+      tradingSettings: {
+        minOrderAmount: 5000,
+        maxSlippage: 0.005,
+        tradingInterval: 1,
+        cooldown: { enabled: true, buyMinutes: 30, sellMinutes: 20, minConfidenceOverride: 0.85 }
+      }
+    });
+  };
+
+  const saveTradingConfig = async () => {
+    try {
+      const success = await window.electronAPI.saveTradingConfig(tradingConfig);
+      if (success) {
+        setSuccessMessage('고급 분석 설정이 저장되었습니다.');
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError('고급 분석 설정 저장에 실패했습니다.');
+      }
+    } catch (err) {
+      setError('고급 분석 설정 저장 중 오류가 발생했습니다.');
     }
   };
 

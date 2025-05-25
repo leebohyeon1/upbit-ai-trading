@@ -22,6 +22,7 @@ from src.indicators.market import MarketIndicators
 from src.indicators.technical import TechnicalIndicators
 from src.utils.logger import Logger
 from config.trading_config import *
+import config.trading_config as trading_config_module
 import time
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -486,6 +487,47 @@ async def toggle_real_trade(request: ToggleRealTradeRequest):
             message=f"Real trading {'enabled' if request.enabled else 'disabled'}"
         )
     except Exception as e:
+        return SuccessResponse(success=False, message=str(e))
+
+@app.post("/update-trading-config", response_model=SuccessResponse)
+async def update_trading_config(config: dict):
+    """트레이딩 설정 업데이트"""
+    try:
+        # 전역 설정을 업데이트
+        if 'decisionThresholds' in config:
+            trading_config_module.DECISION_THRESHOLDS['buy_threshold'] = config['decisionThresholds'].get('buyThreshold', 0.15)
+            trading_config_module.DECISION_THRESHOLDS['sell_threshold'] = config['decisionThresholds'].get('sellThreshold', -0.2)
+        
+        if 'investmentRatios' in config:
+            trading_config_module.INVESTMENT_RATIOS['min_ratio'] = config['investmentRatios'].get('minRatio', 0.15)
+            trading_config_module.INVESTMENT_RATIOS['max_ratio'] = config['investmentRatios'].get('maxRatio', 0.5)
+            trading_config_module.INVESTMENT_RATIOS['per_coin_max_ratio'] = config['investmentRatios'].get('perCoinMaxRatio', 0.2)
+        
+        if 'signalStrengths' in config:
+            trading_config_module.SIGNAL_STRENGTHS.update(config['signalStrengths'])
+        
+        if 'indicatorWeights' in config:
+            trading_config_module.INDICATOR_WEIGHTS.update(config['indicatorWeights'])
+        
+        if 'indicatorUsage' in config:
+            trading_config_module.INDICATOR_USAGE.update(config['indicatorUsage'])
+        
+        if 'tradingSettings' in config:
+            ts = config['tradingSettings']
+            trading_config_module.TRADING_SETTINGS['min_order_amount'] = ts.get('minOrderAmount', 5000)
+            trading_config_module.TRADING_SETTINGS['max_slippage'] = ts.get('maxSlippage', 0.005)
+            trading_config_module.TRADING_SETTINGS['trading_interval'] = ts.get('tradingInterval', 1)
+            if 'cooldown' in ts:
+                trading_config_module.TRADING_SETTINGS['cooldown'].update(ts['cooldown'])
+        
+        print(f"트레이딩 설정 업데이트 완료: {len(config)} 섹션 업데이트됨")
+        
+        # 실행 중인 봇들에게 설정 변경을 알리기 위해 재시작 (선택사항)
+        # 현재는 다음 거래 사이클부터 새 설정이 적용됨
+        
+        return SuccessResponse(success=True, message="Trading configuration updated successfully")
+    except Exception as e:
+        print(f"트레이딩 설정 업데이트 오류: {e}")
         return SuccessResponse(success=False, message=str(e))
 
 # WebSocket 엔드포인트 (실시간 데이터)
