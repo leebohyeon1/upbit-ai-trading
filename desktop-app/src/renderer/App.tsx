@@ -609,9 +609,27 @@ const App: React.FC = () => {
                       size="small"
                     />
                   </Box>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" display="block">
                     신뢰도: {(analysis.confidence * 100).toFixed(0)}%
                   </Typography>
+                  {tradingState.aiEnabled && analysis.reason && (
+                    <Typography 
+                      variant="caption" 
+                      color="text.secondary" 
+                      display="block" 
+                      sx={{ 
+                        mt: 0.5,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        lineHeight: 1.3
+                      }}
+                    >
+                      {analysis.reason}
+                    </Typography>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -836,9 +854,27 @@ const App: React.FC = () => {
                             value={analysis.confidence * 100}
                             sx={{ mb: 1 }}
                           />
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" display="block">
                             신뢰도: {(analysis.confidence * 100).toFixed(0)}%
                           </Typography>
+                          {tradingState.aiEnabled && analysis.reason && (
+                            <Typography 
+                              variant="caption" 
+                              color="text.secondary" 
+                              display="block" 
+                              sx={{ 
+                                mt: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: 'vertical',
+                                lineHeight: 1.4
+                              }}
+                            >
+                              <strong>AI 분석:</strong> {analysis.reason}
+                            </Typography>
+                          )}
                         </Box>
                       )}
                       <Typography variant="caption" display="block" textAlign="center" mt={2} color="primary">
