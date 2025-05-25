@@ -132,6 +132,11 @@ async def get_status():
 def run_trading_bot_for_ticker(ticker: str):
     """특정 티커에 대한 트레이딩 봇 실행 함수"""
     logger_instance = None
+    
+    # 중복 실행 방지 체크
+    current_thread = threading.current_thread()
+    print(f"[{ticker}] 트레이딩 봇 시작 - 스레드: {current_thread.name}")
+    
     try:
         # 환경 설정 로드
         if trading_state.api_keys['upbit_access_key'] and trading_state.api_keys['upbit_secret_key']:
@@ -353,24 +358,33 @@ async def stop_trading():
         return SuccessResponse(success=False, message="Not running")
     
     try:
+        print("자동매매 중지 시작...")
+        stopped_tickers = trading_state.active_tickers.copy()
+        
+        # 1단계: 중지 신호 전송
         trading_state.stop_flag = True
         trading_state.last_update = datetime.now()
         
-        # 활성 티커 목록을 먼저 비우기 (스레드 루프 종료 신호)
-        stopped_tickers = trading_state.active_tickers.copy()
+        # 2단계: 활성 티커 목록을 먼저 비우기 (스레드 루프 종료 신호)
         trading_state.active_tickers = []
         
-        # 모든 봇 스레드 종료 대기
+        # 3단계: 모든 봇 스레드 종료 대기
+        print("트레이딩 봇 종료 대기 중...")
         for ticker, thread in list(trading_state.bot_threads.items()):
-            thread.join(timeout=2)  # 타임아웃 단축
+            print(f"  - {ticker} 봇 종료 대기...")
+            thread.join(timeout=10)  # 충분한 대기 시간
+            if thread.is_alive():
+                print(f"  - 경고: {ticker} 봇이 10초 내에 종료되지 않았습니다.")
+            else:
+                print(f"  - {ticker} 봇 정상 종료 완료")
         
-        # 정리
+        # 4단계: 정리
         trading_state.bot_threads.clear()
         trading_state.trading_engines.clear()
         trading_state.is_running = False
         trading_state.stop_flag = False
         
-        print(f"자동매매 중지 - 중지된 코인: {', '.join(stopped_tickers)}")
+        print(f"자동매매 중지 완료 - 중지된 코인: {', '.join(stopped_tickers)}")
         
         return SuccessResponse(
             success=True, 
@@ -420,8 +434,19 @@ async def toggle_ai(request: ToggleAIRequest):
             print("새로운 AI 설정으로 트레이딩 봇 재시작...")
             trading_state.stop_flag = False
             trading_state.active_tickers = current_tickers
+            trading_state.is_running = True  # 중요: 실행 상태 다시 설정
+            
+            # 중복 스레드 방지를 위해 기존 스레드 딕셔너리가 완전히 비어있는지 확인
+            if trading_state.bot_threads:
+                print(f"경고: 기존 스레드가 남아있습니다: {list(trading_state.bot_threads.keys())}")
+                trading_state.bot_threads.clear()
             
             for ticker in current_tickers:
+                # 이미 실행 중인 스레드가 있는지 확인
+                if ticker in trading_state.bot_threads:
+                    print(f"  - {ticker} 봇이 이미 실행 중입니다. 건너뜁니다.")
+                    continue
+                    
                 print(f"  - {ticker} 봇 시작 중...")
                 thread = threading.Thread(
                     target=run_trading_bot_for_ticker,
