@@ -56,9 +56,17 @@ class ClaudeAPI:
         # 응답 파싱
         try:
             # JSON 형식 응답 추출
-            content = response.content[0].text
-            json_response = self._extract_json(content)
-            return json_response
+            if response and hasattr(response, 'content') and response.content and len(response.content) > 0:
+                content = response.content[0].text
+                json_response = self._extract_json(content)
+                return json_response
+            else:
+                print("Claude 응답이 비어있습니다.")
+                return {
+                    "signal": "hold",
+                    "confidence": 0.5,
+                    "reasoning": "Claude 응답이 비어있어 홀드 신호를 반환합니다."
+                }
         except Exception as e:
             print(f"Claude 응답 파싱 오류: {e}")
             return {

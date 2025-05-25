@@ -65,9 +65,16 @@ def generate_korean_reasoning(analysis_result):
         # 현재가 정보 추출 및 추가
         current_price = None
         try:
-            if analysis_result.get('current_price') and len(analysis_result.get('current_price')) > 0:
-                current_price = analysis_result.get('current_price')[0].get('trade_price')
-        except:
+            current_price_data = analysis_result.get('current_price')
+            if current_price_data and isinstance(current_price_data, list) and len(current_price_data) > 0:
+                if isinstance(current_price_data[0], dict):
+                    current_price = current_price_data[0].get('trade_price')
+        except Exception as e:
+            # logger가 없는 경우 print 사용
+            try:
+                logger.warning(f"현재가 정보 추출 오류: {e}")
+            except:
+                print(f"현재가 정보 추출 오류: {e}")
             pass
         
         # 헤더 추가
@@ -99,9 +106,12 @@ def generate_korean_reasoning(analysis_result):
     
     # 현재가 정보 추출
     try:
-        if analysis_result.get('current_price') and len(analysis_result.get('current_price')) > 0:
-            current_price = analysis_result.get('current_price')[0].get('trade_price')
-    except:
+        current_price_data = analysis_result.get('current_price')
+        if current_price_data and isinstance(current_price_data, list) and len(current_price_data) > 0:
+            if isinstance(current_price_data[0], dict):
+                current_price = current_price_data[0].get('trade_price')
+    except Exception as e:
+        print(f"현재가 정보 추출 오류: {e}")
         pass
     
     # 신호 분류

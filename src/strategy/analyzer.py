@@ -232,10 +232,10 @@ class MarketAnalyzer:
                     url = "https://open.er-api.com/v6/latest/USD"
                     response = requests.get(url, timeout=5)
                     data = response.json()
-                    return data['rates']['KRW']
+                    usd_krw = data['rates']['KRW']
                 except Exception as e:
-                    print(f"ExchangeRate-API 환율 정보 조회 실패: {e}")
-                    return 1350.0  # 기본값
+                    logger.warning(f"ExchangeRate-API 환율 정보 조회 실패: {e}")
+                    usd_krw = 1350.0  # 기본값
                 
                 # 바이낸스 API 조회
                 try:
@@ -276,6 +276,23 @@ class MarketAnalyzer:
     def generate_trading_signals(self, df, current_price, orderbook_ratio, trade_signal, kimchi_premium):
         """트레이딩 신호 생성"""
         signals = []
+        
+        # 입력 데이터 검증
+        if df is None or len(df) == 0:
+            logger.error("OHLCV 데이터가 비어있습니다.")
+            return {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "decision": "hold",
+                "decision_kr": "홀드",
+                "reasoning": "데이터 부족으로 홀드 결정",
+                "confidence": 0.5,
+                "avg_signal_strength": 0,
+                "signals": [],
+                "signal_counts": {"buy": 0, "sell": 0, "hold": 1},
+                "current_price": current_price,
+                "price_change_24h": "N/A"
+            }
+        
         last_row = df.iloc[-1]
         
         # 1. 이동평균선(MA) 분석
@@ -831,50 +848,78 @@ class SignalAnalyzer(MarketAnalyzer):
                             if df is not None and len(df) > 0:
                                 last_row = df.iloc[-1]
                                 
+                                # 각 지표를 개별적으로 안전하게 가져오기
+                                ma5 = self.technical_indicators.get_ma(period=5)
+                                ma20 = self.technical_indicators.get_ma(period=20)
+                                ma60 = self.technical_indicators.get_ma(period=60) if len(df) >= 60 else None
+                                rsi = self.technical_indicators.get_rsi()
+                                macd_data = self.technical_indicators.get_macd()
+                                bb_data = self.technical_indicators.get_bollinger_bands()
+                                
                                 technical_data = {
                                     "ma": {
-                                        "ma5": float(self.technical_indicators.get_ma(period=5).iloc[-1]),
-                                        "ma20": float(self.technical_indicators.get_ma(period=20).iloc[-1]),
-                                        "ma60": float(self.technical_indicators.get_ma(period=60).iloc[-1]) if len(df) >= 60 else None
+                                        "ma5": float(ma5.iloc[-1]) if ma5 is not None and len(ma5) > 0 else None,
+                                        "ma20": float(ma20.iloc[-1]) if ma20 is not None and len(ma20) > 0 else None,
+                                        "ma60": float(ma60.iloc[-1]) if ma60 is not None and len(ma60) > 0 else None
                                     },
-                                    "rsi": float(self.technical_indicators.get_rsi().iloc[-1]),
+                                    "rsi": float(rsi.iloc[-1]) if rsi is not None and len(rsi) > 0 else None,
                                     "macd": {
-                                        "value": float(self.technical_indicators.get_macd()[0].iloc[-1]),
-                                        "signal": float(self.technical_indicators.get_macd()[1].iloc[-1]),
-                                        "histogram": float(self.technical_indicators.get_macd()[2].iloc[-1])
+                                        "value": float(macd_data[0].iloc[-1]) if macd_data is not None and len(macd_data) > 0 and macd_data[0] is not None and len(macd_data[0]) > 0 else None,
+                                        "signal": float(macd_data[1].iloc[-1]) if macd_data is not None and len(macd_data) > 1 and macd_data[1] is not None and len(macd_data[1]) > 0 else None,
+                                        "histogram": float(macd_data[2].iloc[-1]) if macd_data is not None and len(macd_data) > 2 and macd_data[2] is not None and len(macd_data[2]) > 0 else None
                                     },
                                     "bollingerBands": {
-                                        "upper": float(self.technical_indicators.get_bollinger_bands()[0].iloc[-1]),
-                                        "middle": float(self.technical_indicators.get_bollinger_bands()[1].iloc[-1]),
-                                        "lower": float(self.technical_indicators.get_bollinger_bands()[2].iloc[-1])
+                                        "upper": float(bb_data[0].iloc[-1]) if bb_data is not None and len(bb_data) > 0 and bb_data[0] is not None and len(bb_data[0]) > 0 else None,
+                                        "middle": float(bb_data[1].iloc[-1]) if bb_data is not None and len(bb_data) > 1 and bb_data[1] is not None and len(bb_data[1]) > 0 else None,
+                                        "lower": float(bb_data[2].iloc[-1]) if bb_data is not None and len(bb_data) > 2 and bb_data[2] is not None and len(bb_data[2]) > 0 else None
                                     }
                                 }
                         except Exception as e:
-                            print(f"기술적 지표 데이터 구성 오류: {e}")
+                            logger.error(f"기술적 지표 데이터 구성 오류: {e}")
+                            technical_data = {}
                     
                     # 시장 지표 데이터 준비
                     market_indicator_data = {}
                     if self.market_indicators is not None:
                         try:
                             market_signals = market_analysis.get("signals", [])
-                            # 시장 신호 분류
-                            orderbook_signals = [s for s in market_signals if '호가창' in s.get('source', '')]
-                            trade_signals = [s for s in market_signals if '체결' in s.get('source', '')]
-                            kimp_signals = [s for s in market_signals if '김프' in s.get('source', '')]
-                            fear_greed_signals = [s for s in market_signals if '공포' in s.get('source', '') or '탐욕' in s.get('source', '')]
-                            
-                            market_indicator_data = {
-                                "orderbook": orderbook_signals[0] if orderbook_signals else {},
-                                "trades": trade_signals[0] if trade_signals else {},
-                                "kimchiPremium": kimp_signals[0] if kimp_signals else {},
-                                "fearGreedIndex": fear_greed_signals[0] if fear_greed_signals else {}
-                            }
+                            if market_signals and isinstance(market_signals, list):
+                                # 시장 신호 분류
+                                orderbook_signals = [s for s in market_signals if s and '호가창' in s.get('source', '')]
+                                trade_signals = [s for s in market_signals if s and '체결' in s.get('source', '')]
+                                kimp_signals = [s for s in market_signals if s and '김프' in s.get('source', '')]
+                                fear_greed_signals = [s for s in market_signals if s and ('공포' in s.get('source', '') or '탐욕' in s.get('source', ''))]
+                                
+                                market_indicator_data = {
+                                    "orderbook": orderbook_signals[0] if orderbook_signals and len(orderbook_signals) > 0 else {},
+                                    "trades": trade_signals[0] if trade_signals and len(trade_signals) > 0 else {},
+                                    "kimchiPremium": kimp_signals[0] if kimp_signals and len(kimp_signals) > 0 else {},
+                                    "fearGreedIndex": fear_greed_signals[0] if fear_greed_signals and len(fear_greed_signals) > 0 else {}
+                                }
+                            else:
+                                market_indicator_data = {
+                                    "orderbook": {},
+                                    "trades": {},
+                                    "kimchiPremium": {},
+                                    "fearGreedIndex": {}
+                                }
                         except Exception as e:
-                            print(f"시장 지표 데이터 구성 오류: {e}")
+                            logger.error(f"시장 지표 데이터 구성 오류: {e}")
+                            market_indicator_data = {
+                                "orderbook": {},
+                                "trades": {},
+                                "kimchiPremium": {},
+                                "fearGreedIndex": {}
+                            }
                     
                     # 현재 시장 데이터
+                    current_price_data = market_analysis.get("current_price", [])
+                    current_price = 0
+                    if current_price_data and isinstance(current_price_data, list) and len(current_price_data) > 0:
+                        current_price = current_price_data[0].get("trade_price", 0) if isinstance(current_price_data[0], dict) else 0
+                    
                     current_market_data = {
-                        "currentPrice": market_analysis.get("current_price", [{}])[0].get("trade_price", 0),
+                        "currentPrice": current_price,
                         "priceChange24h": market_analysis.get("price_change_24h", "0%"),
                         "timestamp": market_analysis.get("timestamp", "")
                     }
@@ -886,12 +931,12 @@ class SignalAnalyzer(MarketAnalyzer):
                         "signals": market_analysis.get("signals", [])
                     })
                     
-                    if claude_analysis and "signal" in claude_analysis:
+                    if claude_analysis and isinstance(claude_analysis, dict) and "signal" in claude_analysis:
                         # Claude의 신뢰도가 높은 경우 신호 강화
-                        if claude_analysis["signal"] == market_analysis["decision"]:
+                        if claude_analysis.get("signal") == market_analysis.get("decision"):
                             market_analysis["confidence"] = min(
                                 1.0, 
-                                market_analysis["confidence"] + claude_settings.get("confidence_boost", 0.1)
+                                market_analysis.get("confidence", 0.5) + claude_settings.get("confidence_boost", 0.1)
                             )
                             market_analysis["claude_agrees"] = True
                         else:
@@ -913,7 +958,7 @@ class SignalAnalyzer(MarketAnalyzer):
                             counts_summary = f"\n전체 지표: 매수({signal_counts.get('buy', 0)}개), 매도({signal_counts.get('sell', 0)}개), 홀드({signal_counts.get('hold', 0)}개)"
                             
                             # Claude의 분석을 기본 reasoning으로 사용
-                            market_analysis["reasoning"] = decision_summary + counts_summary + "\n\n" + claude_analysis["korean_analysis"]
+                            market_analysis["reasoning"] = decision_summary + counts_summary + "\n\n" + claude_analysis.get("korean_analysis", "")
                     else:
                         market_analysis["claude_error"] = "Claude 응답이 유효하지 않습니다"
                 
