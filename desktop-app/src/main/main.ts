@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import apiClient, { wsClient } from './api-client';
+import tradingEngine from './trading-engine';
 
 class TradingApp {
   private mainWindow: BrowserWindow | null = null;
@@ -17,6 +18,7 @@ class TradingApp {
 
   constructor() {
     this.setupApp();
+    this.setupTradingEngine();
   }
 
   private setupApp() {
@@ -202,8 +204,9 @@ class TradingApp {
 
   private async startTrading(tickers: string[] = ['KRW-BTC']): Promise<boolean> {
     try {
-      // API 서버에 자동매매 시작 요청 (다중 코인 지원)
-      const success = await apiClient.startTrading(this.tradingState.aiEnabled, tickers);
+      // 내장 거래 엔진 사용
+      tradingEngine.setActiveMarkets(tickers);
+      const success = await tradingEngine.start();
       
       if (success) {
         this.tradingState.isRunning = true;
@@ -225,8 +228,8 @@ class TradingApp {
 
   private async stopTrading(): Promise<boolean> {
     try {
-      // API 서버에 자동매매 중지 요청
-      const success = await apiClient.stopTrading();
+      // 내장 거래 엔진 사용
+      const success = await tradingEngine.stop();
       
       if (success) {
         this.tradingState.isRunning = false;
@@ -248,18 +251,16 @@ class TradingApp {
 
   private async toggleAI(enabled: boolean): Promise<boolean> {
     try {
-      // API 서버에 AI 설정 변경 요청
-      const success = await apiClient.toggleAI(enabled);
+      // 내장 거래 엔진 사용
+      tradingEngine.toggleAI(enabled);
       
-      if (success) {
-        this.tradingState.aiEnabled = enabled;
-        this.tradingState.lastUpdate = new Date().toISOString();
-        
-        // 렌더러에 상태 업데이트 알림
-        this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
-      }
+      this.tradingState.aiEnabled = enabled;
+      this.tradingState.lastUpdate = new Date().toISOString();
       
-      return success;
+      // 렌더러에 상태 업데이트 알림
+      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      
+      return true;
     } catch (error) {
       console.error('Failed to toggle AI:', error);
       return false;
@@ -355,19 +356,14 @@ class TradingApp {
         JSON.stringify(encryptedKeys, null, 2)
       );
 
-      // API 서버에 키 설정 전송
+      // 내장 거래 엔진에 키 설정
       try {
-        await apiClient.setApiKeys({
-          upbit_access_key: keys.upbitAccessKey,
-          upbit_secret_key: keys.upbitSecretKey,
-          anthropic_api_key: keys.anthropicApiKey,
-          enable_real_trade: keys.enableRealTrade || false
+        tradingEngine.setApiKeys(keys.upbitAccessKey, keys.upbitSecretKey);
+        tradingEngine.setConfig({
+          enableRealTrading: keys.enableRealTrade || false
         });
-        
-        // 실제 거래 토글도 별도 호출
-        await apiClient.toggleRealTrade(keys.enableRealTrade || false);
       } catch (error) {
-        console.error('Failed to send API keys to server:', error);
+        console.error('Failed to set API keys to trading engine:', error);
       }
 
       return true;
@@ -583,6 +579,51 @@ class TradingApp {
         return false;
       }
     });
+  }
+
+  private setupTradingEngine() {
+    // 거래 엔진 이벤트 리스너 설정
+    tradingEngine.on('tradingStarted', () => {
+      this.tradingState.isRunning = true;
+      this.sendStatusUpdate();
+    });
+
+    tradingEngine.on('tradingStopped', () => {
+      this.tradingState.isRunning = false;
+      this.sendStatusUpdate();
+    });
+
+    tradingEngine.on('aiToggled', (enabled: boolean) => {
+      this.tradingState.aiEnabled = enabled;
+      this.sendStatusUpdate();
+    });
+
+    tradingEngine.on('analysisCompleted', (results: any[]) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('analysis-update', results);
+      }
+    });
+
+    tradingEngine.on('tradeExecuted', (trade: any) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('trade-executed', trade);
+      }
+    });
+
+    tradingEngine.on('statusUpdate', (status: any) => {
+      this.tradingState = {
+        isRunning: status.isRunning,
+        aiEnabled: status.aiEnabled,
+        lastUpdate: new Date().toISOString()
+      };
+      this.sendStatusUpdate();
+    });
+  }
+
+  private sendStatusUpdate() {
+    if (this.mainWindow) {
+      this.mainWindow.webContents.send('status-update', this.tradingState);
+    }
   }
 }
 
