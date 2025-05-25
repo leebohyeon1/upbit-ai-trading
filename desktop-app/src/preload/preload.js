@@ -22,5 +22,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   onAnalysisUpdate: (callback) => {
     ipcRenderer.on('analysis-update', (event, analysis) => callback(analysis));
+  },
+  
+  onTradingConfigChanged: (callback) => {
+    ipcRenderer.on('trading-config-changed', (event, config) => callback(config));
   }
 });

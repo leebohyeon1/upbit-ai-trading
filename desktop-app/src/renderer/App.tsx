@@ -439,6 +439,7 @@ const App: React.FC = () => {
 
   const handleToggleRealTrade = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = event.target.checked;
+    console.log('Real trade toggle clicked:', enabled);
     setError(null);
     
     // 상태 업데이트
@@ -446,7 +447,10 @@ const App: React.FC = () => {
     
     // 즉시 API 호출
     try {
+      console.log('Calling toggleRealTrade API...');
       const success = await window.electronAPI.toggleRealTrade(enabled);
+      console.log('toggleRealTrade result:', success);
+      
       if (success) {
         setSuccessMessage(`실제 거래가 ${enabled ? '활성화' : '비활성화'}되었습니다.`);
         setTimeout(() => setSuccessMessage(null), 3000);
@@ -456,6 +460,7 @@ const App: React.FC = () => {
         setApiKeys({...apiKeys, enableRealTrade: !enabled});
       }
     } catch (err) {
+      console.error('Real trade toggle error:', err);
       setError('실제 거래 설정 변경 중 오류가 발생했습니다.');
       // 실패시 상태 롤백
       setApiKeys({...apiKeys, enableRealTrade: !enabled});

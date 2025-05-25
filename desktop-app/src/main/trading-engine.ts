@@ -55,6 +55,7 @@ class TradingEngine extends EventEmitter {
 
   setConfig(config: Partial<TradingConfig>) {
     this.config = { ...this.config, ...config };
+    this.emit('configChanged', this.config);
   }
 
   setActiveMarkets(markets: string[]) {

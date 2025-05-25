@@ -573,7 +573,9 @@ class TradingApp {
     // 실제 거래 토글
     ipcMain.handle('toggle-real-trade', async (event, enabled: boolean) => {
       try {
-        return await apiClient.toggleRealTrade(enabled);
+        tradingEngine.setConfig({ enableRealTrading: enabled });
+        console.log(`Real trading ${enabled ? 'enabled' : 'disabled'}`);
+        return true;
       } catch (error) {
         console.error('Failed to toggle real trade:', error);
         return false;
@@ -617,6 +619,12 @@ class TradingApp {
         lastUpdate: new Date().toISOString()
       };
       this.sendStatusUpdate();
+    });
+
+    tradingEngine.on('configChanged', (config: any) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('trading-config-changed', config);
+      }
     });
   }
 
