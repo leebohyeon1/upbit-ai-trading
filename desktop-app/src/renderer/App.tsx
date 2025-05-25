@@ -29,6 +29,10 @@ import {
   Avatar,
   Grid,
   LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -159,6 +163,8 @@ const App: React.FC = () => {
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisConfigs, setAnalysisConfigs] = useState<AnalysisConfig[]>([]);
   const [selectedAnalysisCoin, setSelectedAnalysisCoin] = useState<string | null>(null);
+  const [analysisDetailOpen, setAnalysisDetailOpen] = useState(false);
+  const [selectedAnalysisDetail, setSelectedAnalysisDetail] = useState<TradingAnalysis | null>(null);
   
   // 인기 코인 목록
   const popularCoins = [
@@ -458,6 +464,15 @@ const App: React.FC = () => {
     
     // 간단한 이유인 경우 자연스러운 문장으로 변환
     return `AI는 ${reason.toLowerCase()}는 이유로 ${decisionKorean}를 결정했습니다.`;
+  };
+
+  // 분석 상세 정보 표시
+  const handleShowAnalysisDetail = (coin: PortfolioCoin) => {
+    const analysis = recentAnalyses.find(a => a.ticker === coin.ticker);
+    if (analysis) {
+      setSelectedAnalysisDetail(analysis);
+      setAnalysisDetailOpen(true);
+    }
   };
 
   const renderSidebar = () => (
@@ -838,10 +853,7 @@ const App: React.FC = () => {
                         boxShadow: 4
                       }
                     }}
-                    onClick={() => {
-                      setTabValue(2);
-                      setSelectedAnalysisCoin(coin.ticker);
-                    }}
+                    onClick={() => handleShowAnalysisDetail(coin)}
                   >
                     <CardContent>
                       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -909,7 +921,7 @@ const App: React.FC = () => {
                         </Box>
                       )}
                       <Typography variant="caption" display="block" textAlign="center" mt={2} color="primary">
-                        클릭하여 분석 설정
+                        클릭하여 상세 분석 보기
                       </Typography>
                     </CardContent>
                   </Card>
@@ -1294,6 +1306,107 @@ const App: React.FC = () => {
       {renderSidebar()}
       {renderMainContent()}
       {renderRightSidebar()}
+      
+      {/* 분석 상세 정보 모달 */}
+      <Dialog
+        open={analysisDetailOpen}
+        onClose={() => setAnalysisDetailOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        {selectedAnalysisDetail && (
+          <>
+            <DialogTitle>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Typography variant="h6">
+                    {selectedAnalysisDetail.ticker.replace('KRW-', '')} 분석 상세 정보
+                  </Typography>
+                  <Chip
+                    label={getDecisionText(selectedAnalysisDetail.decision)}
+                    color={getDecisionColor(selectedAnalysisDetail.decision) as any}
+                    size="small"
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {new Date(selectedAnalysisDetail.timestamp).toLocaleString('ko-KR')}
+                </Typography>
+              </Box>
+            </DialogTitle>
+            <DialogContent dividers>
+              <Box mb={3}>
+                <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                  신뢰도
+                </Typography>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={selectedAnalysisDetail.confidence * 100}
+                    sx={{ flex: 1, height: 8, borderRadius: 1 }}
+                  />
+                  <Typography variant="body2" fontWeight="bold">
+                    {(selectedAnalysisDetail.confidence * 100).toFixed(0)}%
+                  </Typography>
+                </Box>
+              </Box>
+              
+              {tradingState.aiEnabled && selectedAnalysisDetail.reason && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    AI 분석 의견
+                  </Typography>
+                  <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
+                    <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+                      {formatAIReason(selectedAnalysisDetail.reason, selectedAnalysisDetail.decision)}
+                    </Typography>
+                  </Paper>
+                </Box>
+              )}
+              
+              {!tradingState.aiEnabled && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    기술적 분석 결과
+                  </Typography>
+                  <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {selectedAnalysisDetail.reason || '기술적 지표를 기반으로 분석한 결과입니다.'}
+                    </Typography>
+                  </Paper>
+                </Box>
+              )}
+              
+              <Box mt={3}>
+                <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                  분석 기준
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">결정 유형</Typography>
+                    <Typography variant="body2">{getDecisionText(selectedAnalysisDetail.decision)}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">AI 모드</Typography>
+                    <Typography variant="body2">{tradingState.aiEnabled ? '활성' : '비활성'}</Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => {
+                setTabValue(2);
+                setSelectedAnalysisCoin(selectedAnalysisDetail.ticker);
+                setAnalysisDetailOpen(false);
+              }}>
+                분석 설정으로 이동
+              </Button>
+              <Button onClick={() => setAnalysisDetailOpen(false)} variant="contained">
+                닫기
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 };
