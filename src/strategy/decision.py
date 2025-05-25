@@ -224,6 +224,8 @@ class TradingEngine:
             # 매매 실행
             trade_result = {"status": "no_action", "message": "조건에 맞는 거래가 없습니다."}
             
+            self.logger.log_app(f"[{ticker}] 거래 조건 확인 - 결정: {decision}, KRW 잔고: {krw_balance:.0f}원, BTC 잔고: {btc_balance:.8f}")
+            
             if decision == "buy" and krw_balance > min_order_amount:
                 # 매수할 금액 계산
                 buy_amount = krw_balance * investment_ratio
@@ -234,6 +236,8 @@ class TradingEngine:
                 
                 # 최대 가용 금액 확인
                 buy_amount = min(buy_amount, krw_balance)
+                
+                self.logger.log_app(f"[{ticker}] 매수 주문 실행 - 금액: {buy_amount:.0f}원, 현재가: {current_price:.0f}원, 신뢰도: {confidence:.1%}")
                 
                 # 시장가 매수 주문
                 order = self.upbit_api.buy_market_order(ticker, buy_amount)
@@ -274,6 +278,8 @@ class TradingEngine:
                 
                 # 시장가 매도 주문
                 if sell_amount > 0:
+                    self.logger.log_app(f"[{ticker}] 매도 주문 실행 - 수량: {sell_amount:.8f} BTC, 현재가: {current_price:.0f}원, 신뢰도: {confidence:.1%}")
+                    
                     order = self.upbit_api.sell_market_order(ticker, sell_amount)
                     
                     # 매도 시간 기록 (쿨다운용)
@@ -301,6 +307,13 @@ class TradingEngine:
                         "price": current_price,
                         "message": f"{ticker} {sell_amount:.8f} BTC 매도 완료"
                     }
+                else:
+                    self.logger.log_app(f"[{ticker}] 매도 조건 미충족 - 최소 주문 금액 미달: {sell_amount * current_price:.0f}원 < {min_order_amount}원")
+            else:
+                if decision == "buy" and krw_balance <= min_order_amount:
+                    self.logger.log_app(f"[{ticker}] 매수 실행 불가 - KRW 잔고 부족: {krw_balance:.0f}원 <= {min_order_amount}원")
+                elif decision == "sell" and btc_balance <= 0:
+                    self.logger.log_app(f"[{ticker}] 매도 실행 불가 - BTC 잔고 없음")
             
             return trade_result
         

@@ -93,9 +93,9 @@ TRADING_SETTINGS = {
     },
     "cooldown": {              # 거래 쿨다운 설정
         "enabled": True,       # 쿨다운 기능 사용 여부
-        "buy_minutes": 120,     # 매수 후 대기 시간 (분) - 수수료 최소화를 위해 연속 거래 방지
-        "sell_minutes": 60,    # 매도 후 대기 시간 (분) - 매수보다 매도는 더 자주해도 됨
-        "min_confidence_override": 0.9  # 이 신뢰도 이상이면 쿨다운 무시 (바로 대응해야 하는 긴급 신호)
+        "buy_minutes": 30,     # 매수 후 대기 시간 (분) - 30분으로 단축
+        "sell_minutes": 20,    # 매도 후 대기 시간 (분) - 20분으로 단축
+        "min_confidence_override": 0.85  # 이 신뢰도 이상이면 쿨다운 무시 (85%로 하향)
     }
 }
 
