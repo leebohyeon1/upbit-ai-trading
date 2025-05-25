@@ -443,6 +443,23 @@ const App: React.FC = () => {
     setAnalysisConfigs(newConfigs);
   };
 
+  // AI 분석 이유를 자연스러운 글 형식으로 변환
+  const formatAIReason = (reason: string, decision: string): string => {
+    const decisionKorean = {
+      'buy': '매수',
+      'sell': '매도',
+      'hold': '관망'
+    }[decision] || '관망';
+    
+    // 이미 자연스러운 형식이면 그대로 반환
+    if (reason.includes('판단했습니다') || reason.includes('결정했습니다')) {
+      return reason;
+    }
+    
+    // 간단한 이유인 경우 자연스러운 문장으로 변환
+    return `AI는 ${reason.toLowerCase()}는 이유로 ${decisionKorean}를 결정했습니다.`;
+  };
+
   const renderSidebar = () => (
     <Box sx={{ 
       width: 200, 
@@ -622,12 +639,13 @@ const App: React.FC = () => {
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         display: '-webkit-box',
-                        WebkitLineClamp: 2,
+                        WebkitLineClamp: 3,
                         WebkitBoxOrient: 'vertical',
-                        lineHeight: 1.3
+                        lineHeight: 1.4,
+                        fontStyle: 'italic'
                       }}
                     >
-                      {analysis.reason}
+                      💡 {formatAIReason(analysis.reason, analysis.decision)}
                     </Typography>
                   )}
                 </CardContent>
@@ -858,22 +876,35 @@ const App: React.FC = () => {
                             신뢰도: {(analysis.confidence * 100).toFixed(0)}%
                           </Typography>
                           {tradingState.aiEnabled && analysis.reason && (
-                            <Typography 
-                              variant="caption" 
-                              color="text.secondary" 
-                              display="block" 
-                              sx={{ 
-                                mt: 1,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                display: '-webkit-box',
-                                WebkitLineClamp: 3,
-                                WebkitBoxOrient: 'vertical',
-                                lineHeight: 1.4
-                              }}
-                            >
-                              <strong>AI 분석:</strong> {analysis.reason}
-                            </Typography>
+                            <Box sx={{ 
+                              mt: 1.5, 
+                              p: 1.5, 
+                              bgcolor: 'grey.50', 
+                              borderRadius: 1,
+                              border: '1px solid',
+                              borderColor: 'grey.200'
+                            }}>
+                              <Typography 
+                                variant="caption" 
+                                color="text.secondary" 
+                                display="block" 
+                                sx={{ 
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 4,
+                                  WebkitBoxOrient: 'vertical',
+                                  lineHeight: 1.5,
+                                  fontStyle: 'italic'
+                                }}
+                              >
+                                <Typography component="span" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                  🤖 AI 분석 의견:
+                                </Typography>
+                                <br />
+                                {formatAIReason(analysis.reason, analysis.decision)}
+                              </Typography>
+                            </Box>
                           )}
                         </Box>
                       )}
