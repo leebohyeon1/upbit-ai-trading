@@ -158,6 +158,7 @@ const App: React.FC = () => {
   const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(60);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisConfigs, setAnalysisConfigs] = useState<AnalysisConfig[]>([]);
+  const [selectedAnalysisCoin, setSelectedAnalysisCoin] = useState<string | null>(null);
   
   // 인기 코인 목록
   const popularCoins = [
@@ -687,30 +688,6 @@ const App: React.FC = () => {
         </Alert>
       )}
 
-      {/* Welcome Banner */}
-      {tabValue === 0 && (
-        <Card sx={{ 
-          mb: 3, 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white'
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Grid container alignItems="center" spacing={3}>
-              <Grid item xs={12} md={8}>
-                <Typography variant="h5" fontWeight="bold" gutterBottom>
-                  AI 트레이딩 대시보드
-                </Typography>
-                <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                  실시간 분석과 자동매매로 더 스마트한 투자를 시작하세요
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={4} textAlign="center">
-                <TrendingUp sx={{ fontSize: 80, opacity: 0.8 }} />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Stats Cards */}
       {tabValue === 0 && (
@@ -821,11 +798,23 @@ const App: React.FC = () => {
               const analysis = recentAnalyses.find(a => a.ticker === coin.ticker);
               return (
                 <Grid item xs={12} sm={6} md={4} key={coin.ticker}>
-                  <Card sx={{ 
-                    border: coin.enabled ? 2 : 1,
-                    borderColor: coin.enabled ? 'primary.main' : 'divider',
-                    opacity: coin.enabled ? 1 : 0.6
-                  }}>
+                  <Card 
+                    sx={{ 
+                      border: coin.enabled ? 2 : 1,
+                      borderColor: coin.enabled ? 'primary.main' : 'divider',
+                      opacity: coin.enabled ? 1 : 0.6,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: 4
+                      }
+                    }}
+                    onClick={() => {
+                      setTabValue(2);
+                      setSelectedAnalysisCoin(coin.ticker);
+                    }}
+                  >
                     <CardContent>
                       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                         <Typography variant="h6" fontWeight="bold">
@@ -860,6 +849,9 @@ const App: React.FC = () => {
                           </Typography>
                         </Box>
                       )}
+                      <Typography variant="caption" display="block" textAlign="center" mt={2} color="primary">
+                        클릭하여 분석 설정
+                      </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -956,86 +948,162 @@ const App: React.FC = () => {
           분석 설정
         </Typography>
         
-        <Card>
+        {/* 코인 선택 섹션 */}
+        <Card sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              각 코인별로 분석 주기와 거래 임계값을 설정할 수 있습니다.
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              코인 선택
             </Typography>
-            
-            {portfolio.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                포트폴리오에 코인을 추가하면 분석 설정을 할 수 있습니다.
-              </Typography>
-            ) : (
-              <Box mt={3}>
-                {portfolio.map((coin) => {
-                  const config = getConfigForTicker(coin.ticker);
-                  return (
-                    <Box key={coin.ticker} mb={4} p={3} sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                      <Typography variant="subtitle1" gutterBottom fontWeight="bold">
-                        {coin.name}
-                      </Typography>
-                      
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            fullWidth
-                            label="분석 주기 (분)"
-                            type="number"
-                            value={config.analysisInterval}
-                            onChange={(e) => updateConfigForTicker(coin.ticker, { analysisInterval: parseInt(e.target.value) || 1 })}
-                            InputProps={{ inputProps: { min: 1, max: 60 } }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            fullWidth
-                            label="매수 임계값 (%)"
-                            type="number"
-                            value={config.buyThreshold}
-                            onChange={(e) => updateConfigForTicker(coin.ticker, { buyThreshold: parseInt(e.target.value) || 70 })}
-                            InputProps={{ inputProps: { min: 50, max: 100 } }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            fullWidth
-                            label="매도 임계값 (%)"
-                            type="number"
-                            value={config.sellThreshold}
-                            onChange={(e) => updateConfigForTicker(coin.ticker, { sellThreshold: parseInt(e.target.value) || 30 })}
-                            InputProps={{ inputProps: { min: 0, max: 50 } }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            fullWidth
-                            label="손절 라인 (%)"
-                            type="number"
-                            value={config.stopLoss}
-                            onChange={(e) => updateConfigForTicker(coin.ticker, { stopLoss: parseFloat(e.target.value) || 5 })}
-                            InputProps={{ inputProps: { min: 1, max: 20, step: 0.5 } }}
-                          />
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  );
-                })}
-                
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<Save />}
-                  onClick={saveAnalysisConfigs}
-                  fullWidth
-                  size="large"
-                >
-                  분석 설정 저장
-                </Button>
-              </Box>
-            )}
+            <FormControl fullWidth sx={{ mt: 2 }}>
+              <InputLabel>분석할 코인</InputLabel>
+              <Select
+                value={selectedAnalysisCoin || ''}
+                label="분석할 코인"
+                onChange={(e) => setSelectedAnalysisCoin(e.target.value)}
+              >
+                {portfolio.map((coin) => (
+                  <MenuItem key={coin.ticker} value={coin.ticker}>
+                    {coin.name} ({coin.ticker})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </CardContent>
         </Card>
+        
+        {/* 선택된 코인의 설정 */}
+        {selectedAnalysisCoin && (
+          <Card>
+            <CardContent>
+              {(() => {
+                const selectedCoin = portfolio.find(c => c.ticker === selectedAnalysisCoin);
+                const config = getConfigForTicker(selectedAnalysisCoin);
+                
+                if (!selectedCoin) return null;
+                
+                return (
+                  <>
+                    <Box display="flex" alignItems="center" gap={2} mb={3}>
+                      <Avatar sx={{ bgcolor: 'primary.main' }}>
+                        {selectedCoin.ticker.replace('KRW-', '').charAt(0)}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="h6" fontWeight="bold">
+                          {selectedCoin.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {selectedCoin.ticker}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    <Divider sx={{ mb: 3 }} />
+                    
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                          분석 설정
+                        </Typography>
+                        <TextField
+                          fullWidth
+                          label="분석 주기 (분)"
+                          type="number"
+                          value={config.analysisInterval}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { analysisInterval: parseInt(e.target.value) || 1 })}
+                          InputProps={{ inputProps: { min: 1, max: 60 } }}
+                          helperText="얼마나 자주 시장을 분석할지 설정합니다"
+                          sx={{ mb: 2 }}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                          거래 임계값
+                        </Typography>
+                        <TextField
+                          fullWidth
+                          label="매수 신호 강도 (%)"
+                          type="number"
+                          value={config.buyThreshold}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { buyThreshold: parseInt(e.target.value) || 70 })}
+                          InputProps={{ inputProps: { min: 50, max: 100 } }}
+                          helperText="이 수치 이상일 때 매수 신호로 판단합니다"
+                          sx={{ mb: 2 }}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="매도 신호 강도 (%)"
+                          type="number"
+                          value={config.sellThreshold}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { sellThreshold: parseInt(e.target.value) || 30 })}
+                          InputProps={{ inputProps: { min: 0, max: 50 } }}
+                          helperText="이 수치 이하일 때 매도 신호로 판단합니다"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="손절 라인 (%)"
+                          type="number"
+                          value={config.stopLoss}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { stopLoss: parseFloat(e.target.value) || 5 })}
+                          InputProps={{ inputProps: { min: 1, max: 20, step: 0.5 } }}
+                          helperText="손실이 이 비율을 초과하면 자동 매도합니다"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="목표 수익률 (%)"
+                          type="number"
+                          value={config.takeProfit}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { takeProfit: parseFloat(e.target.value) || 10 })}
+                          InputProps={{ inputProps: { min: 5, max: 50, step: 0.5 } }}
+                          helperText="수익이 이 비율에 도달하면 일부 매도를 고려합니다"
+                        />
+                      </Grid>
+                    </Grid>
+                    
+                    <Box mt={4}>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Save />}
+                        onClick={saveAnalysisConfigs}
+                        fullWidth
+                        size="large"
+                      >
+                        {selectedCoin.name} 설정 저장
+                      </Button>
+                    </Box>
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
+        
+        {!selectedAnalysisCoin && portfolio.length === 0 && (
+          <Card>
+            <CardContent sx={{ textAlign: 'center', py: 6 }}>
+              <Tune sx={{ fontSize: 60, color: 'grey.300', mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                포트폴리오가 비어있습니다
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                포트폴리오에 코인을 추가하면 분석 설정을 할 수 있습니다.
+              </Typography>
+              <Button variant="contained" onClick={() => setTabValue(1)}>
+                코인 추가하기
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </TabPanel>
 
       <TabPanel value={tabValue} index={3}>
