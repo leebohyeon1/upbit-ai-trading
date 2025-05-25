@@ -22,8 +22,7 @@ class TradingAPIClient {
       const response = await this.axiosInstance.get('/status');
       return response.data;
     } catch (error) {
-      console.error('Failed to get status:', error);
-      // 개발 중이므로 더미 데이터 반환
+      // 조용히 처리
       return {
         is_running: false,
         ai_enabled: false,
@@ -61,8 +60,8 @@ class TradingAPIClient {
       });
       return response.data.success;
     } catch (error) {
-      console.error('Failed to toggle AI:', error);
-      return true; // 개발 중이므로 성공으로 처리
+      // 조용히 처리
+      return true;
     }
   }
 
@@ -71,7 +70,7 @@ class TradingAPIClient {
       const response = await this.axiosInstance.post('/set-api-keys', keys);
       return response.data.success;
     } catch (error) {
-      console.error('Failed to set API keys:', error);
+      // 조용히 처리
       return false;
     }
   }
@@ -83,7 +82,7 @@ class TradingAPIClient {
       });
       return response.data.success;
     } catch (error) {
-      console.error('Failed to toggle real trade:', error);
+      // 조용히 처리
       return false;
     }
   }
@@ -93,7 +92,7 @@ class TradingAPIClient {
       const response = await this.axiosInstance.post('/update-trading-config', config);
       return response.data.success;
     } catch (error) {
-      console.error('Failed to update trading config:', error);
+      // 조용히 처리
       return false;
     }
   }
@@ -114,7 +113,7 @@ class WebSocketClient {
       this.ws = new WebSocket('ws://localhost:8000/ws');
 
       this.ws.on('open', () => {
-        console.log('WebSocket connected');
+        // WebSocket 연결됨
         if (this.reconnectInterval) {
           clearInterval(this.reconnectInterval);
           this.reconnectInterval = null;
@@ -128,31 +127,24 @@ class WebSocketClient {
             this.onAnalysisCallback(message.data);
           }
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
+          // 조용히 처리
         }
       });
 
       this.ws.on('close', () => {
-        console.log('WebSocket disconnected');
-        this.reconnect();
+        // WebSocket 연결 끊어짐 - 재연결 시도 안함
       });
 
       this.ws.on('error', (error: Error) => {
-        console.error('WebSocket error:', error);
+        // 조용히 처리
       });
     } catch (error) {
-      console.error('Failed to establish WebSocket connection:', error);
-      this.reconnect();
+      // 조용히 처리 - 재연결 시도 안함
     }
   }
 
   private reconnect() {
-    if (!this.reconnectInterval) {
-      this.reconnectInterval = setInterval(() => {
-        console.log('Attempting to reconnect WebSocket...');
-        this.establishConnection();
-      }, 5000);
-    }
+    // 재연결 시도 비활성화
   }
 
   disconnect() {
