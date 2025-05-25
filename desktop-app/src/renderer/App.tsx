@@ -630,15 +630,7 @@ const App: React.FC = () => {
       p: 3
     }}>
       {/* Top Controls */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            안녕하세요! 👋
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            AI 기반 암호화폐 자동매매 시스템에 오신 것을 환영합니다
-          </Typography>
-        </Box>
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
         <Box display="flex" gap={2}>
           <FormControlLabel
             control={
