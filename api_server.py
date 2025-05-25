@@ -152,6 +152,11 @@ def run_trading_bot_for_ticker(ticker: str):
         technical_indicators = TechnicalIndicators()
         
         # 설정 딕셔너리 생성
+        # AI가 활성화되면 CLAUDE_SETTINGS의 use_claude도 True로 설정
+        claude_settings = CLAUDE_SETTINGS.copy()
+        if trading_state.ai_enabled:
+            claude_settings["use_claude"] = True
+            
         config = {
             "DECISION_THRESHOLDS": DECISION_THRESHOLDS,
             "INVESTMENT_RATIOS": INVESTMENT_RATIOS,
@@ -159,7 +164,7 @@ def run_trading_bot_for_ticker(ticker: str):
             "INDICATOR_WEIGHTS": INDICATOR_WEIGHTS,
             "INDICATOR_USAGE": INDICATOR_USAGE,
             "TRADING_SETTINGS": TRADING_SETTINGS,
-            "CLAUDE_SETTINGS": CLAUDE_SETTINGS,
+            "CLAUDE_SETTINGS": claude_settings,
             "HISTORICAL_SETTINGS": HISTORICAL_SETTINGS,
             "NOTIFICATION_SETTINGS": NOTIFICATION_SETTINGS
         }
@@ -256,9 +261,13 @@ def run_trading_bot_for_ticker(ticker: str):
                     time.sleep(1)
                 
     except Exception as e:
+        import traceback
         print(f"[{ticker}] 트레이딩 봇 실행 오류: {e}")
+        print(f"[{ticker}] 상세 오류 정보:")
+        traceback.print_exc()
         if logger_instance:
             logger_instance.log_error(f"[{ticker}] 트레이딩 봇 실행 오류: {e}")
+            logger_instance.log_error(f"[{ticker}] 트레이스백: {traceback.format_exc()}")
     finally:
         # 종료 시 정리
         if ticker in trading_state.bot_threads:

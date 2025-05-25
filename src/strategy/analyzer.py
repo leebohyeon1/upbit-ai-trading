@@ -817,6 +817,13 @@ class SignalAnalyzer(MarketAnalyzer):
                 self._current_price = market_data.get("current_price")
                 self._orderbook = market_data.get("orderbook")
                 
+            # MarketAnalyzer의 analyze 호출 전에 시장 데이터 조회 및 기술적 지표 설정
+            df = self.get_market_data(ticker)
+            if df is not None and len(df) >= 20:
+                # technical_indicators에 데이터 설정
+                if self.technical_indicators is not None:
+                    self.technical_indicators.set_data(df)
+            
             # 기존 MarketAnalyzer의 analyze 메서드 사용
             market_analysis = super().analyze(ticker)
             
