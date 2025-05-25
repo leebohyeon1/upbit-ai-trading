@@ -609,6 +609,7 @@ class TradingApp {
 
     tradingEngine.on('singleAnalysisCompleted', (analysis: any) => {
       if (this.mainWindow) {
+        console.log('Sending single analysis to frontend:', analysis);
         this.mainWindow.webContents.send('analysis-update', analysis);
       }
     });

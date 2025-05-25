@@ -287,11 +287,20 @@ const App: React.FC = () => {
 
     // 분석 업데이트 리스너 등록
     window.electronAPI.onAnalysisUpdate((analysis) => {
-      setRecentAnalyses(prev => {
-        // 각 코인별로 최신 분석만 유지
-        const filtered = prev.filter(a => a.ticker !== analysis.ticker);
-        return [analysis, ...filtered];
-      });
+      console.log('Received analysis update:', analysis);
+      
+      // 단일 분석 결과인지 배열인지 확인
+      if (Array.isArray(analysis)) {
+        // 배열인 경우 모든 분석 결과로 교체
+        setRecentAnalyses(analysis);
+      } else {
+        // 단일 분석인 경우 기존 로직 사용
+        setRecentAnalyses(prev => {
+          // 각 코인별로 최신 분석만 유지
+          const filtered = prev.filter(a => a.ticker !== analysis.ticker);
+          return [analysis, ...filtered];
+        });
+      }
       setNextAnalysisTime(60); // 타이머 리셋
     });
 
@@ -806,7 +815,7 @@ const App: React.FC = () => {
         </Typography>
         {recentAnalyses.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            분석 결과가 없습니다.
+            분석 결과가 없습니다. (배열 길이: {recentAnalyses.length})
           </Typography>
         ) : (
           <Box display="flex" flexDirection="column" gap={1}>
