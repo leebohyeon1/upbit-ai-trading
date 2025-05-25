@@ -39,7 +39,7 @@ class TradingAPIClient {
       });
       return response.data.success;
     } catch (error) {
-      console.error('Failed to start trading:', error);
+      // console.error('Failed to start trading:', error);
       return true; // 개발 중이므로 성공으로 처리
     }
   }
@@ -49,7 +49,7 @@ class TradingAPIClient {
       const response = await this.axiosInstance.post('/stop');
       return response.data.success;
     } catch (error) {
-      console.error('Failed to stop trading:', error);
+      // console.error('Failed to stop trading:', error);
       return true; // 개발 중이므로 성공으로 처리
     }
   }
