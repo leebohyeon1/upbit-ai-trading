@@ -19,7 +19,10 @@ class ClaudeAPI:
         """
         self.api_key = api_key or os.getenv("CLAUDE_API_KEY")
 
-        print(f"Claude API 키: {self.api_key[:5]}...{self.api_key[-5:] if self.api_key else 'None'}")
+        if self.api_key:
+            print(f"Claude API 키: {self.api_key[:5]}...{self.api_key[-5:]}")
+        else:
+            print("Claude API 키: None")
         self.model = model
         
         if self.api_key:

@@ -135,7 +135,7 @@ def run_trading_bot_for_ticker(ticker: str):
             os.environ['UPBIT_ACCESS_KEY'] = trading_state.api_keys['upbit_access_key']
             os.environ['UPBIT_SECRET_KEY'] = trading_state.api_keys['upbit_secret_key']
             if trading_state.api_keys['anthropic_api_key']:
-                os.environ['ANTHROPIC_API_KEY'] = trading_state.api_keys['anthropic_api_key']
+                os.environ['CLAUDE_API_KEY'] = trading_state.api_keys['anthropic_api_key']
         else:
             # API 키가 없으면 .env 파일에서 로드
             load_dotenv()
@@ -145,7 +145,14 @@ def run_trading_bot_for_ticker(ticker: str):
         
         # API 인스턴스 생성
         upbit_api = UpbitAPI()
-        claude_api = ClaudeAPI() if trading_state.ai_enabled else None
+        claude_api = None
+        if trading_state.ai_enabled:
+            claude_api_key = trading_state.api_keys.get('anthropic_api_key') or os.getenv('CLAUDE_API_KEY')
+            if claude_api_key:
+                claude_api = ClaudeAPI(api_key=claude_api_key)
+            else:
+                logger_instance.log_error("Claude API 키가 설정되지 않았습니다. AI 분석을 사용할 수 없습니다.")
+                claude_api = None
         
         # 분석기 인스턴스 생성
         market_indicators = MarketIndicators(upbit_api)
