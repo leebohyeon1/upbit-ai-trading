@@ -4,6 +4,7 @@ import aiService from './ai-service';
 import { EventEmitter } from 'events';
 import TradingConfigHelper, { CoinSpecificConfig } from './trading-config';
 import { LearningService } from './learning-service';
+import { ApiClient } from './api-client';
 
 export interface TradingConfig {
   enableRealTrading: boolean;
@@ -37,7 +38,7 @@ export interface CoinAnalysis {
   market: string;
   currentPrice: number;
   analysis: TechnicalAnalysis;
-  aiAnalysis: string;
+  aiAnalysis: string | null;
   lastUpdated: number;
 }
 
@@ -68,24 +69,24 @@ export interface DynamicParameters {
 class TradingEngine extends EventEmitter {
   private _isRunning = false;
   private aiEnabled = false;
-  private activeMarkets: string[] = ['KRW-BTC', 'KRW-ETH', 'KRW-XRP', 'KRW-DOGE'];
+  private activeMarkets: string[] = [];
   private config: TradingConfig = {
     enableRealTrading: false,
-    maxInvestmentPerCoin: 50000, // 100000 → 50000 (최대 투자금 축소)
-    stopLossPercent: 3, // 5 → 3 (손절선을 더 타이트하게)
-    takeProfitPercent: 5, // 10 → 5 (작은 이익에도 확정)
-    rsiOverbought: 75, // 70 → 75 (더 확실한 과매수에서만 매도)
-    rsiOversold: 25, // 30 → 25 (더 확실한 과매도에서만 매수)
-    buyingCooldown: 120, // 30분 → 120분 (2시간 매수 쿨타임)
-    sellingCooldown: 60, // 20분 → 60분 (1시간 매도 쿨타임)
-    minConfidenceForTrade: 75, // 60% → 75% (높은 신뢰도에서만 거래)
-    sellRatio: 1.0, // 50% → 100% (손실 시 전량 매도로 리스크 차단)
-    buyRatio: 0.1, // 30% → 10% (최소 금액으로 진입)
+    maxInvestmentPerCoin: 0,
+    stopLossPercent: 0,
+    takeProfitPercent: 0,
+    rsiOverbought: 70,
+    rsiOversold: 30,
+    buyingCooldown: 0,
+    sellingCooldown: 0,
+    minConfidenceForTrade: 50,
+    sellRatio: 0.5,
+    buyRatio: 0.1,
     // 동적 파라미터 조정 설정
-    dynamicRSI: true,
-    dynamicConfidence: true,
-    useKellyCriterion: true,
-    maxKellyFraction: 0.1 // 0.25 → 0.1 (Kelly의 10%만 베팅, 매우 보수적)
+    dynamicRSI: false,
+    dynamicConfidence: false,
+    useKellyCriterion: false,
+    maxKellyFraction: 0.25
   };
   
   private analysisResults: Map<string, CoinAnalysis> = new Map();
@@ -98,11 +99,15 @@ class TradingEngine extends EventEmitter {
   private dynamicParameters: Map<string, DynamicParameters> = new Map();
   private performanceMetrics: Map<string, { wins: number; losses: number; totalProfit: number }> = new Map();
   private learningService: LearningService;
+  private apiClient: ApiClient;
+  private useApiServer: boolean = false;
 
   constructor() {
     super();
     this.learningService = new LearningService();
+    this.apiClient = new ApiClient();
     this.setupLearningService();
+    this.setupApiClient();
   }
 
   private setupLearningService(): void {
@@ -115,6 +120,49 @@ class TradingEngine extends EventEmitter {
     this.learningService.on('trade-recorded', (result) => {
       console.log('Trade recorded for learning:', result.market, result.profitRate + '%');
     });
+  }
+
+  private setupApiClient(): void {
+    // API 서버 연결 이벤트
+    this.apiClient.on('connected', () => {
+      console.log('Connected to API server');
+      this.emit('apiConnected');
+    });
+
+    this.apiClient.on('disconnected', () => {
+      console.log('Disconnected from API server');
+      this.emit('apiDisconnected');
+    });
+
+    // 실시간 분석 데이터 수신
+    this.apiClient.on('analysis', (data: any) => {
+      this.emit('remoteAnalysis', data);
+    });
+
+    // 거래 알림 수신
+    this.apiClient.on('trade', (data: any) => {
+      this.emit('remoteTrade', data);
+    });
+
+    // 상태 업데이트 수신
+    this.apiClient.on('status', (status: any) => {
+      this.emit('remoteStatus', status);
+    });
+  }
+
+  // API 서버 사용 설정
+  setUseApiServer(useApiServer: boolean): void {
+    this.useApiServer = useApiServer;
+    if (useApiServer) {
+      this.apiClient.connect();
+    } else {
+      this.apiClient.disconnect();
+    }
+  }
+
+  // 학습 서비스 getter
+  getLearningService(): LearningService {
+    return this.learningService;
   }
 
   setApiKeys(accessKey: string, secretKey: string, anthropicApiKey?: string) {
@@ -156,10 +204,14 @@ class TradingEngine extends EventEmitter {
       // 즉시 첫 분석 실행
       await this.performAnalysis();
       
-      // 주기적 분석 시작 (60초마다) - 분석 빈도 감소
+      // 주기적 분석 시작 (60초마다)
+      const analysisIntervalMs = 60000; // 60초 고정
+      
+      console.log(`분석 주기: ${analysisIntervalMs / 1000}초`);
+      
       this.analysisInterval = setInterval(() => {
         this.performAnalysis();
-      }, 60000); // 30초 → 60초로 변경
+      }, analysisIntervalMs);
 
       // 상태 업데이트 (5초마다)
       this.statusInterval = setInterval(() => {
@@ -222,19 +274,27 @@ class TradingEngine extends EventEmitter {
             upbitService.getTrades(market, 50)
           ]);
 
-          // 기술적 분석 수행 (추가 데이터 포함)
-          const technicalAnalysis = await analysisService.analyzeTechnicals(candles, ticker, orderbook, trades);
+          // 분석 설정 찾기 (market에서 코인 심볼 추출)
+          const coinSymbol = market.split('-')[1];
+          const analysisConfig = this.analysisConfigs.find(config => config.ticker === coinSymbol);
           
-          // 분석 설정 찾기
-          const analysisConfig = this.analysisConfigs.find(config => config.ticker === ticker);
+          // 기술적 분석 수행 (추가 데이터 및 설정 포함)
+          const technicalAnalysis = await analysisService.analyzeTechnicals(candles, ticker, orderbook, trades, analysisConfig);
           
           // AI 분석 (실제 Claude API 사용)
-          const aiAnalysis = await aiService.generateTradingAnalysis(technicalAnalysis, { 
-              currentPrice, 
-              market,
-              buyScore: technicalAnalysis.scores?.buyScore,
-              sellScore: technicalAnalysis.scores?.sellScore
-            }, analysisConfig);
+          let aiAnalysis = null;
+          if (this.aiEnabled) {
+            try {
+              aiAnalysis = await aiService.generateTradingAnalysis(technicalAnalysis, { 
+                currentPrice, 
+                market,
+                buyScore: technicalAnalysis.scores?.buyScore,
+                sellScore: technicalAnalysis.scores?.sellScore
+              }, analysisConfig);
+            } catch (error) {
+              console.log(`AI 분석 실패 (${market}):`, error instanceof Error ? error.message : 'Unknown error');
+            }
+          }
 
           // 결과 저장
           const coinAnalysis: CoinAnalysis = {
@@ -252,7 +312,7 @@ class TradingEngine extends EventEmitter {
             ticker: market,
             decision: technicalAnalysis.signal.toLowerCase(),
             confidence: technicalAnalysis.confidence / 100,
-            reason: aiAnalysis,
+            reason: aiAnalysis || null,  // AI 분석이 없으면 null
             timestamp: new Date().toISOString()
           };
           
@@ -275,7 +335,7 @@ class TradingEngine extends EventEmitter {
         ticker: analysis.market,
         decision: analysis.analysis.signal.toLowerCase(),
         confidence: analysis.analysis.confidence / 100,
-        reason: analysis.aiAnalysis,
+        reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
         timestamp: new Date(analysis.lastUpdated).toISOString()
       }));
       
@@ -291,7 +351,33 @@ class TradingEngine extends EventEmitter {
     
     try {
       // 코인별 설정 가져오기
-      let coinConfig = TradingConfigHelper.getCoinConfig(market);
+      const ticker = market.split('-')[1];
+      const analysisConfig = this.analysisConfigs.find(config => config.ticker === ticker);
+      
+      if (!analysisConfig) {
+        console.log(`No analysis config found for ${market}, skipping trade signal`);
+        return;
+      }
+      
+      // UI에서 설정한 값들 사용 (기본값 없음)
+      let coinConfig: CoinSpecificConfig = {
+        minConfidenceForBuy: analysisConfig.buyConfidenceThreshold || 50,
+        minConfidenceForSell: analysisConfig.sellConfidenceThreshold || 50,
+        buyingCooldown: analysisConfig.buyCooldown || 0,
+        sellingCooldown: analysisConfig.sellCooldown || 0,
+        defaultBuyRatio: analysisConfig.buying?.defaultBuyRatio || 0.1,
+        defaultSellRatio: analysisConfig.selling?.defaultSellRatio || 0.5,
+        stopLossPercent: analysisConfig.stopLossMode === 'signal' ? 100 : (analysisConfig.stopLoss || 5),
+        takeProfitPercent: analysisConfig.takeProfitMode === 'signal' ? 100 : (analysisConfig.takeProfit || 10),
+        rsiOverbought: analysisConfig.rsiOverbought || 70,
+        rsiOversold: analysisConfig.rsiOversold || 30,
+        minVolume: analysisConfig.minVolume || 0,
+        maxPositionSize: analysisConfig.maxPositionSize || 0,
+        useKellyOptimization: analysisConfig.useKellyOptimization || false,
+        volatilityAdjustment: analysisConfig.volatilityAdjustment || false,
+        newsImpactMultiplier: analysisConfig.newsImpactMultiplier || 1.0,
+        preferredTradingHours: analysisConfig.preferredTradingHours || []
+      };
       
       // 현재 시간 확인
       const currentHour = new Date().getHours();
@@ -313,14 +399,10 @@ class TradingEngine extends EventEmitter {
       // 동적 파라미터 계산
       const dynamicParams = this.calculateDynamicParameters(market, technical);
       
-      // 코인별 신뢰도 임계값 적용
-      // 분석 설정에서 사용자가 지정한 값 우선 사용
-      const ticker = market.split('-')[1];
-      const analysisConfig = this.analysisConfigs.find(config => config.ticker === ticker);
-      
+      // 이미 위에서 coinConfig에 UI 설정이 병합되었으므로 직접 사용
       const minConfidenceForTrade = technical.signal === 'BUY' ? 
-        (analysisConfig?.buyConfidenceThreshold || coinConfig.minConfidenceForBuy) : 
-        (analysisConfig?.sellConfidenceThreshold || coinConfig.minConfidenceForSell);
+        coinConfig.minConfidenceForBuy : 
+        coinConfig.minConfidenceForSell;
       
       const minConfidence = this.config.dynamicConfidence ? 
         Math.max(dynamicParams.adjustedMinConfidence, minConfidenceForTrade) : 
@@ -337,14 +419,11 @@ class TradingEngine extends EventEmitter {
       const coinAccount = accounts.find(acc => acc.currency === market.split('-')[1]);
 
       if (technical.signal === 'BUY') {
-        // 코인별 매수 쿨타임 체크
-        const buyCooldown = analysisConfig?.buyCooldown || coinConfig.buyingCooldown;
-        
         // 높은 신뢰도에서 쿨다운 무시 옵션 체크
         const skipCooldown = analysisConfig?.skipCooldownOnHighConfidence && 
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
-        if (!skipCooldown && this.isInCooldownWithConfig(market, 'buy', buyCooldown)) {
+        if (!skipCooldown && this.isInCooldownWithConfig(market, 'buy', coinConfig.buyingCooldown)) {
           return;
         }
 
@@ -390,9 +469,10 @@ class TradingEngine extends EventEmitter {
           const maxInvestment = this.config.maxInvestmentPerCoin;
           const buyAmount = maxInvestment * adjustedBuyRatio;
           
-          // 최소 주문 금액 확인 (5,000원)
-          if (buyAmount < 5000) {
-            console.log(`Buy amount ₩${buyAmount.toLocaleString()} is below minimum order amount ₩5,000`);
+          // 최소 주문 금액 확인 (기본 5,000원, UI 설정 사용 가능)
+          const minOrderAmount = analysisConfig?.minOrderAmount || 5000;
+          if (buyAmount < minOrderAmount) {
+            console.log(`Buy amount ₩${buyAmount.toLocaleString()} is below minimum order amount ₩${minOrderAmount.toLocaleString()}`);
             return;
           }
           
@@ -435,14 +515,11 @@ class TradingEngine extends EventEmitter {
           });
         }
       } else if (technical.signal === 'SELL') {
-        // 코인별 매도 쿨타임 체크
-        const sellCooldown = analysisConfig?.sellCooldown || coinConfig.sellingCooldown;
-        
         // 높은 신뢰도에서 쿨다운 무시 옵션 체크
         const skipCooldown = analysisConfig?.skipCooldownOnHighConfidence && 
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
-        if (!skipCooldown && this.isInCooldownWithConfig(market, 'sell', sellCooldown)) {
+        if (!skipCooldown && this.isInCooldownWithConfig(market, 'sell', coinConfig.sellingCooldown)) {
           return;
         }
 
@@ -725,10 +802,23 @@ class TradingEngine extends EventEmitter {
     this.performanceMetrics.set(trade.market, metrics);
   }
   
-  // analysisConfigs 속성 추가 (174번 라인 오류 수정)
+  // analysisConfigs 속성 추가 (UI에서 설정한 코인별 거래 설정)
   private analysisConfigs: any[] = [];
   
+  // 코인별 거래 설정 업데이트 메서드
+  setAnalysisConfigs(configs: any[]): void {
+    this.analysisConfigs = configs;
+    // 활성 시장 업데이트
+    this.activeMarkets = configs.map(config => `KRW-${config.ticker}`);
+    console.log('Analysis configs updated:', configs.length, 'coins');
+    console.log('Active markets:', this.activeMarkets);
+  }
+  
   // 시장 상황 판단
+  getAnalysisConfigs(): any[] {
+    return this.analysisConfigs;
+  }
+  
   private determineMarketCondition(technical: TechnicalAnalysis): 'bull' | 'bear' | 'sideways' {
     let bullishSignals = 0;
     let bearishSignals = 0;

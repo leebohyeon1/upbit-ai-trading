@@ -425,4 +425,31 @@ export class LearningService extends EventEmitter {
     }
     this.saveData();
   }
+
+  // 학습 모드 관리
+  private learningStates: Map<string, boolean> = new Map();
+
+  public startLearning(ticker: string): void {
+    this.learningStates.set(ticker, true);
+    console.log(`Learning started for ${ticker}`);
+    this.emit('learning-started', { ticker, isRunning: true });
+  }
+
+  public stopLearning(ticker: string): void {
+    this.learningStates.set(ticker, false);
+    console.log(`Learning stopped for ${ticker}`);
+    this.emit('learning-stopped', { ticker, isRunning: false });
+  }
+
+  public isLearning(ticker: string): boolean {
+    return this.learningStates.get(ticker) || false;
+  }
+
+  public getLearningStates(): Array<{ ticker: string; isRunning: boolean }> {
+    const states: Array<{ ticker: string; isRunning: boolean }> = [];
+    this.learningStates.forEach((isRunning, ticker) => {
+      states.push({ ticker, isRunning });
+    });
+    return states;
+  }
 }

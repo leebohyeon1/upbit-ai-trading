@@ -18,6 +18,7 @@ class TradingApp {
   constructor() {
     this.setupApp();
     this.setupTradingEngine();
+    this.setupIpcHandlers();
   }
 
   private setupApp() {
@@ -755,6 +756,211 @@ class TradingApp {
     } catch (error) {
       console.error('Failed to load saved API keys:', error);
     }
+  }
+
+  private setupIpcHandlers() {
+    // API Key validation
+    ipcMain.handle('validate-api-key', async (event, accessKey: string, secretKey: string) => {
+      try {
+        const upbitService = require('./upbit-service').default;
+        upbitService.setApiKeys(accessKey, secretKey);
+        const accounts = await upbitService.getAccounts();
+        
+        return {
+          isValid: true,
+          accessKey: accessKey,
+          balance: accounts.find((acc: any) => acc.currency === 'KRW')?.balance || '0'
+        };
+      } catch (error) {
+        console.error('API key validation failed:', error);
+        return {
+          isValid: false,
+          accessKey: accessKey,
+          balance: '0'
+        };
+      }
+    });
+
+    // Account methods
+    ipcMain.handle('get-accounts', async () => {
+      try {
+        const upbitService = require('./upbit-service').default;
+        return await upbitService.getAccounts();
+      } catch (error) {
+        console.error('Failed to get accounts:', error);
+        return [];
+      }
+    });
+
+    // Market methods
+    ipcMain.handle('get-markets', async () => {
+      try {
+        const upbitService = require('./upbit-service').default;
+        return await upbitService.getMarkets();
+      } catch (error) {
+        console.error('Failed to get markets:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('get-tickers', async (event, symbols: string[]) => {
+      try {
+        const upbitService = require('./upbit-service').default;
+        return await upbitService.getTickers(symbols);
+      } catch (error) {
+        console.error('Failed to get tickers:', error);
+        return [];
+      }
+    });
+
+    // Trading methods
+    ipcMain.handle('start-trading', async (event, tradingConfig: any, analysisConfigs: any[]) => {
+      try {
+        // 설정 업데이트
+        tradingEngine.updateConfig(tradingConfig);
+        
+        // 분석 설정 전달 (UI에서 설정한 코인별 거래 파라미터)
+        tradingEngine.setAnalysisConfigs(analysisConfigs);
+        
+        // AI 설정
+        tradingEngine.toggleAI(tradingConfig.useAI || false);
+        
+        // 거래 시작 (analysisConfigs에서 시장 목록 추출)
+        const markets = analysisConfigs.map(config => `KRW-${config.ticker}`);
+        return await this.startTrading(markets);
+      } catch (error) {
+        console.error('Failed to start trading:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('stop-trading', async () => {
+      return await this.stopTrading();
+    });
+
+    ipcMain.handle('get-trading-state', async () => {
+      return this.tradingState;
+    });
+
+    // Backtest methods
+    ipcMain.handle('run-backtest', async (event, ticker: string, startDate: string, endDate: string, config: any) => {
+      try {
+        const backtestService = require('./backtest-service').default;
+        return await backtestService.runBacktest(ticker, startDate, endDate, config);
+      } catch (error) {
+        console.error('Backtest failed:', error);
+        throw error;
+      }
+    });
+
+    // Learning methods
+    ipcMain.handle('start-learning', async (event, ticker: string) => {
+      try {
+        const learningService = tradingEngine.getLearningService();
+        if (learningService) {
+          learningService.startLearning(ticker);
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error('Failed to start learning:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('stop-learning', async (event, ticker: string) => {
+      try {
+        const learningService = tradingEngine.getLearningService();
+        if (learningService) {
+          learningService.stopLearning(ticker);
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error('Failed to stop learning:', error);
+        return false;
+      }
+    });
+
+    // Settings methods
+    ipcMain.handle('save-api-keys', async (event, keys: any) => {
+      return await this.saveApiKeys(keys);
+    });
+
+    ipcMain.handle('get-api-keys', async () => {
+      return await this.getApiKeys();
+    });
+
+    ipcMain.handle('save-portfolio', async (event, portfolio: any[]) => {
+      try {
+        fs.writeFileSync(this.getPortfolioPath(), JSON.stringify(portfolio, null, 2));
+        return true;
+      } catch (error) {
+        console.error('Failed to save portfolio:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('get-portfolio', async () => {
+      try {
+        const portfolioPath = this.getPortfolioPath();
+        if (fs.existsSync(portfolioPath)) {
+          return JSON.parse(fs.readFileSync(portfolioPath, 'utf-8'));
+        }
+        return [];
+      } catch (error) {
+        console.error('Failed to get portfolio:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('save-analysis-configs', async (event, configs: any[]) => {
+      try {
+        fs.writeFileSync(this.getAnalysisConfigsPath(), JSON.stringify(configs, null, 2));
+        return true;
+      } catch (error) {
+        console.error('Failed to save analysis configs:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('get-analysis-configs', async () => {
+      try {
+        const configsPath = this.getAnalysisConfigsPath();
+        if (fs.existsSync(configsPath)) {
+          return JSON.parse(fs.readFileSync(configsPath, 'utf-8'));
+        }
+        return [];
+      } catch (error) {
+        console.error('Failed to get analysis configs:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('save-trading-config', async (event, config: any) => {
+      try {
+        fs.writeFileSync(this.getTradingConfigPath(), JSON.stringify(config, null, 2));
+        return true;
+      } catch (error) {
+        console.error('Failed to save trading config:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('get-trading-config', async () => {
+      try {
+        const configPath = this.getTradingConfigPath();
+        if (fs.existsSync(configPath)) {
+          return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to get trading config:', error);
+        return null;
+      }
+    });
+
+    // reset-all-settings 핸들러는 이미 존재함
   }
 }
 

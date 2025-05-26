@@ -1,163 +1,168 @@
 import axios from 'axios';
 import WebSocket from 'ws';
+import { EventEmitter } from 'events';
 
-const API_BASE_URL = 'http://localhost:8000'; // FastAPI 서버 주소
+interface ApiConfig {
+  baseUrl: string;
+  wsUrl: string;
+}
 
-export interface TradingStatus {
-  is_running: boolean;
+interface TradingStatus {
+  running: boolean;
   ai_enabled: boolean;
-  current_price?: number;
-  position?: string;
-  profit_rate?: number;
+  real_trade_enabled: boolean;
+  active_tickers: string[];
 }
 
-class TradingAPIClient {
-  private axiosInstance = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 10000,
-  });
-
-  async getStatus(): Promise<TradingStatus> {
-    try {
-      const response = await this.axiosInstance.get('/status');
-      return response.data;
-    } catch (error) {
-      // 조용히 처리
-      return {
-        is_running: false,
-        ai_enabled: false,
-      };
-    }
-  }
-
-  async startTrading(aiEnabled: boolean = false, tickers: string[] = ['KRW-BTC']): Promise<boolean> {
-    try {
-      const response = await this.axiosInstance.post('/start', {
-        ai_enabled: aiEnabled,
-        tickers: tickers,
-      });
-      return response.data.success;
-    } catch (error) {
-      // console.error('Failed to start trading:', error);
-      return true; // 개발 중이므로 성공으로 처리
-    }
-  }
-
-  async stopTrading(): Promise<boolean> {
-    try {
-      const response = await this.axiosInstance.post('/stop');
-      return response.data.success;
-    } catch (error) {
-      // console.error('Failed to stop trading:', error);
-      return true; // 개발 중이므로 성공으로 처리
-    }
-  }
-
-  async toggleAI(enabled: boolean): Promise<boolean> {
-    try {
-      const response = await this.axiosInstance.post('/toggle-ai', {
-        enabled,
-      });
-      return response.data.success;
-    } catch (error) {
-      // 조용히 처리
-      return true;
-    }
-  }
-
-  async setApiKeys(keys: { upbit_access_key: string; upbit_secret_key: string; anthropic_api_key?: string; enable_real_trade?: boolean }): Promise<boolean> {
-    try {
-      const response = await this.axiosInstance.post('/set-api-keys', keys);
-      return response.data.success;
-    } catch (error) {
-      // 조용히 처리
-      return false;
-    }
-  }
-
-  async toggleRealTrade(enabled: boolean): Promise<boolean> {
-    try {
-      const response = await this.axiosInstance.post('/toggle-real-trade', {
-        enabled,
-      });
-      return response.data.success;
-    } catch (error) {
-      // 조용히 처리
-      return false;
-    }
-  }
-
-  async updateTradingConfig(config: any): Promise<boolean> {
-    try {
-      const response = await this.axiosInstance.post('/update-trading-config', config);
-      return response.data.success;
-    } catch (error) {
-      // 조용히 처리
-      return false;
-    }
-  }
-}
-
-class WebSocketClient {
+export class ApiClient extends EventEmitter {
+  private config: ApiConfig;
   private ws: WebSocket | null = null;
   private reconnectInterval: NodeJS.Timeout | null = null;
-  private onAnalysisCallback: ((analysis: any) => void) | null = null;
+  private isConnecting = false;
 
-  connect(onAnalysis: (analysis: any) => void) {
-    this.onAnalysisCallback = onAnalysis;
-    this.establishConnection();
+  constructor(config: ApiConfig = {
+    baseUrl: 'http://localhost:8000',
+    wsUrl: 'ws://localhost:8000/ws'
+  }) {
+    super();
+    this.config = config;
   }
 
-  private establishConnection() {
+  // WebSocket 연결
+  connect(): void {
+    if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
+      return;
+    }
+
+    this.isConnecting = true;
+    console.log('Connecting to WebSocket:', this.config.wsUrl);
+
     try {
-      this.ws = new WebSocket('ws://localhost:8000/ws');
+      this.ws = new WebSocket(this.config.wsUrl);
 
       this.ws.on('open', () => {
-        // WebSocket 연결됨
+        console.log('WebSocket connected');
+        this.isConnecting = false;
+        this.emit('connected');
+        
+        // 재연결 타이머 정리
         if (this.reconnectInterval) {
           clearInterval(this.reconnectInterval);
           this.reconnectInterval = null;
         }
       });
 
-      this.ws.on('message', (data: string) => {
+      this.ws.on('message', (data: Buffer) => {
         try {
-          const message = JSON.parse(data);
-          if (message.type === 'analysis_update' && this.onAnalysisCallback) {
-            this.onAnalysisCallback(message.data);
-          }
+          const message = JSON.parse(data.toString());
+          this.handleMessage(message);
         } catch (error) {
-          // 조용히 처리
+          console.error('Failed to parse WebSocket message:', error);
         }
       });
 
-      this.ws.on('close', () => {
-        // WebSocket 연결 끊어짐 - 재연결 시도 안함
+      this.ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        this.isConnecting = false;
+        this.emit('error', error);
       });
 
-      this.ws.on('error', (error: Error) => {
-        // 조용히 처리
+      this.ws.on('close', () => {
+        console.log('WebSocket disconnected');
+        this.isConnecting = false;
+        this.emit('disconnected');
+        this.setupReconnect();
       });
     } catch (error) {
-      // 조용히 처리 - 재연결 시도 안함
+      console.error('Failed to create WebSocket:', error);
+      this.isConnecting = false;
+      this.setupReconnect();
     }
   }
 
-  private reconnect() {
-    // 재연결 시도 비활성화
+  // 재연결 설정
+  private setupReconnect(): void {
+    if (this.reconnectInterval) return;
+
+    this.reconnectInterval = setInterval(() => {
+      console.log('Attempting to reconnect...');
+      this.connect();
+    }, 5000);
   }
 
-  disconnect() {
+  // WebSocket 메시지 처리
+  private handleMessage(message: any): void {
+    switch (message.type) {
+      case 'status':
+        this.emit('status', message.data);
+        break;
+      case 'analysis':
+        this.emit('analysis', message.data);
+        break;
+      case 'trade':
+        this.emit('trade', message.data);
+        break;
+      case 'error':
+        this.emit('error', new Error(message.message));
+        break;
+      default:
+        console.log('Unknown message type:', message.type);
+    }
+  }
+
+  // 연결 해제
+  disconnect(): void {
     if (this.reconnectInterval) {
       clearInterval(this.reconnectInterval);
       this.reconnectInterval = null;
     }
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
   }
-}
 
-export const wsClient = new WebSocketClient();
-export default new TradingAPIClient();
+  // API 요청 메서드들
+  async getStatus(): Promise<TradingStatus> {
+    const response = await axios.get(`${this.config.baseUrl}/status`);
+    return response.data;
+  }
+
+  async startTrading(params: {
+    use_ai: boolean;
+    tickers: string[];
+  }): Promise<any> {
+    const response = await axios.post(`${this.config.baseUrl}/start`, params);
+    return response.data;
+  }
+
+  async stopTrading(): Promise<any> {
+    const response = await axios.post(`${this.config.baseUrl}/stop`);
+    return response.data;
+  }
+
+  async toggleAI(enabled: boolean): Promise<any> {
+    const response = await axios.post(`${this.config.baseUrl}/toggle-ai`, { enabled });
+    return response.data;
+  }
+
+  async toggleRealTrade(enabled: boolean): Promise<any> {
+    const response = await axios.post(`${this.config.baseUrl}/toggle-real-trade`, { enabled });
+    return response.data;
+  }
+
+  async setApiKeys(keys: {
+    upbit_access_key?: string;
+    upbit_secret_key?: string;
+    anthropic_api_key?: string;
+  }): Promise<any> {
+    const response = await axios.post(`${this.config.baseUrl}/set-api-keys`, keys);
+    return response.data;
+  }
+
+  async updateTradingConfig(config: any): Promise<any> {
+    const response = await axios.post(`${this.config.baseUrl}/update-trading-config`, config);
+    return response.data;
+  }
+}

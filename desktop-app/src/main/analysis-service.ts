@@ -363,7 +363,7 @@ class AnalysisService {
   }
 
   // 종합 기술적 분석
-  async analyzeTechnicals(candles: CandleData[], ticker?: any, orderbook?: any, trades?: any[]): Promise<TechnicalAnalysis> {
+  async analyzeTechnicals(candles: CandleData[], ticker?: any, orderbook?: any, trades?: any[], config?: any): Promise<TechnicalAnalysis> {
     if (candles.length < 20) {
       return {
         market: candles[0]?.market || '',
@@ -387,11 +387,15 @@ class AnalysisService {
     const currentPrice = prices[prices.length - 1];
     const currentVolume = volumes[volumes.length - 1];
 
-    // 기본 기술적 지표 계산
-    const rsi = this.calculateRSI(prices);
-    const stochasticRSI = this.calculateStochasticRSI(prices);
+    // 기본 기술적 지표 계산 (사용자 설정 적용)
+    const rsiPeriod = config?.rsiPeriod || 14;
+    const bbPeriod = config?.bbPeriod || 20;
+    const bbStdDev = config?.bbStdDev || 2;
+    
+    const rsi = this.calculateRSI(prices, rsiPeriod);
+    const stochasticRSI = this.calculateStochasticRSI(prices, rsiPeriod);
     const macd = this.calculateMACD(prices);
-    const bollinger = this.calculateBollingerBands(prices);
+    const bollinger = this.calculateBollingerBands(prices, bbPeriod, bbStdDev);
     const sma20 = this.calculateSMA(prices, 20);
     const sma50 = this.calculateSMA(prices, 50);
     
@@ -460,8 +464,9 @@ class AnalysisService {
       // 평균 거래량 계산
       const avgTradeVolume = trades.reduce((sum, t) => sum + t.trade_volume, 0) / trades.length;
       
-      // 고래 감지 (평균의 10배 이상)
-      const whaleThreshold = avgTradeVolume * 10;
+      // 고래 감지 (사용자 설정 배수 또는 기본 10배)
+      const whaleMultiplier = config?.whaleMultiplier || 10;
+      const whaleThreshold = avgTradeVolume * whaleMultiplier;
       const whaleTrades = trades.filter(t => t.trade_volume > whaleThreshold);
       const whaleVolume = whaleTrades.reduce((sum, t) => sum + t.trade_volume, 0);
       
@@ -511,8 +516,8 @@ class AnalysisService {
     // 각 신호에 가중치 부여 (중요도에 따라 다르게 설정)
     const buySignalsWithWeight = [
       // RSI 관련 지표
-      { condition: rsi < 30, weight: 3.0 }, // RSI 극도의 과매도 (매우 중요)
-      { condition: rsi < 40, weight: 2.0 }, // RSI 과매도
+      { condition: rsi < (config?.rsiOversold || 30), weight: 3.0 }, // RSI 극도의 과매도 (매우 중요)
+      { condition: rsi < ((config?.rsiOversold || 30) + 10), weight: 2.0 }, // RSI 과매도
       { condition: stochasticRSI && stochasticRSI.k < 20 && stochasticRSI.d < 20, weight: 3.0 }, // Stochastic RSI 극도의 과매도
       { condition: stochasticRSI && stochasticRSI.k < 30, weight: 2.0 }, // Stochastic RSI 과매도
       { condition: stochasticRSI && stochasticRSI.k > stochasticRSI.d && stochasticRSI.k < 50, weight: 2.5 }, // Stochastic RSI 골든크로스
@@ -527,8 +532,8 @@ class AnalysisService {
       { condition: macd.histogram > 0 && Math.abs(macd.histogram) > Math.abs(macd.macd) * 0.1, weight: 2.0 }, // MACD 히스토그램 강세
       
       // 거래량 및 OBV
-      { condition: volumeRatio > 2.0, weight: 2.0 }, // 거래량 2배 이상 급증
-      { condition: volumeRatio > 1.5, weight: 1.0 }, // 거래량 급증
+      { condition: volumeRatio > (config?.volumeThreshold || 2.0), weight: 2.0 }, // 거래량 급증 (사용자 설정)
+      { condition: volumeRatio > ((config?.volumeThreshold || 2.0) * 0.75), weight: 1.0 }, // 거래량 증가
       { condition: obv && obv.trend === 'UP', weight: 2.5 }, // OBV 상승 추세
       { condition: obv && obv.value > obv.signal * 1.05, weight: 2.0 }, // OBV 시그널 돌파
       
@@ -566,8 +571,8 @@ class AnalysisService {
     // 매도 신호 조건들 (가중치 포함)
     const sellSignalsWithWeight = [
       // RSI 관련 지표
-      { condition: rsi > 80, weight: 3.0 }, // RSI 극도의 과매수 (매우 중요)
-      { condition: rsi > 70, weight: 2.0 }, // RSI 과매수
+      { condition: rsi > (config?.rsiOverbought || 70), weight: 3.0 }, // RSI 극도의 과매수 (매우 중요)
+      { condition: rsi > ((config?.rsiOverbought || 70) - 10), weight: 2.0 }, // RSI 과매수
       { condition: stochasticRSI && stochasticRSI.k > 80 && stochasticRSI.d > 80, weight: 3.0 }, // Stochastic RSI 극도의 과매수
       { condition: stochasticRSI && stochasticRSI.k > 70, weight: 2.0 }, // Stochastic RSI 과매수
       { condition: stochasticRSI && stochasticRSI.k < stochasticRSI.d && stochasticRSI.k > 50, weight: 2.5 }, // Stochastic RSI 데드크로스

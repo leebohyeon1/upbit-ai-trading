@@ -18,7 +18,13 @@
       "Bash(find:*)",
       "Bash(mv:*)",
       "mcp__filesystem__read_multiple_files",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "mcp__filesystem__edit_file",
+      "Bash(npm run typecheck:*)",
+      "Bash(mkdir:*)",
+      "mcp__filesystem__read_file",
+      "Bash(dpkg:*)",
+      "Bash(npm install)"
     ],
     "deny": []
   }
