@@ -1940,8 +1940,13 @@ const App: React.FC = () => {
                 </Grid>
               ))}
             </Grid>
+            </Box>
+          )}
 
-            <Typography variant="h6" gutterBottom mt={4}>거래 설정</Typography>
+          {/* Tab 3: 거래 설정 */}
+          {advancedConfigTab === 3 && (
+            <Box>
+            <Typography variant="h6" gutterBottom>거래 설정</Typography>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <TextField
@@ -2292,15 +2297,18 @@ const App: React.FC = () => {
                   
                   {/* 매도 비율 계산 예시 */}
                   <Grid item xs={12}>
-                    <Card variant="outlined" sx={{ p: 2, bgcolor: 'info.50' }}>
+                    <Card variant="outlined" sx={{ p: 2, bgcolor: 'error.50' }}>
                       <Typography variant="subtitle2" gutterBottom>
-                        📊 매도 비율 계산 예시
+                        📊 매도 비율 계산 예시 (보유 코인: 1.0 BTC 기준)
                       </Typography>
                       <Grid container spacing={2}>
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 95%</Typography>
-                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                          <Typography variant="body2" fontWeight="bold" color="error.main">
                             {Math.min(100, ((tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * (tradingConfig.tradingSettings?.selling?.highConfidenceMultiplier || 1.5) * 100)).toFixed(0)}%
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {(1.0 * Math.min(1, (tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * (tradingConfig.tradingSettings?.selling?.highConfidenceMultiplier || 1.5))).toFixed(3)} BTC
                           </Typography>
                         </Grid>
                         <Grid item xs={4}>
@@ -2308,11 +2316,17 @@ const App: React.FC = () => {
                           <Typography variant="body2" fontWeight="bold" color="primary.main">
                             {((tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * 100).toFixed(0)}%
                           </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {(1.0 * (tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5)).toFixed(3)} BTC
+                          </Typography>
                         </Grid>
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 65%</Typography>
                           <Typography variant="body2" fontWeight="bold" color="warning.main">
                             {((tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * (tradingConfig.tradingSettings?.selling?.lowConfidenceMultiplier || 0.7) * 100).toFixed(0)}%
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {(1.0 * (tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * (tradingConfig.tradingSettings?.selling?.lowConfidenceMultiplier || 0.7)).toFixed(3)} BTC
                           </Typography>
                         </Grid>
                       </Grid>

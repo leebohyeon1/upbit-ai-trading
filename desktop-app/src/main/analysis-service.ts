@@ -153,13 +153,13 @@ class AnalysisService {
     // 더 민감한 신호 결정
     if (buyCount >= 2 || (buyCount > sellCount && buyCount >= 1)) {
       signal = 'BUY';
-      confidence = Math.min(40 + (buyCount * 12), 80); // 40-80% 범위
+      confidence = Math.min(50 + (buyCount * 15), 95); // 50-95% 범위
     } else if (sellCount >= 2 || (sellCount > buyCount && sellCount >= 1)) {
       signal = 'SELL';
-      confidence = Math.min(40 + (sellCount * 12), 80); // 40-80% 범위
+      confidence = Math.min(50 + (sellCount * 15), 95); // 50-95% 범위
     } else {
       signal = 'HOLD';
-      confidence = Math.max(25, 45 - Math.abs(buyCount - sellCount) * 8); // 25-45% 범위
+      confidence = Math.max(30, 50 - Math.abs(buyCount - sellCount) * 10); // 30-50% 범위
     }
 
     return {
