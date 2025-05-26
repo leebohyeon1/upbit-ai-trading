@@ -14,6 +14,7 @@ export interface TradingConfig {
   sellingCooldown: number; // 매도 쿨타임 (분)
   minConfidenceForTrade: number; // 거래 최소 신뢰도
   sellRatio: number; // 매도 비율 (0.1 = 10%, 1.0 = 100%)
+  buyRatio: number; // 매수 비율 (0.1 = 10%, 1.0 = 100%)
 }
 
 export interface TradingStatus {
@@ -47,7 +48,8 @@ class TradingEngine extends EventEmitter {
     buyingCooldown: 30, // 30분 매수 쿨타임
     sellingCooldown: 20, // 20분 매도 쿨타임
     minConfidenceForTrade: 60, // 60% 이상 신뢰도에서만 거래
-    sellRatio: 0.5 // 50% 매도 (기본값)
+    sellRatio: 0.5, // 50% 매도 (기본값)
+    buyRatio: 0.3 // 30% 매수 (기본값)
   };
   
   private analysisResults: Map<string, CoinAnalysis> = new Map();
@@ -238,11 +240,34 @@ class TradingEngine extends EventEmitter {
 
         // 매수 로직
         if (krwAccount && parseFloat(krwAccount.balance) > this.config.maxInvestmentPerCoin) {
+          // 신뢰도 기반 매수 비율 조정
+          let adjustedBuyRatio = this.config.buyRatio;
+          
+          // 신뢰도가 90% 이상이면 더 많이 매수 (최대 100%)
+          if (technical.confidence >= 0.9) {
+            adjustedBuyRatio = Math.min(1.0, this.config.buyRatio * 1.8);
+          }
+          // 신뢰도가 80% 이상이면 조금 더 매수
+          else if (technical.confidence >= 0.8) {
+            adjustedBuyRatio = Math.min(1.0, this.config.buyRatio * 1.4);
+          }
+          // 신뢰도가 낮으면 (60-70%) 더 적게 매수
+          else if (technical.confidence < 0.7) {
+            adjustedBuyRatio = this.config.buyRatio * 0.6;
+          }
+          
+          // 매수할 금액 계산
+          const maxInvestment = this.config.maxInvestmentPerCoin;
+          const buyAmount = maxInvestment * adjustedBuyRatio;
+          const buyAmountStr = buyAmount.toFixed(0); // 원 단위로 반올림
+          
           console.log(`Buy signal for ${market} - confidence: ${technical.confidence.toFixed(1)}%`);
+          console.log(`Base ratio: ${(this.config.buyRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedBuyRatio * 100).toFixed(1)}%`);
+          console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy amount: ₩${buyAmount.toLocaleString()}`);
           
           // 실제 거래 실행 (테스트 모드에서는 로그만)
           if (this.config.enableRealTrading) {
-            await upbitService.buyOrder(market, this.config.maxInvestmentPerCoin.toString());
+            await upbitService.buyOrder(market, buyAmountStr);
           }
           
           // 거래 시간 기록

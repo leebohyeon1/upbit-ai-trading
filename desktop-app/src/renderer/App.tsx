@@ -142,6 +142,12 @@ interface TradingConfig {
       highConfidenceMultiplier: number; // 고신뢰도 배율
       lowConfidenceMultiplier: number; // 저신뢰도 배율
     };
+    buying: {
+      defaultBuyRatio: number; // 기본 매수 비율
+      confidenceBasedAdjustment: boolean; // 신뢰도 기반 조정 활성화
+      highConfidenceMultiplier: number; // 고신뢰도 배율
+      lowConfidenceMultiplier: number; // 저신뢰도 배율
+    };
   };
 }
 
@@ -233,6 +239,12 @@ const App: React.FC = () => {
         confidenceBasedAdjustment: true,
         highConfidenceMultiplier: 1.5,
         lowConfidenceMultiplier: 0.7
+      },
+      buying: {
+        defaultBuyRatio: 0.3,
+        confidenceBasedAdjustment: true,
+        highConfidenceMultiplier: 1.8,
+        lowConfidenceMultiplier: 0.6
       }
     }
   });
@@ -620,6 +632,12 @@ const App: React.FC = () => {
           confidenceBasedAdjustment: true, // 신뢰도 기반 조정 활성화
           highConfidenceMultiplier: 1.5, // 고신뢰도 배율 (×1.5)
           lowConfidenceMultiplier: 0.7 // 저신뢰도 배율 (×0.7)
+        },
+        buying: {
+          defaultBuyRatio: 0.3, // 기본 30% 매수
+          confidenceBasedAdjustment: true, // 신뢰도 기반 조정 활성화
+          highConfidenceMultiplier: 1.8, // 고신뢰도 배율 (×1.8)
+          lowConfidenceMultiplier: 0.6 // 저신뢰도 배율 (×0.6)
         }
       }
     });
@@ -2317,6 +2335,134 @@ const App: React.FC = () => {
               )}
             </Grid>
             
+            {/* 매수 설정 섹션 */}
+            <Typography variant="h6" gutterBottom mt={4}>매수 설정</Typography>
+            <Grid container spacing={3} mb={4}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="기본 매수 비율 (%)"
+                  type="number"
+                  value={(tradingConfig.tradingSettings.buying.defaultBuyRatio * 100).toFixed(0)}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    tradingSettings: {
+                      ...tradingConfig.tradingSettings,
+                      buying: {
+                        ...tradingConfig.tradingSettings.buying,
+                        defaultBuyRatio: parseFloat(e.target.value) / 100 || 0.3
+                      }
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 10, max: 100 } }}
+                  helperText="매수 신호 발생시 기본적으로 투자할 비율 (최대 투자 금액 대비)"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={tradingConfig.tradingSettings.buying.confidenceBasedAdjustment}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          buying: {
+                            ...tradingConfig.tradingSettings.buying,
+                            confidenceBasedAdjustment: e.target.checked
+                          }
+                        }
+                      })}
+                    />
+                  }
+                  label="신뢰도 기반 매수 비율 조정"
+                />
+              </Grid>
+              
+              {tradingConfig.tradingSettings.buying.confidenceBasedAdjustment && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="고신뢰도 배율 (90% 이상)"
+                      type="number"
+                      value={tradingConfig.tradingSettings.buying.highConfidenceMultiplier.toFixed(1)}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          buying: {
+                            ...tradingConfig.tradingSettings.buying,
+                            highConfidenceMultiplier: parseFloat(e.target.value) || 1.8
+                          }
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 1.0, max: 3.0, step: 0.1 } }}
+                      helperText="신뢰도 90% 이상일 때 매수 비율 증가 배율"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="저신뢰도 배율 (70% 미만)"
+                      type="number"
+                      value={tradingConfig.tradingSettings.buying.lowConfidenceMultiplier.toFixed(1)}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          buying: {
+                            ...tradingConfig.tradingSettings.buying,
+                            lowConfidenceMultiplier: parseFloat(e.target.value) || 0.6
+                          }
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 0.2, max: 1.0, step: 0.1 } }}
+                      helperText="신뢰도 70% 미만일 때 매수 비율 감소 배율"
+                    />
+                  </Grid>
+                  
+                  {/* 매수 비율 계산 예시 */}
+                  <Grid item xs={12}>
+                    <Card variant="outlined" sx={{ p: 2, bgcolor: 'success.50' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        💰 매수 비율 계산 예시 (최대 투자 금액: ₩100,000 기준)
+                      </Typography>
+                      <Grid container spacing={2}>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">신뢰도 95%</Typography>
+                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                            {Math.min(100, (tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.highConfidenceMultiplier * 100)).toFixed(0)}%
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            ₩{(100000 * Math.min(1, tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.highConfidenceMultiplier)).toLocaleString()}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">신뢰도 75%</Typography>
+                          <Typography variant="body2" fontWeight="bold" color="primary.main">
+                            {(tradingConfig.tradingSettings.buying.defaultBuyRatio * 100).toFixed(0)}%
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            ₩{(100000 * tradingConfig.tradingSettings.buying.defaultBuyRatio).toLocaleString()}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">신뢰도 65%</Typography>
+                          <Typography variant="body2" fontWeight="bold" color="warning.main">
+                            {(tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.lowConfidenceMultiplier * 100).toFixed(0)}%
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            ₩{(100000 * tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.lowConfidenceMultiplier).toLocaleString()}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Card>
+                  </Grid>
+                </>
+              )}
+            </Grid>
+
             {/* 매도 설정 섹션 */}
             <Typography variant="h6" gutterBottom mt={4}>매도 설정</Typography>
             <Grid container spacing={3}>
