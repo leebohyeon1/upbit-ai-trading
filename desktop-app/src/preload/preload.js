@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAnalysisConfigs: () => ipcRenderer.invoke('get-analysis-configs'),
   saveTradingConfig: (config) => ipcRenderer.invoke('save-trading-config', config),
   getTradingConfig: () => ipcRenderer.invoke('get-trading-config'),
+  getLearningStatus: () => ipcRenderer.invoke('get-learning-status'),
+  resetAllSettings: () => ipcRenderer.invoke('reset-all-settings'),
   
   onTradingStateChanged: (callback) => {
     ipcRenderer.on('trading-state-changed', (event, state) => callback(state));

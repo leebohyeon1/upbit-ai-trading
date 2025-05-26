@@ -106,7 +106,7 @@ class UpbitService {
     }
   }
 
-  // 캔들 데이터 조회 (공개 API)
+  // 캔들 데이터 조회 (공개 API) - 기본 5분봉
   async getCandles(market: string, count: number = 200): Promise<CandleData[]> {
     try {
       const response = await axios.get(`${this.baseURL}/v1/candles/minutes/5`, {
@@ -125,6 +125,70 @@ class UpbitService {
     } catch (error) {
       console.error('Failed to get candles:', error);
       return [];
+    }
+  }
+
+  // 15분봉 캔들 데이터 조회
+  async getCandles15m(market: string, count: number = 100): Promise<CandleData[]> {
+    try {
+      const response = await axios.get(`${this.baseURL}/v1/candles/minutes/15`, {
+        params: { market, count }
+      });
+      
+      return response.data.map((candle: any) => ({
+        market: candle.market,
+        candle_date_time_utc: candle.candle_date_time_utc,
+        opening_price: candle.opening_price,
+        high_price: candle.high_price,
+        low_price: candle.low_price,
+        trade_price: candle.trade_price,
+        candle_acc_trade_volume: candle.candle_acc_trade_volume
+      }));
+    } catch (error) {
+      console.error('Failed to get 15m candles:', error);
+      return [];
+    }
+  }
+
+  // 1시간봉 캔들 데이터 조회
+  async getCandles1h(market: string, count: number = 50): Promise<CandleData[]> {
+    try {
+      const response = await axios.get(`${this.baseURL}/v1/candles/minutes/60`, {
+        params: { market, count }
+      });
+      
+      return response.data.map((candle: any) => ({
+        market: candle.market,
+        candle_date_time_utc: candle.candle_date_time_utc,
+        opening_price: candle.opening_price,
+        high_price: candle.high_price,
+        low_price: candle.low_price,
+        trade_price: candle.trade_price,
+        candle_acc_trade_volume: candle.candle_acc_trade_volume
+      }));
+    } catch (error) {
+      console.error('Failed to get 1h candles:', error);
+      return [];
+    }
+  }
+
+  // 멀티 타임프레임 캔들 데이터 조회
+  async getMultiTimeframeCandles(market: string): Promise<{
+    m5: CandleData[];
+    m15: CandleData[];
+    h1: CandleData[];
+  }> {
+    try {
+      const [m5, m15, h1] = await Promise.all([
+        this.getCandles(market, 200),
+        this.getCandles15m(market, 100),
+        this.getCandles1h(market, 50)
+      ]);
+
+      return { m5, m15, h1 };
+    } catch (error) {
+      console.error('Failed to get multi-timeframe candles:', error);
+      return { m5: [], m15: [], h1: [] };
     }
   }
 
@@ -213,26 +277,125 @@ class UpbitService {
     }
   }
 
-  // 호가 정보 조회
+  // 호가 정보 조회 (개선된 버전)
   async getOrderbook(market: string): Promise<any> {
     try {
       const response = await axios.get(`${this.baseURL}/v1/orderbook`, {
         params: { markets: market }
       });
-      return response.data[0];
+      const orderbook = response.data[0];
+      
+      // 호가창 상세 분석 추가
+      if (orderbook) {
+        // 상위 5단계 호가 분석
+        const top5Units = orderbook.orderbook_units.slice(0, 5);
+        const top5BidSize = top5Units.reduce((sum: number, unit: any) => sum + unit.bid_size, 0);
+        const top5AskSize = top5Units.reduce((sum: number, unit: any) => sum + unit.ask_size, 0);
+        
+        // 호가 불균형 지수 계산 (-100 ~ 100)
+        const imbalance = ((top5BidSize - top5AskSize) / (top5BidSize + top5AskSize)) * 100;
+        
+        // 호가 밀도 분석 (가격 대비 수량)
+        const bidDensity = top5Units.map((unit: any, idx: number) => ({
+          level: idx + 1,
+          price: unit.bid_price,
+          size: unit.bid_size,
+          density: unit.bid_size / unit.bid_price
+        }));
+        
+        const askDensity = top5Units.map((unit: any, idx: number) => ({
+          level: idx + 1,
+          price: unit.ask_price,
+          size: unit.ask_size,
+          density: unit.ask_size / unit.ask_price
+        }));
+        
+        // 분석 데이터 추가
+        orderbook.analysis = {
+          top5BidSize,
+          top5AskSize,
+          imbalance,
+          bidDensity,
+          askDensity,
+          wallDetected: this.detectWall(top5Units)
+        };
+      }
+      
+      return orderbook;
     } catch (error) {
       console.error('Failed to get orderbook:', error);
       return null;
     }
   }
+  
+  // 호가벽 감지
+  private detectWall(orderbookUnits: any[]): { bid: boolean; ask: boolean; level: number } | null {
+    if (!orderbookUnits || orderbookUnits.length < 5) return null;
+    
+    // 평균 수량 계산
+    const avgBidSize = orderbookUnits.reduce((sum, unit) => sum + unit.bid_size, 0) / orderbookUnits.length;
+    const avgAskSize = orderbookUnits.reduce((sum, unit) => sum + unit.ask_size, 0) / orderbookUnits.length;
+    
+    // 벽 감지 (평균의 3배 이상)
+    for (let i = 0; i < Math.min(5, orderbookUnits.length); i++) {
+      if (orderbookUnits[i].bid_size > avgBidSize * 3) {
+        return { bid: true, ask: false, level: i + 1 };
+      }
+      if (orderbookUnits[i].ask_size > avgAskSize * 3) {
+        return { bid: false, ask: true, level: i + 1 };
+      }
+    }
+    
+    return null;
+  }
 
-  // 체결 내역 조회
-  async getTrades(market: string, count: number = 20): Promise<any[]> {
+  // 체결 내역 조회 (웨일 감지 포함)
+  async getTrades(market: string, count: number = 50): Promise<any[]> {
     try {
       const response = await axios.get(`${this.baseURL}/v1/trades/ticks`, {
         params: { market, count }
       });
-      return response.data;
+      const trades = response.data;
+      
+      // 웨일 감지를 위한 분석
+      if (trades && trades.length > 0) {
+        // 평균 거래량 계산
+        const avgVolume = trades.reduce((sum: number, trade: any) => sum + trade.trade_volume, 0) / trades.length;
+        
+        // 웨일 거래 표시 (평균의 10배 이상)
+        const whaleThreshold = avgVolume * 10;
+        
+        trades.forEach((trade: any) => {
+          if (trade.trade_volume > whaleThreshold) {
+            trade.isWhale = true;
+            trade.whaleMultiple = (trade.trade_volume / avgVolume).toFixed(1);
+          }
+        });
+        
+        // 체결 내역 요약 정보 추가
+        const summary = {
+          totalVolume: trades.reduce((sum: number, t: any) => sum + t.trade_volume, 0),
+          buyVolume: trades.filter((t: any) => t.ask_bid === 'BID').reduce((sum: number, t: any) => sum + t.trade_volume, 0),
+          sellVolume: trades.filter((t: any) => t.ask_bid === 'ASK').reduce((sum: number, t: any) => sum + t.trade_volume, 0),
+          avgVolume,
+          whaleThreshold,
+          whaleCount: trades.filter((t: any) => t.isWhale).length,
+          dominantSide: null as string | null
+        };
+        
+        // 매수/매도 우세 판단
+        const buyRatio = summary.buyVolume / summary.totalVolume;
+        if (buyRatio > 0.65) summary.dominantSide = 'BUY';
+        else if (buyRatio < 0.35) summary.dominantSide = 'SELL';
+        else summary.dominantSide = 'NEUTRAL';
+        
+        // 첫 번째 거래에 요약 정보 추가
+        if (trades[0]) {
+          trades[0].summary = summary;
+        }
+      }
+      
+      return trades;
     } catch (error) {
       console.error('Failed to get trades:', error);
       return [];

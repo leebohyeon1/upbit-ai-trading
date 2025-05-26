@@ -579,6 +579,109 @@ class TradingApp {
         return false;
       }
     });
+
+    // 학습 시스템 상태 조회
+    ipcMain.handle('get-learning-status', async () => {
+      try {
+        return tradingEngine.getLearningStatus();
+      } catch (error) {
+        console.error('Failed to get learning status:', error);
+        return null;
+      }
+    });
+
+    // 설정 초기화
+    ipcMain.handle('reset-all-settings', async () => {
+      try {
+        // 1. 거래 설정 초기화 (App.tsx의 TradingConfig 타입과 일치)
+        const defaultTradingConfig = {
+          decisionThresholds: { buyThreshold: 0.15, sellThreshold: -0.2 },
+          investmentRatios: { minRatio: 0.15, maxRatio: 0.5, perCoinMaxRatio: 0.2 },
+          signalStrengths: {
+            ma_crossover: 0.7, ma_long_trend: 0.5,
+            bb_extreme: 0.8, bb_middle: 0.3,
+            rsi_extreme: 0.95, rsi_middle: 0.4,
+            macd_crossover: 0.9, macd_trend: 0.5,
+            stoch_extreme: 0.7, stoch_middle: 0.3,
+            orderbook: 0.7, trade_data: 0.6, korea_premium: 0.7,
+            fear_greed_extreme: 0.9, fear_greed_middle: 0.6,
+            onchain_sopr: 0.7, onchain_active_addr: 0.5
+          },
+          indicatorWeights: {
+            MA: 0.8, MA60: 0.7, BB: 1.3, RSI: 1.5, MACD: 1.5, Stochastic: 1.3,
+            Orderbook: 1.1, Trades: 0.9, KIMP: 1.2, FearGreed: 1.4, SOPR: 0.6, ActiveAddr: 0.5
+          },
+          indicatorUsage: {
+            MA: true, MA60: true, BB: true, RSI: true, MACD: true, Stochastic: true,
+            Orderbook: true, Trades: true, KIMP: true, FearGreed: true, SOPR: true, ActiveAddr: true
+          },
+          tradingSettings: {
+            minOrderAmount: 5000,
+            maxSlippage: 0.005,
+            tradingInterval: 1,
+            cooldown: { enabled: true, buyMinutes: 120, sellMinutes: 60, minConfidenceOverride: 0.85 },
+            selling: {
+              defaultSellRatio: 1.0,
+              confidenceBasedAdjustment: true,
+              highConfidenceMultiplier: 1.5,
+              lowConfidenceMultiplier: 0.7
+            },
+            buying: {
+              defaultBuyRatio: 0.1,
+              confidenceBasedAdjustment: true,
+              highConfidenceMultiplier: 1.8,
+              lowConfidenceMultiplier: 0.6
+            }
+          }
+        };
+        
+        // 2. 포트폴리오 초기화 (빈 배열)
+        const defaultPortfolio: any[] = [];
+        
+        // 3. 분석 설정 초기화 (빈 배열)
+        const defaultAnalysisConfigs: any[] = [];
+        
+        // 4. 파일에 저장
+        fs.writeFileSync(this.getTradingConfigPath(), JSON.stringify(defaultTradingConfig, null, 2));
+        fs.writeFileSync(this.getPortfolioPath(), JSON.stringify(defaultPortfolio, null, 2));
+        fs.writeFileSync(this.getAnalysisConfigsPath(), JSON.stringify(defaultAnalysisConfigs, null, 2));
+        
+        // 5. 학습 데이터 초기화
+        const learningDataPath = path.join(process.cwd(), 'data', 'learning');
+        if (fs.existsSync(learningDataPath)) {
+          const files = fs.readdirSync(learningDataPath);
+          files.forEach(file => {
+            fs.unlinkSync(path.join(learningDataPath, file));
+          });
+        }
+        
+        // 6. 거래 엔진에 기본 설정 적용 (거래 엔진용 타입)
+        const engineConfig = {
+          enableRealTrading: false,
+          maxInvestmentPerCoin: 50000,
+          stopLossPercent: 3,
+          takeProfitPercent: 5,
+          rsiOverbought: 75,
+          rsiOversold: 25,
+          buyingCooldown: 120,
+          sellingCooldown: 60,
+          minConfidenceForTrade: 75,
+          sellRatio: 1.0,
+          buyRatio: 0.1,
+          dynamicRSI: true,
+          dynamicConfidence: true,
+          useKellyCriterion: true,
+          maxKellyFraction: 0.1
+        };
+        tradingEngine.setConfig(engineConfig);
+        
+        console.log('All settings have been reset to defaults');
+        return true;
+      } catch (error) {
+        console.error('Failed to reset settings:', error);
+        return false;
+      }
+    });
   }
 
   private setupTradingEngine() {

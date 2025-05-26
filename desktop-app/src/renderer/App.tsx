@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTheme, useMediaQuery } from '@mui/material';
 import {
   Paper,
   Box,
@@ -13,6 +14,7 @@ import {
   Select,
   MenuItem,
   FormControl,
+  FormHelperText,
   InputLabel,
   Tabs,
   Tab,
@@ -34,6 +36,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  AlertTitle,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -106,6 +109,27 @@ interface AnalysisConfig {
   sellThreshold: number; // 0-100
   stopLoss: number; // %
   takeProfit: number; // %
+  // 신뢰도 임계값 설정
+  buyConfidenceThreshold?: number; // 매수 신뢰도 임계값 (0-100)
+  sellConfidenceThreshold?: number; // 매도 신뢰도 임계값 (0-100)
+  // 쿨다운 설정
+  buyCooldown?: number; // 매수 쿨다운 (분)
+  sellCooldown?: number; // 매도 쿨다운 (분)
+  skipCooldownOnHighConfidence?: boolean; // 높은 신뢰도에서 쿨다운 무시
+  skipCooldownThreshold?: number; // 쿨다운 무시 신뢰도 임계값
+  // 손절/익절 모드
+  stopLossMode?: 'fixed' | 'signal'; // fixed: 고정 %, signal: 신호 기반
+  takeProfitMode?: 'fixed' | 'signal'; // fixed: 고정 %, signal: 신호 기반
+  // 데이터 소스 설정
+  useOrderbook?: boolean;
+  useTrades?: boolean;
+  useNews?: boolean;
+  useKimchiPremium?: boolean;
+  // 가중치 설정
+  technicalWeight?: number;
+  sentimentWeight?: number;
+  volumeWeight?: number;
+  orderbookWeight?: number;
 }
 
 interface TradingConfig {
@@ -171,6 +195,8 @@ declare global {
       getAnalysisConfigs: () => Promise<AnalysisConfig[]>;
       saveTradingConfig: (config: TradingConfig) => Promise<boolean>;
       getTradingConfig: () => Promise<TradingConfig>;
+      getLearningStatus: () => Promise<any>;
+      resetAllSettings: () => Promise<boolean>;
     };
   }
 }
@@ -253,6 +279,16 @@ const App: React.FC = () => {
   const [advancedConfigTab, setAdvancedConfigTab] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [learningStatus, setLearningStatus] = useState<{
+    performance: any;
+    indicatorWeights: any[];
+  } | null>(null);
+  
+  // 반응형 디자인을 위한 미디어 쿼리
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // 600px 이하
+  const isTablet = useMediaQuery(theme.breakpoints.down('md')); // 900px 이하
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg')); // 1200px 이상
   
   // 기술적 지표 목록
   const indicators = [
@@ -310,6 +346,7 @@ const App: React.FC = () => {
     loadPortfolio();
     loadAnalysisConfigs();
     loadTradingConfig();
+    loadLearningStatus();
 
     // 상태 변경 리스너 등록
     window.electronAPI.onTradingStateChanged((state) => {
@@ -341,6 +378,15 @@ const App: React.FC = () => {
       }
     };
   }, []);
+
+  // 학습 상태 주기적 업데이트
+  useEffect(() => {
+    if (tabValue === 4) {
+      loadLearningStatus();
+      const interval = setInterval(loadLearningStatus, 10000); // 10초마다 업데이트
+      return () => clearInterval(interval);
+    }
+  }, [tabValue]);
 
   const loadTradingState = async () => {
     try {
@@ -550,6 +596,15 @@ const App: React.FC = () => {
     setNextAnalysisTime(60);
   };
 
+  const loadLearningStatus = async () => {
+    try {
+      const status = await window.electronAPI.getLearningStatus();
+      setLearningStatus(status);
+    } catch (err) {
+      console.error('Failed to load learning status:', err);
+    }
+  };
+
   const getDecisionColor = (decision: string) => {
     switch (decision) {
       case 'buy': return 'success';
@@ -590,9 +645,10 @@ const App: React.FC = () => {
   const loadTradingConfig = async () => {
     try {
       const config = await window.electronAPI.getTradingConfig();
-      if (config) {
+      if (config && config.decisionThresholds) {
         setTradingConfig(config);
       } else {
+        console.log('No valid trading config found, initializing defaults');
         initializeTradingConfig();
       }
     } catch (err) {
@@ -691,9 +747,14 @@ const App: React.FC = () => {
       'hold': '관망'
     }[decision] || '관망';
     
-    // 이미 자연스러운 형식이면 그대로 반환
+    // 이미 자연스러운 형식이면 그대로 반환하되, 줄바꿈 처리
     if (reason.includes('판단했습니다') || reason.includes('결정했습니다')) {
-      return reason;
+      return reason
+        .replace(/\n\n/g, '\n') // 중복 줄바꿈 제거
+        .replace(/•/g, '\n•') // 불릿 포인트 앞에 줄바꿈
+        .replace(/(\d+\.)(\s)/g, '\n$1$2') // 숫자 리스트 앞에 줄바꿈
+        .replace(/(\*\*[^*]+\*\*:)/g, '\n$1') // 볼드 제목 앞에 줄바꿈
+        .trim();
     }
     
     // 간단한 이유인 경우 자연스러운 문장으로 변환
@@ -711,10 +772,10 @@ const App: React.FC = () => {
 
   const renderSidebar = () => (
     <Box sx={{ 
-      width: sidebarOpen ? 200 : 0, 
+      width: sidebarOpen ? (isMobile ? '100%' : isTablet ? 180 : 200) : 0, 
       height: '100vh', 
       bgcolor: 'background.paper', 
-      borderRight: sidebarOpen ? 1 : 0, 
+      borderRight: sidebarOpen && !isMobile ? 1 : 0, 
       borderColor: 'divider',
       display: 'flex',
       flexDirection: 'column',
@@ -723,7 +784,8 @@ const App: React.FC = () => {
       top: 0,
       zIndex: 1000,
       overflow: 'hidden',
-      transition: 'width 0.3s ease-in-out'
+      transition: 'width 0.3s ease-in-out',
+      boxShadow: isMobile && sidebarOpen ? 3 : 'none'
     }}>
       {/* Logo */}
       <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
@@ -742,6 +804,7 @@ const App: React.FC = () => {
           { label: '포트폴리오', icon: <AccountBalance />, value: 1 },
           { label: '분석설정', icon: <ShowChart />, value: 2 },
           { label: '환경설정', icon: <Settings />, value: 3 },
+          { label: '학습시스템', icon: <Psychology />, value: 4 },
         ].map((item) => (
           <Button
             key={item.value}
@@ -784,14 +847,20 @@ const App: React.FC = () => {
     </Box>
   );
 
-  const renderRightSidebar = () => (
+  const renderRightSidebar = () => {
+    // 태블릿 이하에서는 우측 패널 숨김
+    if (isTablet && rightPanelOpen) {
+      setRightPanelOpen(false);
+    }
+    
+    return (
     <Box sx={{ 
-      width: rightPanelOpen ? 300 : 0, 
+      width: rightPanelOpen && !isTablet ? 300 : 0, 
       height: '100vh', 
       bgcolor: 'background.paper', 
-      borderLeft: rightPanelOpen ? 1 : 0, 
+      borderLeft: rightPanelOpen && !isTablet ? 1 : 0, 
       borderColor: 'divider',
-      display: 'flex',
+      display: isTablet ? 'none' : 'flex',
       flexDirection: 'column',
       position: 'fixed',
       right: 0,
@@ -885,7 +954,7 @@ const App: React.FC = () => {
                     <Typography 
                       variant="caption" 
                       color="text.secondary" 
-                      display="block" 
+                      component="div"
                       sx={{ 
                         mt: 0.5,
                         overflow: 'hidden',
@@ -894,7 +963,8 @@ const App: React.FC = () => {
                         WebkitLineClamp: 3,
                         WebkitBoxOrient: 'vertical',
                         lineHeight: 1.4,
-                        fontStyle: 'italic'
+                        fontStyle: 'italic',
+                        whiteSpace: 'pre-line'
                       }}
                     >
                       💡 {formatAIReason(analysis.reason, analysis.decision)}
@@ -907,21 +977,29 @@ const App: React.FC = () => {
         )}
       </Box>
     </Box>
-  );
+    );
+  };
 
   const renderMainContent = () => (
     <Box sx={{ 
-      ml: sidebarOpen ? '200px' : 0, 
-      mr: rightPanelOpen ? '300px' : 0, 
+      ml: sidebarOpen && !isMobile ? (isTablet ? '180px' : '200px') : 0, 
+      mr: rightPanelOpen && !isTablet ? '300px' : 0, 
       minHeight: '100vh',
       bgcolor: 'grey.50',
-      p: 3,
-      transition: 'margin 0.3s ease-in-out'
+      p: isMobile ? 1 : isTablet ? 2 : 3,
+      transition: 'margin 0.3s ease-in-out',
+      width: '100%'
     }}>
       {/* Top Controls */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" 
+        flexDirection={isMobile ? 'column' : 'row'}
+        justifyContent="space-between" 
+        alignItems={isMobile ? 'stretch' : 'center'} 
+        mb={3}
+        gap={isMobile ? 2 : 0}
+      >
         {/* Left Side - Navigation Controls */}
-        <Box display="flex" gap={1} alignItems="center">
+        <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
           <IconButton
             onClick={() => setSidebarOpen(!sidebarOpen)}
             sx={{ 
@@ -933,10 +1011,10 @@ const App: React.FC = () => {
           </IconButton>
           
           {/* Logo when sidebar is closed */}
-          {!sidebarOpen && (
+          {(!sidebarOpen || isMobile) && (
             <Box display="flex" alignItems="center" gap={1} sx={{ mr: 2 }}>
               <TrendingUp color="primary" />
-              <Typography variant="h6" fontWeight="bold" color="primary">
+              <Typography variant="h6" fontWeight="bold" color="primary" sx={{ display: isMobile ? 'none' : 'block' }}>
                 Upbit AI
               </Typography>
             </Box>
@@ -1142,7 +1220,7 @@ const App: React.FC = () => {
             {portfolio.map((coin) => {
               const analysis = recentAnalyses.find(a => a.ticker === coin.ticker);
               return (
-                <Grid item xs={12} sm={6} lg={4} xl={3} key={coin.ticker}>
+                <Grid item xs={12} sm={6} md={4} lg={3} key={coin.ticker}>
                   <Card 
                     sx={{ 
                       border: coin.enabled ? 2 : 1,
@@ -1201,7 +1279,7 @@ const App: React.FC = () => {
                               <Typography 
                                 variant="caption" 
                                 color="text.secondary" 
-                                display="block" 
+                                component="div"
                                 sx={{ 
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
@@ -1209,7 +1287,8 @@ const App: React.FC = () => {
                                   WebkitLineClamp: 4,
                                   WebkitBoxOrient: 'vertical',
                                   lineHeight: 1.5,
-                                  fontStyle: 'italic'
+                                  fontStyle: 'italic',
+                                  whiteSpace: 'pre-line'
                                 }}
                               >
                                 <Typography component="span" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
@@ -1449,6 +1528,140 @@ const App: React.FC = () => {
                           InputProps={{ inputProps: { min: 5, max: 50, step: 0.5 } }}
                           helperText="수익이 이 비율에 도달하면 일부 매도를 고려합니다"
                         />
+                      </Grid>
+                    </Grid>
+                    
+                    <Divider sx={{ my: 3 }} />
+                    
+                    {/* 신뢰도 임계값 설정 */}
+                    <Typography variant="subtitle2" gutterBottom color="text.secondary" sx={{ mt: 3 }}>
+                      🎯 신뢰도 임계값 설정
+                    </Typography>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="매수 신뢰도 임계값 (%)"
+                          type="number"
+                          value={config.buyConfidenceThreshold || 65}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { buyConfidenceThreshold: parseInt(e.target.value) || 65 })}
+                          InputProps={{ inputProps: { min: 50, max: 95, step: 5 } }}
+                          helperText="AI 신뢰도가 이 값 이상일 때만 매수합니다"
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="매도 신뢰도 임계값 (%)"
+                          type="number"
+                          value={config.sellConfidenceThreshold || 60}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { sellConfidenceThreshold: parseInt(e.target.value) || 60 })}
+                          InputProps={{ inputProps: { min: 50, max: 95, step: 5 } }}
+                          helperText="AI 신뢰도가 이 값 이상일 때만 매도합니다"
+                        />
+                      </Grid>
+                    </Grid>
+                    
+                    <Divider sx={{ my: 3 }} />
+                    
+                    {/* 쿨다운 설정 */}
+                    <Typography variant="subtitle2" gutterBottom color="text.secondary" sx={{ mt: 3 }}>
+                      ⏱️ 쿨다운 설정
+                    </Typography>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="매수 쿨다운 (분)"
+                          type="number"
+                          value={config.buyCooldown || 30}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { buyCooldown: parseInt(e.target.value) || 30 })}
+                          InputProps={{ inputProps: { min: 10, max: 360, step: 10 } }}
+                          helperText="매수 후 다음 매수까지 대기 시간"
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="매도 쿨다운 (분)"
+                          type="number"
+                          value={config.sellCooldown || 20}
+                          onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { sellCooldown: parseInt(e.target.value) || 20 })}
+                          InputProps={{ inputProps: { min: 10, max: 360, step: 10 } }}
+                          helperText="매도 후 다음 거래까지 대기 시간"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={config.skipCooldownOnHighConfidence !== false}
+                              onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { skipCooldownOnHighConfidence: e.target.checked })}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body1">높은 신뢰도에서 쿨다운 무시</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                매우 강한 신호일 때 쿨다운을 무시하고 즉시 거래합니다
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Grid>
+                      {config.skipCooldownOnHighConfidence && (
+                        <Grid item xs={12} md={6}>
+                          <TextField
+                            fullWidth
+                            label="쿨다운 무시 신뢰도 (%)"
+                            type="number"
+                            value={config.skipCooldownThreshold || 85}
+                            onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { skipCooldownThreshold: parseInt(e.target.value) || 85 })}
+                            InputProps={{ inputProps: { min: 70, max: 95, step: 5 } }}
+                            helperText="이 신뢰도 이상일 때 쿨다운을 무시합니다"
+                          />
+                        </Grid>
+                      )}
+                    </Grid>
+                    
+                    <Divider sx={{ my: 3 }} />
+                    
+                    {/* 손절/익절 모드 설정 */}
+                    <Typography variant="subtitle2" gutterBottom color="text.secondary" sx={{ mt: 3 }}>
+                      📈 손절/익절 모드
+                    </Typography>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>손절 모드</InputLabel>
+                          <Select
+                            value={config.stopLossMode || 'fixed'}
+                            onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { stopLossMode: e.target.value as 'fixed' | 'signal' })}
+                            label="손절 모드"
+                          >
+                            <MenuItem value="fixed">고정 비율</MenuItem>
+                            <MenuItem value="signal">신호 기반</MenuItem>
+                          </Select>
+                          <FormHelperText>
+                            {config.stopLossMode === 'signal' ? '매도 신호 발생 시 손절' : '설정한 비율에 도달 시 손절'}
+                          </FormHelperText>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>익절 모드</InputLabel>
+                          <Select
+                            value={config.takeProfitMode || 'fixed'}
+                            onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { takeProfitMode: e.target.value as 'fixed' | 'signal' })}
+                            label="익절 모드"
+                          >
+                            <MenuItem value="fixed">고정 비율</MenuItem>
+                            <MenuItem value="signal">신호 기반</MenuItem>
+                          </Select>
+                          <FormHelperText>
+                            {config.takeProfitMode === 'signal' ? '매도 신호 발생 시 익절' : '설정한 비율에 도달 시 익절'}
+                          </FormHelperText>
+                        </FormControl>
                       </Grid>
                     </Grid>
                     
@@ -1791,8 +2004,201 @@ const App: React.FC = () => {
                 </Typography>
               </Alert>
             </Box>
+            
+            <Divider sx={{ my: 3 }} />
+            
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                설정 초기화
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                모든 설정을 기본값으로 초기화합니다. 이 작업은 되돌릴 수 없습니다.
+              </Typography>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={async () => {
+                  if (window.confirm('정말로 모든 설정을 초기화하시겠습니까?\n\n이 작업은 되돌릴 수 없으며, 포트폴리오와 거래 설정이 모두 초기화됩니다.')) {
+                    setLoading(true);
+                    try {
+                      const success = await window.electronAPI.resetAllSettings();
+                      if (success) {
+                        setSuccessMessage('모든 설정이 초기화되었습니다.');
+                        // 페이지 새로고침
+                        setTimeout(() => {
+                          window.location.reload();
+                        }, 1500);
+                      } else {
+                        setError('설정 초기화에 실패했습니다.');
+                      }
+                    } catch (err) {
+                      setError('설정 초기화 중 오류가 발생했습니다.');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }
+                }}
+                fullWidth
+              >
+                모든 설정 초기화
+              </Button>
+            </Box>
           </CardContent>
         </Card>
+      </TabPanel>
+
+      {/* 학습 시스템 탭 */}
+      <TabPanel value={tabValue} index={4}>
+        <Typography variant="h6" fontWeight="bold" mb={3}>
+          학습 시스템
+        </Typography>
+        
+        {learningStatus ? (
+          <Grid container spacing={3}>
+            {/* 성과 메트릭 */}
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                    거래 성과 (최근 30일)
+                  </Typography>
+                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="text.secondary">총 거래 횟수</Typography>
+                      <Typography variant="h5" fontWeight="bold">{learningStatus.performance.total_trades}</Typography>
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="text.secondary">승률</Typography>
+                      <Typography variant="h5" fontWeight="bold" color={learningStatus.performance.win_rate >= 0.5 ? 'success.main' : 'error.main'}>
+                        {(learningStatus.performance.win_rate * 100).toFixed(1)}%
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="text.secondary">평균 수익률</Typography>
+                      <Typography variant="h5" fontWeight="bold" color={learningStatus.performance.average_profit >= 0 ? 'success.main' : 'error.main'}>
+                        {learningStatus.performance.average_profit.toFixed(2)}%
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="text.secondary">샤프 비율</Typography>
+                      <Typography variant="h5" fontWeight="bold">{learningStatus.performance.sharpe_ratio.toFixed(2)}</Typography>
+                    </Grid>
+                  </Grid>
+                  <Box sx={{ mt: 3 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">최고 수익률</Typography>
+                        <Typography variant="body1" fontWeight="bold" color="success.main">
+                          +{learningStatus.performance.best_trade.toFixed(2)}%
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">최대 손실률</Typography>
+                        <Typography variant="body1" fontWeight="bold" color="error.main">
+                          {learningStatus.performance.worst_trade.toFixed(2)}%
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">연속 승리</Typography>
+                        <Typography variant="body1" fontWeight="bold">
+                          {learningStatus.performance.max_consecutive_wins}회
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">연속 패배</Typography>
+                        <Typography variant="body1" fontWeight="bold">
+                          {learningStatus.performance.max_consecutive_losses}회
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* 지표별 가중치 */}
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                    지표별 학습된 가중치
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    각 지표의 예측 성공률에 따라 자동으로 조정됩니다
+                  </Typography>
+                  
+                  <Box sx={{ mt: 2 }}>
+                    {learningStatus.indicatorWeights.map((indicator) => (
+                      <Box key={indicator.indicator} sx={{ mb: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                          <Typography variant="body2">
+                            {indicator.indicator}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              성공률: {(indicator.success_rate * 100).toFixed(1)}%
+                            </Typography>
+                            <Typography variant="body2" fontWeight="bold">
+                              가중치: {indicator.weight.toFixed(2)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={indicator.weight * 50} 
+                            sx={{ 
+                              flexGrow: 1, 
+                              height: 8,
+                              backgroundColor: 'grey.200',
+                              '& .MuiLinearProgress-bar': {
+                                backgroundColor: indicator.weight > 1 ? 'success.main' : 
+                                                indicator.weight < 0.5 ? 'error.main' : 'primary.main'
+                              }
+                            }} 
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>
+                            {indicator.sample_size} 샘플
+                          </Typography>
+                          {indicator.confidence < 1 && (
+                            <Chip 
+                              label="학습중" 
+                              size="small" 
+                              color="warning"
+                              sx={{ height: 20 }}
+                            />
+                          )}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* 학습 시스템 설명 */}
+            <Grid item xs={12}>
+              <Alert severity="info">
+                <AlertTitle>학습 시스템 안내</AlertTitle>
+                <Typography variant="body2">
+                  • 각 거래 결과를 분석하여 지표별 가중치를 자동으로 조정합니다<br/>
+                  • 최소 20회 이상의 거래 데이터가 쉬여야 신뢰할 수 있는 학습이 이루어집니다<br/>
+                  • 가중치가 1.0보다 크면 해당 지표가 예측에 더 중요하게 사용됩니다<br/>
+                  • Kelly Criterion을 활용하여 최적의 포지션 크기를 계산합니다
+                </Typography>
+              </Alert>
+            </Grid>
+          </Grid>
+        ) : (
+          <Card>
+            <CardContent sx={{ textAlign: 'center', py: 6 }}>
+              <CircularProgress sx={{ mb: 2 }} />
+              <Typography variant="body1" color="text.secondary">
+                학습 데이터를 불러오는 중...
+              </Typography>
+            </CardContent>
+          </Card>
+        )}
       </TabPanel>
     </Box>
   );
@@ -1857,7 +2263,22 @@ const App: React.FC = () => {
                     AI 분석 의견
                   </Typography>
                   <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
-                    <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+                    <Typography 
+                      variant="body1" 
+                      component="div"
+                      sx={{ 
+                        lineHeight: 1.8,
+                        whiteSpace: 'pre-line',
+                        '& ul, & ol': {
+                          mt: 1,
+                          mb: 1,
+                          pl: 3
+                        },
+                        '& li': {
+                          mb: 0.5
+                        }
+                      }}
+                    >
                       {formatAIReason(selectedAnalysisDetail.reason, selectedAnalysisDetail.decision)}
                     </Typography>
                   </Paper>
@@ -1910,6 +2331,7 @@ const App: React.FC = () => {
       </Dialog>
 
       {/* 고급 설정 다이얼로그 */}
+      {tradingConfig && (
       <Dialog
         open={advancedConfigOpen}
         onClose={() => setAdvancedConfigOpen(false)}
@@ -1932,7 +2354,6 @@ const App: React.FC = () => {
             <Tab label="신호 강도" />
             <Tab label="지표 가중치" />
             <Tab label="거래 설정" />
-            <Tab label="데이터 소스" />
           </Tabs>
 
           {/* Tab 0: 결정 임계값 설정 */}
@@ -2503,314 +2924,17 @@ const App: React.FC = () => {
             </Grid>
             </Box>
           )}
-          
-          {/* Tab 4: 데이터 소스 설정 */}
-          {advancedConfigTab === 4 && (
-            <Box>
-              <Typography variant="h6" gutterBottom>데이터 소스 설정</Typography>
-              <Typography variant="body2" color="text.secondary" mb={3}>
-                각 데이터 소스의 사용 여부와 중요도를 설정합니다. 더 많은 데이터를 사용할수록 정확한 분석이 가능합니다.
-              </Typography>
-              
-              {/* 기본 데이터 소스 */}
-              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-                📊 기본 데이터 소스
-              </Typography>
-              <Grid container spacing={3} mb={4}>
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={tradingConfig.dataSourceUsage?.technicalIndicators !== false}
-                          onChange={(e) => setTradingConfig({
-                            ...tradingConfig,
-                            dataSourceUsage: {
-                              ...tradingConfig.dataSourceUsage,
-                              technicalIndicators: e.target.checked
-                            }
-                          })}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1" fontWeight="bold">기술적 지표</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            RSI, MACD, 볼린저밴드, 이동평균선 등
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Card>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={tradingConfig.dataSourceUsage?.volume !== false}
-                          onChange={(e) => setTradingConfig({
-                            ...tradingConfig,
-                            dataSourceUsage: {
-                              ...tradingConfig.dataSourceUsage,
-                              volume: e.target.checked
-                            }
-                          })}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1" fontWeight="bold">거래량 분석</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            거래량 변화, 평균 대비 비율 등
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Card>
-                </Grid>
-              </Grid>
-              
-              {/* 고급 데이터 소스 */}
-              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-                🔍 고급 데이터 소스
-              </Typography>
-              <Grid container spacing={3} mb={4}>
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={tradingConfig.dataSourceUsage?.orderbook !== false}
-                          onChange={(e) => setTradingConfig({
-                            ...tradingConfig,
-                            dataSourceUsage: {
-                              ...tradingConfig.dataSourceUsage,
-                              orderbook: e.target.checked
-                            }
-                          })}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1" fontWeight="bold">호가 데이터</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            매수/매도 호가 비율, 스프레드 분석
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Card>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={tradingConfig.dataSourceUsage?.trades !== false}
-                          onChange={(e) => setTradingConfig({
-                            ...tradingConfig,
-                            dataSourceUsage: {
-                              ...tradingConfig.dataSourceUsage,
-                              trades: e.target.checked
-                            }
-                          })}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1" fontWeight="bold">체결 데이터</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            실시간 매수/매도 체결 내역 분석
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Card>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={tradingConfig.dataSourceUsage?.kimchiPremium !== false}
-                          onChange={(e) => setTradingConfig({
-                            ...tradingConfig,
-                            dataSourceUsage: {
-                              ...tradingConfig.dataSourceUsage,
-                              kimchiPremium: e.target.checked
-                            }
-                          })}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1" fontWeight="bold">김치 프리미엄</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            한국/해외 가격 차이 실시간 추적
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Card>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={tradingConfig.dataSourceUsage?.news !== false}
-                          onChange={(e) => setTradingConfig({
-                            ...tradingConfig,
-                            dataSourceUsage: {
-                              ...tradingConfig.dataSourceUsage,
-                              news: e.target.checked
-                            }
-                          })}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1" fontWeight="bold">뉴스 분석</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Google News, Reddit, CoinGecko 감정 분석
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Card>
-                </Grid>
-              </Grid>
-              
-              {/* 데이터 가중치 설정 */}
-              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-                ⚖️ 데이터 중요도 가중치
-              </Typography>
-              <Typography variant="body2" color="text.secondary" mb={2}>
-                각 데이터 유형의 상대적 중요도를 설정합니다. 합계가 100%가 되도록 자동 조정됩니다.
-              </Typography>
-              
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="caption" gutterBottom>기술적 지표 가중치</Typography>
-                  <Slider
-                    value={tradingConfig.dataWeights?.technical || 40}
-                    onChange={(e, value) => setTradingConfig({
-                      ...tradingConfig,
-                      dataWeights: {
-                        ...tradingConfig.dataWeights,
-                        technical: value as number
-                      }
-                    })}
-                    valueLabelDisplay="auto"
-                    marks={[
-                      { value: 0, label: '0%' },
-                      { value: 50, label: '50%' },
-                      { value: 100, label: '100%' }
-                    ]}
-                    disabled={!tradingConfig.dataSourceUsage?.technicalIndicators}
-                    sx={{ mb: 3 }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Typography variant="caption" gutterBottom>시장 데이터 가중치</Typography>
-                  <Slider
-                    value={tradingConfig.dataWeights?.market || 30}
-                    onChange={(e, value) => setTradingConfig({
-                      ...tradingConfig,
-                      dataWeights: {
-                        ...tradingConfig.dataWeights,
-                        market: value as number
-                      }
-                    })}
-                    valueLabelDisplay="auto"
-                    marks={[
-                      { value: 0, label: '0%' },
-                      { value: 50, label: '50%' },
-                      { value: 100, label: '100%' }
-                    ]}
-                    disabled={!tradingConfig.dataSourceUsage?.orderbook && !tradingConfig.dataSourceUsage?.trades}
-                    sx={{ mb: 3 }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Typography variant="caption" gutterBottom>뉴스/감정 가중치</Typography>
-                  <Slider
-                    value={tradingConfig.dataWeights?.sentiment || 20}
-                    onChange={(e, value) => setTradingConfig({
-                      ...tradingConfig,
-                      dataWeights: {
-                        ...tradingConfig.dataWeights,
-                        sentiment: value as number
-                      }
-                    })}
-                    valueLabelDisplay="auto"
-                    marks={[
-                      { value: 0, label: '0%' },
-                      { value: 50, label: '50%' },
-                      { value: 100, label: '100%' }
-                    ]}
-                    disabled={!tradingConfig.dataSourceUsage?.news}
-                    sx={{ mb: 3 }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Typography variant="caption" gutterBottom>거래량 가중치</Typography>
-                  <Slider
-                    value={tradingConfig.dataWeights?.volume || 10}
-                    onChange={(e, value) => setTradingConfig({
-                      ...tradingConfig,
-                      dataWeights: {
-                        ...tradingConfig.dataWeights,
-                        volume: value as number
-                      }
-                    })}
-                    valueLabelDisplay="auto"
-                    marks={[
-                      { value: 0, label: '0%' },
-                      { value: 50, label: '50%' },
-                      { value: 100, label: '100%' }
-                    ]}
-                    disabled={!tradingConfig.dataSourceUsage?.volume}
-                    sx={{ mb: 3 }}
-                  />
-                </Grid>
-              </Grid>
-              
-              {/* 가중치 합계 표시 */}
-              <Card variant="outlined" sx={{ p: 2, bgcolor: 'info.50', mt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  가중치 합계
-                </Typography>
-                <Typography variant="h6" color="primary">
-                  {((tradingConfig.dataWeights?.technical || 40) + 
-                    (tradingConfig.dataWeights?.market || 30) + 
-                    (tradingConfig.dataWeights?.sentiment || 20) + 
-                    (tradingConfig.dataWeights?.volume || 10))}%
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  합계가 100%가 아닌 경우 자동으로 비율 조정됩니다
-                </Typography>
-              </Card>
-            </Box>
-          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAdvancedConfigOpen(false)}>
-            취소
+            닫기
           </Button>
           <Button onClick={saveTradingConfig} variant="contained">
             설정 저장
           </Button>
         </DialogActions>
       </Dialog>
+      )}
     </Box>
   );
 };

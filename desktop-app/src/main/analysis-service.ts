@@ -5,6 +5,10 @@ import newsService, { NewsAnalysis } from './news-service';
 export interface TechnicalAnalysis {
   market: string;
   rsi: number;
+  stochasticRSI?: {
+    k: number;
+    d: number;
+  };
   macd: {
     macd: number;
     signal: number;
@@ -14,14 +18,30 @@ export interface TechnicalAnalysis {
     upper: number;
     middle: number;
     lower: number;
+    position: number; // -1 (below lower) to 1 (above upper)
   };
   sma: {
     sma20: number;
     sma50: number;
   };
+  atr?: number; // Average True Range
+  obv?: {
+    value: number;
+    signal: number; // OBV의 이동평균
+    trend: 'UP' | 'DOWN' | 'NEUTRAL';
+  };
+  adx?: {
+    adx: number;
+    plusDI: number;
+    minusDI: number;
+    trend: 'STRONG' | 'WEAK' | 'NONE';
+  };
   signal: 'BUY' | 'SELL' | 'HOLD';
   confidence: number;
   timestamp: number;
+  volumeRatio: number; // volume.ratio alias for compatibility
+  obvTrend: number; // -1 to 1, simplified OBV trend
+  whaleActivity?: boolean; // whether whale activity detected
   // 추가 데이터
   volume: {
     current: number;
@@ -39,11 +59,14 @@ export interface TechnicalAnalysis {
     totalBidSize: number;
     totalAskSize: number;
     spread: number; // 스프레드 (%)
+    imbalance?: number; // 호가 불균형 지수 (-100 ~ 100)
   };
   trades?: {
     buyVolume: number;
     sellVolume: number;
     buyRatio: number; // 매수 비율
+    whaleDetected?: boolean; // 고래 감지
+    whaleVolume?: number; // 고래 거래량
   };
   kimchiPremium?: number; // 김치 프리미엄 (%)
   fearGreedIndex?: number; // 공포/탐욕 지수 (0-100)
@@ -100,19 +123,207 @@ class AnalysisService {
     return ema;
   }
 
-  // MACD 계산
+  // MACD 계산 (개선된 버전)
   calculateMACD(prices: number[]): { macd: number; signal: number; histogram: number } {
-    const ema12 = this.calculateEMA(prices, 12);
-    const ema26 = this.calculateEMA(prices, 26);
-    const macd = ema12 - ema26;
-
+    if (prices.length < 26) return { macd: 0, signal: 0, histogram: 0 };
+    
+    // MACD line 계산을 위한 전체 기간의 EMA 값들
+    const ema12Values: number[] = [];
+    const ema26Values: number[] = [];
+    
+    let ema12 = prices[0];
+    let ema26 = prices[0];
+    
+    const multiplier12 = 2 / (12 + 1);
+    const multiplier26 = 2 / (26 + 1);
+    
+    for (let i = 0; i < prices.length; i++) {
+      ema12 = (prices[i] * multiplier12) + (ema12 * (1 - multiplier12));
+      ema26 = (prices[i] * multiplier26) + (ema26 * (1 - multiplier26));
+      ema12Values.push(ema12);
+      ema26Values.push(ema26);
+    }
+    
+    // MACD line 계산
+    const macdValues: number[] = [];
+    for (let i = 0; i < ema12Values.length; i++) {
+      macdValues.push(ema12Values[i] - ema26Values[i]);
+    }
+    
     // Signal line (MACD의 9일 EMA)
-    const macdValues = [macd]; // 실제로는 여러 MACD 값들이 필요하지만 단순화
-    const signal = macd; // 단순화된 버전
-
-    const histogram = macd - signal;
-
-    return { macd, signal, histogram };
+    const signalValues = this.calculateEMAArray(macdValues, 9);
+    
+    const lastMACD = macdValues[macdValues.length - 1];
+    const lastSignal = signalValues[signalValues.length - 1];
+    const histogram = lastMACD - lastSignal;
+    
+    return { macd: lastMACD, signal: lastSignal, histogram };
+  }
+  
+  // 배열에 대한 EMA 계산
+  calculateEMAArray(values: number[], period: number): number[] {
+    if (values.length === 0) return [];
+    
+    const multiplier = 2 / (period + 1);
+    const emaValues: number[] = [values[0]];
+    
+    for (let i = 1; i < values.length; i++) {
+      const ema = (values[i] * multiplier) + (emaValues[i - 1] * (1 - multiplier));
+      emaValues.push(ema);
+    }
+    
+    return emaValues;
+  }
+  
+  // Stochastic RSI 계산
+  calculateStochasticRSI(prices: number[], rsiPeriod: number = 14, stochPeriod: number = 14, smoothK: number = 3, smoothD: number = 3): { k: number; d: number } {
+    if (prices.length < rsiPeriod + stochPeriod) return { k: 50, d: 50 };
+    
+    // RSI 값들의 배열 계산
+    const rsiValues: number[] = [];
+    for (let i = rsiPeriod; i < prices.length; i++) {
+      const periodPrices = prices.slice(i - rsiPeriod, i + 1);
+      const rsi = this.calculateRSI(periodPrices, rsiPeriod);
+      rsiValues.push(rsi);
+    }
+    
+    if (rsiValues.length < stochPeriod) return { k: 50, d: 50 };
+    
+    // Stochastic 계산
+    const stochValues: number[] = [];
+    for (let i = stochPeriod - 1; i < rsiValues.length; i++) {
+      const periodRSI = rsiValues.slice(i - stochPeriod + 1, i + 1);
+      const highestRSI = Math.max(...periodRSI);
+      const lowestRSI = Math.min(...periodRSI);
+      const currentRSI = periodRSI[periodRSI.length - 1];
+      
+      const stoch = highestRSI === lowestRSI ? 50 : ((currentRSI - lowestRSI) / (highestRSI - lowestRSI)) * 100;
+      stochValues.push(stoch);
+    }
+    
+    // %K 계산 (smoothed)
+    const kValues = this.calculateSMA(stochValues, smoothK);
+    const k = kValues;
+    
+    // %D 계산 (K의 이동평균)
+    const d = this.calculateSMA([k], smoothD);
+    
+    return { k, d };
+  }
+  
+  // ATR (Average True Range) 계산
+  calculateATR(candles: CandleData[], period: number = 14): number {
+    if (candles.length < period + 1) return 0;
+    
+    const trueRanges: number[] = [];
+    
+    for (let i = 1; i < candles.length; i++) {
+      const high = candles[i].high_price;
+      const low = candles[i].low_price;
+      const prevClose = candles[i - 1].trade_price;
+      
+      const tr = Math.max(
+        high - low,
+        Math.abs(high - prevClose),
+        Math.abs(low - prevClose)
+      );
+      
+      trueRanges.push(tr);
+    }
+    
+    // ATR은 True Range의 지수이동평균
+    return this.calculateEMA(trueRanges, period);
+  }
+  
+  // OBV (On Balance Volume) 계산
+  calculateOBV(candles: CandleData[]): { value: number; signal: number; trend: 'UP' | 'DOWN' | 'NEUTRAL' } {
+    if (candles.length < 2) return { value: 0, signal: 0, trend: 'NEUTRAL' };
+    
+    const obvValues: number[] = [0];
+    
+    for (let i = 1; i < candles.length; i++) {
+      const currentClose = candles[i].trade_price;
+      const prevClose = candles[i - 1].trade_price;
+      const volume = candles[i].candle_acc_trade_volume;
+      
+      let obv = obvValues[i - 1];
+      
+      if (currentClose > prevClose) {
+        obv += volume;
+      } else if (currentClose < prevClose) {
+        obv -= volume;
+      }
+      // 가격이 같으면 OBV 변화 없음
+      
+      obvValues.push(obv);
+    }
+    
+    const currentOBV = obvValues[obvValues.length - 1];
+    const obvSignal = this.calculateSMA(obvValues.slice(-20), 20); // 20일 이동평균
+    
+    let trend: 'UP' | 'DOWN' | 'NEUTRAL' = 'NEUTRAL';
+    if (currentOBV > obvSignal * 1.02) trend = 'UP';
+    else if (currentOBV < obvSignal * 0.98) trend = 'DOWN';
+    
+    return { value: currentOBV, signal: obvSignal, trend };
+  }
+  
+  // ADX (Average Directional Index) 계산
+  calculateADX(candles: CandleData[], period: number = 14): { adx: number; plusDI: number; minusDI: number; trend: 'STRONG' | 'WEAK' | 'NONE' } {
+    if (candles.length < period * 2) return { adx: 0, plusDI: 0, minusDI: 0, trend: 'NONE' };
+    
+    const plusDM: number[] = [];
+    const minusDM: number[] = [];
+    const trueRanges: number[] = [];
+    
+    // DM과 TR 계산
+    for (let i = 1; i < candles.length; i++) {
+      const highDiff = candles[i].high_price - candles[i - 1].high_price;
+      const lowDiff = candles[i - 1].low_price - candles[i].low_price;
+      
+      // +DM과 -DM 계산
+      if (highDiff > lowDiff && highDiff > 0) {
+        plusDM.push(highDiff);
+        minusDM.push(0);
+      } else if (lowDiff > highDiff && lowDiff > 0) {
+        plusDM.push(0);
+        minusDM.push(lowDiff);
+      } else {
+        plusDM.push(0);
+        minusDM.push(0);
+      }
+      
+      // True Range 계산
+      const tr = Math.max(
+        candles[i].high_price - candles[i].low_price,
+        Math.abs(candles[i].high_price - candles[i - 1].trade_price),
+        Math.abs(candles[i].low_price - candles[i - 1].trade_price)
+      );
+      trueRanges.push(tr);
+    }
+    
+    // Smoothed 값들 계산
+    const smoothedPlusDM = this.calculateEMA(plusDM, period);
+    const smoothedMinusDM = this.calculateEMA(minusDM, period);
+    const smoothedTR = this.calculateEMA(trueRanges, period);
+    
+    // DI 계산
+    const plusDI = smoothedTR > 0 ? (smoothedPlusDM / smoothedTR) * 100 : 0;
+    const minusDI = smoothedTR > 0 ? (smoothedMinusDM / smoothedTR) * 100 : 0;
+    
+    // DX 계산
+    const diSum = plusDI + minusDI;
+    const dx = diSum > 0 ? Math.abs(plusDI - minusDI) / diSum * 100 : 0;
+    
+    // ADX는 DX의 이동평균 (간단화를 위해 현재 DX 값 사용)
+    const adx = dx;
+    
+    // 추세 강도 판단
+    let trend: 'STRONG' | 'WEAK' | 'NONE' = 'NONE';
+    if (adx > 50) trend = 'STRONG';
+    else if (adx > 25) trend = 'WEAK';
+    
+    return { adx, plusDI, minusDI, trend };
   }
 
   // 볼린저 밴드 계산
@@ -120,6 +331,7 @@ class AnalysisService {
     upper: number;
     middle: number;
     lower: number;
+    position: number;
   } {
     const sma = this.calculateSMA(prices, period);
     const slice = prices.slice(-period);
@@ -128,10 +340,25 @@ class AnalysisService {
     const variance = slice.reduce((acc, price) => acc + Math.pow(price - sma, 2), 0) / period;
     const stdDev = Math.sqrt(variance);
 
+    const upper = sma + (stdDev * multiplier);
+    const lower = sma - (stdDev * multiplier);
+    const currentPrice = prices[prices.length - 1];
+    
+    // Calculate position (-1 to 1)
+    let position = 0;
+    if (currentPrice > upper) {
+      position = Math.min(1, (currentPrice - upper) / (upper - sma));
+    } else if (currentPrice < lower) {
+      position = Math.max(-1, (currentPrice - lower) / (sma - lower));
+    } else {
+      position = (currentPrice - sma) / (upper - sma);
+    }
+    
     return {
-      upper: sma + (stdDev * multiplier),
+      upper,
       middle: sma,
-      lower: sma - (stdDev * multiplier)
+      lower,
+      position
     };
   }
 
@@ -142,13 +369,16 @@ class AnalysisService {
         market: candles[0]?.market || '',
         rsi: 50,
         macd: { macd: 0, signal: 0, histogram: 0 },
-        bollinger: { upper: 0, middle: 0, lower: 0 },
+        bollinger: { upper: 0, middle: 0, lower: 0, position: 0 },
         sma: { sma20: 0, sma50: 0 },
         signal: 'HOLD',
         confidence: 30,
         timestamp: Date.now(),
         volume: { current: 0, average: 0, ratio: 0 },
-        priceChange: { change24h: 0, changeRate24h: 0, high24h: 0, low24h: 0 }
+        priceChange: { change24h: 0, changeRate24h: 0, high24h: 0, low24h: 0 },
+        volumeRatio: 0,
+        obvTrend: 0,
+        whaleActivity: false
       };
     }
 
@@ -157,12 +387,18 @@ class AnalysisService {
     const currentPrice = prices[prices.length - 1];
     const currentVolume = volumes[volumes.length - 1];
 
-    // 기술적 지표 계산
+    // 기본 기술적 지표 계산
     const rsi = this.calculateRSI(prices);
+    const stochasticRSI = this.calculateStochasticRSI(prices);
     const macd = this.calculateMACD(prices);
     const bollinger = this.calculateBollingerBands(prices);
     const sma20 = this.calculateSMA(prices, 20);
     const sma50 = this.calculateSMA(prices, 50);
+    
+    // 추가 지표 계산
+    const atr = this.calculateATR(candles);
+    const obv = this.calculateOBV(candles);
+    const adx = this.calculateADX(candles);
 
     // 거래량 분석
     const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
@@ -181,7 +417,7 @@ class AnalysisService {
       low24h: Math.min(...prices.slice(-288))
     };
 
-    // 호가 분석
+    // 호가 분석 (개선된 버전)
     let orderbookData;
     if (orderbook) {
       const totalBidSize = orderbook.orderbook_units.reduce((sum: number, unit: any) => sum + unit.bid_size, 0);
@@ -189,24 +425,52 @@ class AnalysisService {
       const bestBid = orderbook.orderbook_units[0].bid_price;
       const bestAsk = orderbook.orderbook_units[0].ask_price;
       
+      // 상위 5단계 호가 불균형 계산
+      let top5BidSize = 0;
+      let top5AskSize = 0;
+      for (let i = 0; i < Math.min(5, orderbook.orderbook_units.length); i++) {
+        top5BidSize += orderbook.orderbook_units[i].bid_size;
+        top5AskSize += orderbook.orderbook_units[i].ask_size;
+      }
+      
+      // 호가 불균형 지수 (-100 ~ 100)
+      const imbalance = ((top5BidSize - top5AskSize) / (top5BidSize + top5AskSize)) * 100;
+      
       orderbookData = {
         bidAskRatio: totalBidSize / (totalAskSize || 1),
         totalBidSize,
         totalAskSize,
-        spread: ((bestAsk - bestBid) / bestBid) * 100
+        spread: ((bestAsk - bestBid) / bestBid) * 100,
+        imbalance
       };
     }
 
-    // 체결 내역 분석
-    let tradesData;
+    // 체결 내역 분석 (고래 감지 추가)
+    let tradesData: {
+      buyVolume: number;
+      sellVolume: number;
+      buyRatio: number;
+      whaleDetected?: boolean;
+      whaleVolume?: number;
+    } | undefined;
     if (trades && trades.length > 0) {
       const buyVolume = trades.filter(t => t.ask_bid === 'BID').reduce((sum, t) => sum + t.trade_volume, 0);
       const sellVolume = trades.filter(t => t.ask_bid === 'ASK').reduce((sum, t) => sum + t.trade_volume, 0);
       
+      // 평균 거래량 계산
+      const avgTradeVolume = trades.reduce((sum, t) => sum + t.trade_volume, 0) / trades.length;
+      
+      // 고래 감지 (평균의 10배 이상)
+      const whaleThreshold = avgTradeVolume * 10;
+      const whaleTrades = trades.filter(t => t.trade_volume > whaleThreshold);
+      const whaleVolume = whaleTrades.reduce((sum, t) => sum + t.trade_volume, 0);
+      
       tradesData = {
         buyVolume,
         sellVolume,
-        buyRatio: buyVolume / (buyVolume + sellVolume || 1)
+        buyRatio: buyVolume / (buyVolume + sellVolume || 1),
+        whaleDetected: whaleTrades.length > 0,
+        whaleVolume
       };
     }
 
@@ -246,18 +510,44 @@ class AnalysisService {
 
     // 각 신호에 가중치 부여 (중요도에 따라 다르게 설정)
     const buySignalsWithWeight = [
+      // RSI 관련 지표
       { condition: rsi < 30, weight: 3.0 }, // RSI 극도의 과매도 (매우 중요)
       { condition: rsi < 40, weight: 2.0 }, // RSI 과매도
+      { condition: stochasticRSI && stochasticRSI.k < 20 && stochasticRSI.d < 20, weight: 3.0 }, // Stochastic RSI 극도의 과매도
+      { condition: stochasticRSI && stochasticRSI.k < 30, weight: 2.0 }, // Stochastic RSI 과매도
+      { condition: stochasticRSI && stochasticRSI.k > stochasticRSI.d && stochasticRSI.k < 50, weight: 2.5 }, // Stochastic RSI 골든크로스
+      
+      // 가격 및 볼린저 관련
       { condition: currentPrice < bollinger.lower, weight: 2.5 }, // 볼린저 하단 돌파
       { condition: currentPrice < bollinger.middle, weight: 1.5 }, // 볼린저 중간선 아래
       { condition: sma20 > sma50, weight: 2.0 }, // 골든크로스
+      
+      // MACD 및 운동량 지표
       { condition: macd.histogram > 0 && macd.macd > macd.signal, weight: 2.5 }, // MACD 상승 전환
+      { condition: macd.histogram > 0 && Math.abs(macd.histogram) > Math.abs(macd.macd) * 0.1, weight: 2.0 }, // MACD 히스토그램 강세
+      
+      // 거래량 및 OBV
       { condition: volumeRatio > 2.0, weight: 2.0 }, // 거래량 2배 이상 급증
       { condition: volumeRatio > 1.5, weight: 1.0 }, // 거래량 급증
+      { condition: obv && obv.trend === 'UP', weight: 2.5 }, // OBV 상승 추세
+      { condition: obv && obv.value > obv.signal * 1.05, weight: 2.0 }, // OBV 시그널 돌파
+      
+      // 추세 강도 (ADX)
+      { condition: adx && adx.trend === 'STRONG' && adx.plusDI > adx.minusDI, weight: 3.0 }, // 강한 상승 추세
+      { condition: adx && adx.adx > 25 && adx.plusDI > adx.minusDI, weight: 2.0 }, // 약한 상승 추세
+      
+      // 변동성 (ATR)
+      { condition: atr && atr > 0 && currentPrice < (currentPrice - atr), weight: 2.0 }, // 변동성 대비 하락
+      
+      // 호가 및 체결 분석
       { condition: orderbookData && orderbookData.bidAskRatio > 1.5, weight: 2.0 }, // 강한 매수세
       { condition: orderbookData && orderbookData.bidAskRatio > 1.2, weight: 1.0 }, // 매수세 우세
+      { condition: orderbookData && orderbookData.imbalance && orderbookData.imbalance > 20, weight: 2.5 }, // 호가 매수 불균형
       { condition: tradesData && tradesData.buyRatio > 0.7, weight: 2.0 }, // 강한 매수 체결
       { condition: tradesData && tradesData.buyRatio > 0.6, weight: 1.0 }, // 매수 체결 우세
+      { condition: tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume, weight: 3.5 }, // 매수 고래 감지
+      
+      // 가격 변화 및 시장 상황
       { condition: priceChange.changeRate24h < -0.1, weight: 2.5 }, // 24시간 10% 이상 급락 (반등 기대)
       { condition: priceChange.changeRate24h < -0.05, weight: 1.5 }, // 24시간 5% 이상 하락
       { condition: kimchiPremium < 0, weight: 3.0 }, // 역프리미엄 (매우 유리)
@@ -266,6 +556,8 @@ class AnalysisService {
       { condition: fearGreedIndex < 35, weight: 2.0 }, // 공포 상태
       { condition: orderbookData && orderbookData.spread < 0.1, weight: 1.0 }, // 좁은 스프레드
       { condition: currentPrice < priceChange.low24h * 1.02, weight: 2.0 }, // 24시간 저점 근처
+      
+      // 뉴스 및 이벤트
       { condition: newsAnalysis && newsAnalysis.sentimentScore < -50, weight: 3.0 }, // 매우 부정적 뉴스 (역발상)
       { condition: newsAnalysis && newsAnalysis.sentimentScore < -20, weight: 2.0 }, // 부정적 뉴스
       { condition: newsAnalysis && newsAnalysis.majorEvents.length > 0 && newsAnalysis.sentimentScore > 20, weight: 2.5 } // 긍정적 주요 이벤트
@@ -273,17 +565,43 @@ class AnalysisService {
 
     // 매도 신호 조건들 (가중치 포함)
     const sellSignalsWithWeight = [
+      // RSI 관련 지표
       { condition: rsi > 80, weight: 3.0 }, // RSI 극도의 과매수 (매우 중요)
       { condition: rsi > 70, weight: 2.0 }, // RSI 과매수
+      { condition: stochasticRSI && stochasticRSI.k > 80 && stochasticRSI.d > 80, weight: 3.0 }, // Stochastic RSI 극도의 과매수
+      { condition: stochasticRSI && stochasticRSI.k > 70, weight: 2.0 }, // Stochastic RSI 과매수
+      { condition: stochasticRSI && stochasticRSI.k < stochasticRSI.d && stochasticRSI.k > 50, weight: 2.5 }, // Stochastic RSI 데드크로스
+      
+      // 가격 및 볼린저 관련
       { condition: currentPrice > bollinger.upper, weight: 2.5 }, // 볼린저 상단 돌파
       { condition: currentPrice > bollinger.middle, weight: 1.5 }, // 볼린저 중간선 위
       { condition: sma20 < sma50, weight: 2.0 }, // 데드크로스
+      
+      // MACD 및 운동량 지표
       { condition: macd.histogram < 0 && macd.macd < macd.signal, weight: 2.5 }, // MACD 하락 전환
+      { condition: macd.histogram < 0 && Math.abs(macd.histogram) > Math.abs(macd.macd) * 0.1, weight: 2.0 }, // MACD 히스토그램 약세
+      
+      // 거래량 및 OBV
       { condition: volumeRatio > 2.0 && priceChange.changeRate24h > 0, weight: 2.0 }, // 상승 중 거래량 급증 (차익실현)
+      { condition: obv && obv.trend === 'DOWN', weight: 2.5 }, // OBV 하락 추세
+      { condition: obv && obv.value < obv.signal * 0.95, weight: 2.0 }, // OBV 시그널 하향 돌파
+      
+      // 추세 강도 (ADX)
+      { condition: adx && adx.trend === 'STRONG' && adx.minusDI > adx.plusDI, weight: 3.0 }, // 강한 하락 추세
+      { condition: adx && adx.adx > 25 && adx.minusDI > adx.plusDI, weight: 2.0 }, // 약한 하락 추세
+      
+      // 변동성 (ATR)
+      { condition: atr && atr > 0 && currentPrice > (currentPrice + atr), weight: 2.0 }, // 변동성 대비 상승
+      
+      // 호가 및 체결 분석
       { condition: orderbookData && orderbookData.bidAskRatio < 0.7, weight: 2.0 }, // 강한 매도세
       { condition: orderbookData && orderbookData.bidAskRatio < 0.8, weight: 1.0 }, // 매도세 우세
+      { condition: orderbookData && orderbookData.imbalance && orderbookData.imbalance < -20, weight: 2.5 }, // 호가 매도 불균형
       { condition: tradesData && tradesData.buyRatio < 0.3, weight: 2.0 }, // 강한 매도 체결
       { condition: tradesData && tradesData.buyRatio < 0.4, weight: 1.0 }, // 매도 체결 우세
+      { condition: tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume, weight: 3.5 }, // 매도 고래 감지
+      
+      // 가격 변화 및 시장 상황
       { condition: priceChange.changeRate24h > 0.15, weight: 2.5 }, // 24시간 15% 이상 급등 (차익실현)
       { condition: priceChange.changeRate24h > 0.1, weight: 1.5 }, // 24시간 10% 이상 상승
       { condition: kimchiPremium > 5, weight: 3.0 }, // 매우 높은 김프 (위험)
@@ -292,6 +610,8 @@ class AnalysisService {
       { condition: fearGreedIndex > 75, weight: 2.0 }, // 탐욕 상태
       { condition: orderbookData && orderbookData.spread > 0.5, weight: 1.5 }, // 넓은 스프레드 (변동성)
       { condition: currentPrice > priceChange.high24h * 0.98, weight: 2.0 }, // 24시간 고점 근처
+      
+      // 뉴스 및 이벤트
       { condition: newsAnalysis && newsAnalysis.sentimentScore > 50, weight: 3.0 }, // 매우 긍정적 뉴스 (과열 경고)
       { condition: newsAnalysis && newsAnalysis.sentimentScore > 20, weight: 2.0 }, // 긍정적 뉴스
       { condition: newsAnalysis && newsAnalysis.majorEvents.length > 0 && newsAnalysis.sentimentScore < -20, weight: 2.5 } // 부정적 주요 이벤트
@@ -338,6 +658,14 @@ class AnalysisService {
       if (currentPrice < bollinger.lower && volumeRatio > 2 && orderbookData && orderbookData.bidAskRatio > 1.5) {
         confidence = Math.min(confidence + 5, 95);
       }
+      // Stochastic RSI + OBV + ADX 트리플 매수 신호
+      if (stochasticRSI && stochasticRSI.k < 20 && obv && obv.trend === 'UP' && adx && adx.plusDI > adx.minusDI) {
+        confidence = Math.min(confidence + 8, 95);
+      }
+      // 고래 매수 감지 + 강한 트렌드
+      if (tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume && adx && adx.trend === 'STRONG') {
+        confidence = Math.min(confidence + 12, 95);
+      }
     } else if (signal === 'SELL') {
       // 극도의 탐욕 + 높은 김프 + RSI 과매수 = 강력한 매도 신호
       if (fearGreedIndex > 85 && kimchiPremium > 5 && rsi > 80) {
@@ -346,6 +674,14 @@ class AnalysisService {
       // 볼린저 상단 돌파 + 거래량 급증 + 매도세 우세
       if (currentPrice > bollinger.upper && volumeRatio > 2 && orderbookData && orderbookData.bidAskRatio < 0.7) {
         confidence = Math.min(confidence + 5, 95);
+      }
+      // Stochastic RSI + OBV + ADX 트리플 매도 신호
+      if (stochasticRSI && stochasticRSI.k > 80 && obv && obv.trend === 'DOWN' && adx && adx.minusDI > adx.plusDI) {
+        confidence = Math.min(confidence + 8, 95);
+      }
+      // 고래 매도 감지 + 강한 트렌드
+      if (tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume && adx && adx.trend === 'STRONG') {
+        confidence = Math.min(confidence + 12, 95);
       }
     }
 
@@ -356,22 +692,30 @@ class AnalysisService {
       buySignalsWithWeight.forEach(sig => {
         if (sig.condition && sig.weight >= 2.0) {
           if (sig.condition === (rsi < 30)) activeSignals.push('RSI 극도의 과매도');
+          else if (sig.condition === (stochasticRSI && stochasticRSI.k < 20 && stochasticRSI.d < 20)) activeSignals.push('Stochastic RSI 과매도');
           else if (sig.condition === (currentPrice < bollinger.lower)) activeSignals.push('볼린저 하단 돌파');
           else if (sig.condition === (kimchiPremium < 0)) activeSignals.push('역프리미엄');
           else if (sig.condition === (fearGreedIndex < 20)) activeSignals.push('극도의 공포');
           else if (sig.condition === (volumeRatio > 2.0)) activeSignals.push('거래량 급증');
           else if (sig.condition === (priceChange.changeRate24h < -0.1)) activeSignals.push('24시간 10% 이상 하락');
+          else if (sig.condition === (obv && obv.trend === 'UP')) activeSignals.push('OBV 상승 추세');
+          else if (sig.condition === (adx && adx.trend === 'STRONG' && adx.plusDI > adx.minusDI)) activeSignals.push('ADX 강한 상승 추세');
+          else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume)) activeSignals.push('매수 고래 감지');
         }
       });
     } else if (signal === 'SELL') {
       sellSignalsWithWeight.forEach(sig => {
         if (sig.condition && sig.weight >= 2.0) {
           if (sig.condition === (rsi > 80)) activeSignals.push('RSI 극도의 과매수');
+          else if (sig.condition === (stochasticRSI && stochasticRSI.k > 80 && stochasticRSI.d > 80)) activeSignals.push('Stochastic RSI 과매수');
           else if (sig.condition === (currentPrice > bollinger.upper)) activeSignals.push('볼린저 상단 돌파');
           else if (sig.condition === (kimchiPremium > 5)) activeSignals.push('김프 과열');
           else if (sig.condition === (fearGreedIndex > 85)) activeSignals.push('극도의 탐욕');
           else if (sig.condition === (volumeRatio > 2.0 && priceChange.changeRate24h > 0)) activeSignals.push('상승 중 거래량 급증');
           else if (sig.condition === (priceChange.changeRate24h > 0.15)) activeSignals.push('24시간 15% 이상 급등');
+          else if (sig.condition === (obv && obv.trend === 'DOWN')) activeSignals.push('OBV 하락 추세');
+          else if (sig.condition === (adx && adx.trend === 'STRONG' && adx.minusDI > adx.plusDI)) activeSignals.push('ADX 강한 하락 추세');
+          else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume)) activeSignals.push('매도 고래 감지');
         }
       });
     }
@@ -379,9 +723,13 @@ class AnalysisService {
     return {
       market: candles[0].market,
       rsi,
+      stochasticRSI,
       macd,
       bollinger,
       sma: { sma20, sma50 },
+      atr,
+      obv,
+      adx,
       signal,
       confidence,
       timestamp: Date.now(),
@@ -400,7 +748,11 @@ class AnalysisService {
         sellScore: normalizedSellScore,
         activeSignals
       },
-      newsAnalysis
+      newsAnalysis,
+      // Additional properties for compatibility
+      volumeRatio,
+      obvTrend: obv ? (obv.trend === 'UP' ? 1 : obv.trend === 'DOWN' ? -1 : 0) : 0,
+      whaleActivity: tradesData?.whaleDetected || false
     };
   }
 

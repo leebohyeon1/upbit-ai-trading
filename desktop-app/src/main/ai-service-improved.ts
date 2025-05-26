@@ -6,7 +6,7 @@ export function generateImprovedAnalysis(technical: any): string {
   let analysis = '';
   
   // 🎯 핵심 인사이트
-  analysis += `💡 **핵심 인사이트**:\n`;
+  analysis += `💡 **지금 상황을 정리하면**:\n`;
   
   // 가장 강력한 신호 찾기
   const strongSignals = [];
@@ -16,21 +16,21 @@ export function generateImprovedAnalysis(technical: any): string {
   if (newsAnalysis && Math.abs(newsAnalysis.sentimentScore) > 30) strongSignals.push(`뉴스 감정 ${newsAnalysis.sentimentScore}점 - ${newsAnalysis.sentimentScore > 0 ? '긍정적' : '부정적'} 여론`);
   
   if (strongSignals.length > 0) {
-    analysis += `• 지금 주목해야 할 신호: ${strongSignals.join(', ')}\n`;
+    analysis += `• 이거 봐야 해요: ${strongSignals.join(', ')}\n`;
   }
   
   // 🧠 시장 심리 종합 판단
-  analysis += `\n🧠 **시장 심리 분석**:\n`;
+  analysis += `\n🧠 **지금 사람들 분위기는**:\n`;
   const marketSentiment = (fearGreedIndex || 50) + (newsAnalysis ? newsAnalysis.sentimentScore / 2 : 0);
   
   if (marketSentiment > 70) {
-    analysis += `• 시장이 과도하게 낙관적입니다. FOMO(Fear of Missing Out)에 휩쓸리지 마세요.\n`;
-    analysis += `• 대중이 욕심낼 때 두려워하는 것이 현명합니다. 분할 매도를 고려하세요.\n`;
+    analysis += `• 지금 다들 너무 흥분해 있어요. "나만 놓치나?"하는 FOMO에 휩쓸리지 마세요.\n`;
+    analysis += `• 남들이 욕심낼 때 조심하는 게 현명해요. 지금은 오히려 팔 타이밍을 보세요.\n`;
   } else if (marketSentiment < 30) {
-    analysis += `• 극도의 공포 상태입니다. 워렌 버핏의 말처럼 "남들이 두려워할 때 탐욕스러워지세요".\n`;
-    analysis += `• 패닉 셀링이 일어나는 지금이 오히려 좋은 매수 기회일 수 있습니다.\n`;
+    analysis += `• 모두가 공포에 떨고 있어요. 버핏 할아버지 말처럼 "남들이 무서워할 때 사라"고 하죠?\n`;
+    analysis += `• 다들 패닉에 빠져서 팔고 있어요. 이럴 때가 오히려 기회일 수 있어요.\n`;
   } else {
-    analysis += `• 시장 심리는 중립적입니다. 기술적 지표를 더 중요하게 봐야 할 시점입니다.\n`;
+    analysis += `• 지금은 특별히 좋지도 나쁘지도 않아요. 차트를 더 꾼꾼히 봐야 할 때에요.\n`;
   }
   
   // 거래량과 체결 분석으로 실제 수급 파악
@@ -44,7 +44,7 @@ export function generateImprovedAnalysis(technical: any): string {
   }
   
   // 📊 실전 매매 전략 (구체적이고 실용적으로)
-  analysis += `\n📊 **실전 매매 전략**:\n`;
+  analysis += `\n📊 **그래서 어떻게 하라고요?**:\n`;
   const currentPrice = bollinger.middle;
   
   switch (signal) {
@@ -54,7 +54,7 @@ export function generateImprovedAnalysis(technical: any): string {
       const buyTarget1 = currentPrice * 1.02;
       const buyTarget2 = currentPrice * 1.05;
       
-      analysis += `🟢 매수 전략:\n`;
+      analysis += `🟢 매수하려면:\n`;
       analysis += `• 1차 진입: ${buyEntry.toFixed(0)}원 (현재가 -0.5%)\n`;
       analysis += `• 2차 진입: ${(currentPrice * 0.98).toFixed(0)}원 (추가 하락 시)\n`;
       analysis += `• 손절가: ${buyStop.toFixed(0)}원 (-3%) - 칼같이 지키세요!\n`;
@@ -75,7 +75,7 @@ export function generateImprovedAnalysis(technical: any): string {
       const sellStop = currentPrice * 1.03;
       const sellTarget = currentPrice * 0.97;
       
-      analysis += `🔴 매도 전략:\n`;
+      analysis += `🔴 매도하려면:\n`;
       analysis += `• 1차 매도: ${sellEntry.toFixed(0)}원 (현재가 +0.5%)\n`;
       analysis += `• 전량 청산: ${(currentPrice * 1.01).toFixed(0)}원 이상\n`;
       analysis += `• 손절가: ${sellStop.toFixed(0)}원 (+3%) - 추세 전환 시\n`;
@@ -91,15 +91,15 @@ export function generateImprovedAnalysis(technical: any): string {
       break;
       
     default:
-      analysis += `⏸️ 관망 전략:\n`;
-      analysis += `• 애매한 구간입니다. 욕심내지 말고 기다리세요.\n`;
+      analysis += `⏸️ 잘 모르겠다면:\n`;
+      analysis += `• 애매할 때는 그냥 구경만 하세요. 선물주기 히트 칠 때까지 기다려요.\n`;
       analysis += `• 매수 진입: RSI 30 이하 또는 볼린저 하단 터치 시\n`;
       analysis += `• 매도 진입: RSI 70 이상 또는 볼린저 상단 돌파 시\n`;
       analysis += `• 지금은 "노 포지션이 최고의 포지션"입니다.\n`;
   }
   
   // 🔮 향후 시나리오
-  analysis += `\n🔮 **향후 전망**:\n`;
+  analysis += `\n🔮 **앞으로 어떻게 될 것 같나요?**:\n`;
   
   // 이동평균선과 MACD로 중장기 트렌드 판단
   if (sma.sma20 > sma.sma50 && macd.histogram > 0) {
@@ -121,7 +121,7 @@ export function generateImprovedAnalysis(technical: any): string {
   }
   
   // ⚠️ 리스크 관리
-  analysis += `\n⚠️ **리스크 관리**:\n`;
+  analysis += `\n⚠️ **이건 주의하세요**:\n`;
   
   const risks = [];
   if (orderbook && orderbook.spread > 0.5) risks.push(`스프레드 ${orderbook.spread.toFixed(3)}% - 슬리피지 주의`);
@@ -133,24 +133,21 @@ export function generateImprovedAnalysis(technical: any): string {
   }
   
   // 🤖 AI의 솔직한 의견
-  analysis += `\n🤖 **AI의 솔직한 조언**:\n`;
+  analysis += `\n🤖 **솔직히 말하면**:\n`;
   
   if (confidence > 70) {
-    analysis += `• 신뢰도 ${confidence.toFixed(1)}%로 확신합니다. 계획대로 진행하세요.\n`;
-    analysis += `• 단, 절대 올인하지 마세요. 분할 매수/매도가 답입니다.\n`;
+    analysis += `• 이건 꽤 확실한 기회예요 (신뢰도 ${confidence.toFixed(1)}%). 그런데 아무리 확실해도 절대 올인은 금물! 나눠서 사세요.\n`;
   } else if (confidence < 40) {
-    analysis += `• 신뢰도 ${confidence.toFixed(1)}%로 낮습니다. 지금은 관망하세요.\n`;
-    analysis += `• 억지로 매매하면 십중팔구 손실입니다. 기다림도 전략입니다.\n`;
+    analysis += `• 음... 솔직히 애매해요 (신뢰도 ${confidence.toFixed(1)}%). 이럴 땐 그냥 구경만 하는 게 최고예요. 억지로 들어가면 보통 손해 봅니다.\n`;
   } else {
-    analysis += `• 신뢰도 ${confidence.toFixed(1)}%로 애매합니다. 소액으로만 테스트하세요.\n`;
-    analysis += `• 시장이 방향을 정할 때까지 기다리는 것이 현명합니다.\n`;
+    analysis += `• 반반입니다 (신뢰도 ${confidence.toFixed(1)}%). 꼭 해야겠다면 소액으로만 해보세요. 시장이 방향을 정할 때까지 기다리는 것도 전략이에요.\n`;
   }
   
   // 개인적인 투자 철학 추가
   if (signal === 'BUY' && confidence > 60) {
-    analysis += `\n💭 "두려움 속에서 사고, 탐욕 속에서 팔아라" - 지금이 그 두려움의 시기일 수 있습니다.\n`;
+    analysis += `\n💭 지금 다들 무서워하고 있어요. 이럴 때가 오히려 기회일 수 있죠. 다만 조금씩 나눠서 사세요!\n`;
   } else if (signal === 'SELL' && confidence > 60) {
-    analysis += `\n💭 "수익을 확정하는 것은 절대 잘못된 선택이 아닙니다" - 욕심이 화를 부릅니다.\n`;
+    analysis += `\n💭 수익 실현하고 후회하는 사람은 못 봤어요. 손절하고 후회하는 사람은 많이 봤죠. 욕심내지 마세요.\n`;
   }
   
   return analysis.trim();

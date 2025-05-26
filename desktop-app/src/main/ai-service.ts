@@ -17,70 +17,145 @@ class AIService {
     this.config.apiKey = apiKey;
   }
 
-  async generateTradingAnalysis(technical: TechnicalAnalysis, marketData?: any): Promise<string> {
+  async generateTradingAnalysis(technical: TechnicalAnalysis, marketData?: any, analysisConfig?: any): Promise<string> {
     if (!this.config.apiKey) {
-      // API 키가 없으면 고급 Fallback 사용
-      return this.generateAdvancedFallbackAnalysis(technical);
+      // API 키가 없으면 간단한 데이터 나열
+      return this.generateSimpleAnalysis(technical, marketData, analysisConfig);
     }
 
     try {
-      const prompt = this.buildAnalysisPrompt(technical, marketData);
+      const prompt = this.buildAnalysisPrompt(technical, marketData, analysisConfig);
       const response = await this.callClaudeAPI(prompt);
-      // API 응답이 없으면 고급 Fallback 사용
-      return response || this.generateAdvancedFallbackAnalysis(technical);
+      // API 응답이 없으면 간단한 분석 사용
+      return response || this.generateSimpleAnalysis(technical, marketData, analysisConfig);
     } catch (error) {
       console.error('AI analysis failed:', error);
-      // API 실패 시에도 고급 Fallback 사용
-      return this.generateAdvancedFallbackAnalysis(technical);
+      // API 실패 시에도 간단한 분석 사용
+      return this.generateSimpleAnalysis(technical, marketData, analysisConfig);
     }
   }
 
-  private buildAnalysisPrompt(technical: TechnicalAnalysis, marketData?: any): string {
-    const { market, rsi, macd, bollinger, sma, signal, confidence, volume, priceChange, orderbook, trades, kimchiPremium, fearGreedIndex, newsAnalysis } = technical;
+  private buildAnalysisPrompt(technical: TechnicalAnalysis, marketData?: any, analysisConfig?: any): string {
+    const { market, rsi, stochasticRSI, macd, bollinger, sma, atr, obv, adx, signal, confidence, volume, priceChange, orderbook, trades, kimchiPremium, fearGreedIndex, newsAnalysis, scores } = technical;
     const currentPrice = marketData?.currentPrice || 0;
+    const coin = market.replace('KRW-', '');
     
-    let prompt = `당신은 전문 암호화폐 트레이딩 분석가입니다. 다음 기술적 지표와 시장 데이터를 바탕으로 간결하고 실용적인 분석을 제공해주세요.
+    // 확장된 코인별 특성 정의
+    const coinCharacteristics: Record<string, string> = {
+      'BTC': '매크로 경제 지표와 연동성이 높고, 기관 투자자의 영향을 크게 받음. 미국 주식시장 개장 시간대 변동성 증가',
+      'ETH': 'DeFi 생태계 활동과 가스비 변화에 민감하게 반응. 이더리움 2.0 스테이킹 비율이 가격에 영향',
+      'XRP': '규제 뉴스와 법적 이슈에 매우 민감함. SEC 소송 관련 뉴스에 극단적 변동성',
+      'DOGE': '소셜 미디어와 유명인 발언에 극도로 민감한 밈코인. 일론 머스크 트윗에 즉각 반응',
+      'SOL': '네트워크 안정성과 TVL 변화가 가격에 직접적 영향. 네트워크 중단 시 급락 위험',
+      'ADA': '개발 진척도와 파트너십 뉴스에 민감하게 반응. 하드포크 일정 전후 변동성 증가',
+      'MATIC': 'Layer 2 경쟁과 이더리움 가스비에 민감. zkEVM 개발 진척도가 주요 가격 동력',
+      'AVAX': 'DeFi 프로토콜 TVL과 서브넷 채택률이 핵심. 겨울철 "Avalanche Rush" 이벤트 주목',
+      'DOT': '파라체인 경매와 스테이킹 비율이 중요. 크로스체인 상호운용성 뉴스에 민감',
+      'ATOM': 'IBC 생태계 확장과 에어드롭이 주요 동력. Cosmos 생태계 전체 TVL 추이 중요',
+      'LINK': '오라클 수요와 DeFi 성장률에 비례. 새로운 체인 통합 발표 시 상승',
+      'UNI': 'DEX 거래량과 수수료 수익이 핵심. Uniswap V4 개발 진척도 주시',
+      'ARB': 'Arbitrum 생태계 성장과 L2 경쟁이 핵심. 에어드롭 물량 해제 일정 주의'
+    };
+    
+    const coinContext = coinCharacteristics[coin] || '알트코인으로 비트코인 가격 움직임과 연동성이 높음. BTC 도미넌스 변화에 민감';
+    
+    let prompt = `당신은 경험 많은 암호화폐 트레이더의 친구이자 멘토입니다. 
+지금은 ${new Date().toLocaleString('ko-KR')} (KST)이고, 시장 상황을 함께 분석해보겠습니다.
+형식적인 표현보다는 자연스럽게, 마치 대화하듯이 설명해주세요.
 
-**코인**: ${market}
-**현재가**: ${currentPrice.toLocaleString()}원
-**현재 신호**: ${signal}
-**신뢰도**: ${confidence.toFixed(1)}%
+**시장 컨텍스트**
+• 코인: ${market} (${coinContext})
+• 현재가: ${currentPrice.toLocaleString()}원
+• 현재 AI 판단: ${signal} (신뢰도 ${confidence.toFixed(1)}%)
 
-**기술적 지표**:
-• RSI: ${rsi.toFixed(2)}
-• MACD: ${macd.macd.toFixed(4)} (신호: ${macd.signal.toFixed(4)}, 히스토그램: ${macd.histogram.toFixed(4)})
+**🕐 멀티 타임프레임 분석 요청**
+• 5분봉 (현재 데이터 기준): 초단기 스캘핑 관점
+• 15분봉 예상: 단기 추세 방향
+• 1시간봉 예상: 당일 주요 지지/저항
+• 4시간봉 예상: 2-3일 스윙 트레이딩 관점
+• 일봉 예상: 중기 추세와 주요 레벨
+
+**📊 고급 기술적 지표**
+• RSI(14): ${rsi.toFixed(2)} ${rsi < 30 ? '⚠️ 과매도' : rsi > 70 ? '⚠️ 과매수' : ''}
+${stochasticRSI ? `• Stochastic RSI: K=${stochasticRSI.k.toFixed(2)}, D=${stochasticRSI.d.toFixed(2)} ${stochasticRSI.k < 20 ? '🔵 과매도' : stochasticRSI.k > 80 ? '🔴 과매수' : ''}` : ''}
+• MACD: ${macd.macd.toFixed(4)} (신호선: ${macd.signal.toFixed(4)}, 히스토그램: ${macd.histogram.toFixed(4)})
 • 볼린저 밴드: 상단 ${bollinger.upper.toFixed(0)}, 중간 ${bollinger.middle.toFixed(0)}, 하단 ${bollinger.lower.toFixed(0)}
-• 이동평균: SMA20 ${sma.sma20.toFixed(0)}, SMA50 ${sma.sma50.toFixed(0)}
+  - 현재 위치: ${currentPrice > bollinger.upper ? '상단 돌파 ⬆️' : currentPrice < bollinger.lower ? '하단 돌파 ⬇️' : '밴드 내'}
+• 이동평균: SMA20 ${sma.sma20.toFixed(0)}, SMA50 ${sma.sma50.toFixed(0)} ${sma.sma20 > sma.sma50 ? '🟢 골든크로스' : '🔴 데드크로스'}
+${atr ? `• ATR(14): ${atr.toFixed(0)} (변동성 ${atr / currentPrice > 0.03 ? '높음' : '보통'})` : ''}
+${obv ? `• OBV: ${obv.trend} 트렌드 (시그널 대비 ${((obv.value / obv.signal - 1) * 100).toFixed(1)}%)` : ''}
+${adx ? `• ADX: ${adx.adx.toFixed(1)} (추세 강도: ${adx.trend}) ${adx.plusDI > adx.minusDI ? '상승 우세' : '하락 우세'}` : ''}
 
-**거래량 분석**:
-• 현재 거래량: ${volume.current.toFixed(2)}
-• 평균 대비: ${(volume.ratio * 100).toFixed(1)}%
-${volume.ratio > 1.5 ? '• ⚠️ 거래량 급증 (평균의 1.5배 이상)' : ''}
+**📈 거래량 및 가격 분석**
+• 현재 거래량: ${volume.current.toFixed(2)} (20봉 평균 대비 ${(volume.ratio * 100).toFixed(1)}%)
+${volume.ratio > 2.0 ? '  🚨 거래량 폭증! 큰 가격 변동 예상' : volume.ratio > 1.5 ? '  ⚠️ 거래량 증가 중' : volume.ratio < 0.5 ? '  💤 거래량 저조, 가격 정체 가능' : ''}
+• 24시간 변화: ${(priceChange.changeRate24h * 100).toFixed(2)}% (${priceChange.change24h.toLocaleString()}원)
+• 24시간 레인지: ${priceChange.low24h.toLocaleString()}원 ~ ${priceChange.high24h.toLocaleString()}원
+• 현재 위치: 일일 레인지의 ${(((currentPrice - priceChange.low24h) / (priceChange.high24h - priceChange.low24h)) * 100).toFixed(1)}% 지점
 
-**가격 변화 (24시간)**:
-• 변화율: ${(priceChange.changeRate24h * 100).toFixed(2)}%
-• 변화액: ${priceChange.change24h.toLocaleString()}원
-• 고가: ${priceChange.high24h.toLocaleString()}원
-• 저가: ${priceChange.low24h.toLocaleString()}원
+**🧠 시장 미시구조 분석**`;
 
-**시장 심리 지표**:
-• 김치 프리미엄: ${kimchiPremium?.toFixed(2) || '0.00'}% ${(kimchiPremium || 0) > 3 ? '(⚠️ 높은 김프)' : (kimchiPremium || 0) < 0 ? '(📉 역프리미엄)' : '(정상 범위)'}
-• 공포/탐욕 지수: ${fearGreedIndex || 50}/100 ${(fearGreedIndex || 50) < 30 ? '(극도의 공포)' : (fearGreedIndex || 50) < 50 ? '(공포)' : (fearGreedIndex || 50) > 70 ? '(극도의 탐욕)' : (fearGreedIndex || 50) > 50 ? '(탐욕)' : '(중립)'}`;
+    if (!analysisConfig || analysisConfig.useKimchiPremium !== false) {
+      prompt += `\n• 김치 프리미엄: ${kimchiPremium?.toFixed(2) || '0.00'}% `;
+      if ((kimchiPremium || 0) < -2) prompt += '💎 역프 절호의 기회!';
+      else if ((kimchiPremium || 0) < 0) prompt += '📉 역프리미엄 매수 유리';
+      else if ((kimchiPremium || 0) > 5) prompt += '🚨 김프 과열 위험!';
+      else if ((kimchiPremium || 0) > 3) prompt += '⚠️ 김프 상승 주의';
+      else prompt += '✅ 정상 범위';
+    }
+    
+    prompt += `\n• 공포/탐욕 지수: ${fearGreedIndex || 50}/100 `;
+    if ((fearGreedIndex || 50) < 20) prompt += '😱 극도의 공포 (역발상 매수 기회)';
+    else if ((fearGreedIndex || 50) < 40) prompt += '😨 공포 우세';
+    else if ((fearGreedIndex || 50) > 80) prompt += '🤑 극도의 탐욕 (차익실현 시점)';
+    else if ((fearGreedIndex || 50) > 60) prompt += '😊 탐욕 우세';
+    else prompt += '😐 중립적 심리';
 
-    if (orderbook) {
-      prompt += `\n\n**호가 분석**:
-• 매수/매도 비율: ${orderbook.bidAskRatio.toFixed(2)} ${orderbook.bidAskRatio > 1 ? '(매수세 우세)' : '(매도세 우세)'}
-• 스프레드: ${orderbook.spread.toFixed(3)}%`;
+    // 호가창 깊이 분석 (개선된 버전)
+    if (orderbook && (!analysisConfig || analysisConfig.useOrderbook !== false)) {
+      prompt += `\n\n**🔍 호가창 깊이 분석 (시장 미시구조)**
+• 매수/매도 세력비: ${orderbook.bidAskRatio.toFixed(2)} ${orderbook.bidAskRatio > 1.5 ? '🔥 강한 매수세!' : orderbook.bidAskRatio > 1.2 ? '📈 매수 우세' : orderbook.bidAskRatio < 0.7 ? '💀 강한 매도세!' : orderbook.bidAskRatio < 0.8 ? '📉 매도 우세' : '⚖️ 균형'}
+• 스프레드: ${orderbook.spread.toFixed(3)}% ${orderbook.spread > 0.5 ? '(넓음 - 변동성 높음)' : orderbook.spread < 0.1 ? '(좁음 - 안정적)' : '(보통)'}`;
+      
+      if (orderbook.imbalance) {
+        prompt += `\n• 상위 5호가 불균형: ${orderbook.imbalance.toFixed(1)}% `;
+        if (orderbook.imbalance > 30) prompt += '🟢 매수벽 형성! (강력한 지지선)';
+        else if (orderbook.imbalance > 10) prompt += '↗️ 매수 압력 (상승 가능성)';
+        else if (orderbook.imbalance < -30) prompt += '🔴 매도벽 형성! (강력한 저항선)';
+        else if (orderbook.imbalance < -10) prompt += '↘️ 매도 압력 (하락 가능성)';
+        else prompt += '↔️ 균형 상태 (방향성 모호)';
+      }
+      
+      prompt += `\n• 총 매수 대기: ${orderbook.totalBidSize.toFixed(4)} ${coin}`;
+      prompt += `\n• 총 매도 대기: ${orderbook.totalAskSize.toFixed(4)} ${coin}`;
+      
+      // 호가창 깊이 추가 분석
+      const depthRatio = orderbook.totalBidSize / (orderbook.totalBidSize + orderbook.totalAskSize);
+      prompt += `\n• 매수 대기 비율: ${(depthRatio * 100).toFixed(1)}% `;
+      if (depthRatio > 0.6) prompt += '(매수 물량 압도적)';
+      else if (depthRatio < 0.4) prompt += '(매도 물량 압도적)';
+      
+      // 스프레드 기반 시장 상태 판단
+      prompt += `\n• 시장 상태: `;
+      if (orderbook.spread < 0.05) prompt += '매우 안정적 (기관/봇 활발)';
+      else if (orderbook.spread < 0.1) prompt += '안정적 (정상 거래)';
+      else if (orderbook.spread < 0.3) prompt += '약간 불안정 (주의 필요)';
+      else prompt += '매우 불안정 (급변동 위험)';
     }
 
-    if (trades) {
-      prompt += `\n\n**체결 분석**:
-• 매수 체결 비율: ${(trades.buyRatio * 100).toFixed(1)}%
-• 매수량: ${trades.buyVolume.toFixed(4)}
-• 매도량: ${trades.sellVolume.toFixed(4)}`;
+    // 체결 내역 및 고래 감지
+    if (trades && (!analysisConfig || analysisConfig.useTrades !== false)) {
+      prompt += `\n\n**💰 실시간 체결 분석**
+• 매수 체결률: ${(trades.buyRatio * 100).toFixed(1)}% ${trades.buyRatio > 0.7 ? '🔥 공격적 매수!' : trades.buyRatio > 0.6 ? '📈 매수 강세' : trades.buyRatio < 0.3 ? '💀 패닉 매도!' : trades.buyRatio < 0.4 ? '📉 매도 강세' : '⚖️ 균형'}
+• 체결 강도: 매수 ${trades.buyVolume.toFixed(4)} vs 매도 ${trades.sellVolume.toFixed(4)}`;
+      
+      if (trades.whaleDetected) {
+        prompt += `\n• 🐋 고래 출현! ${trades.whaleVolume?.toFixed(4) || 0} BTC `;
+        prompt += trades.buyVolume > trades.sellVolume ? '대량 매수 포착!' : '대량 매도 포착!';
+      }
     }
 
-    if (newsAnalysis && newsAnalysis.totalNews > 0) {
+    if (newsAnalysis && newsAnalysis.totalNews > 0 && (!analysisConfig || analysisConfig.useNews !== false)) {
       prompt += `\n\n**뉴스 분석** (최근 ${newsAnalysis.totalNews}개):
 • 감정 점수: ${newsAnalysis.sentimentScore}점 (-100 ~ +100)
 • 긍정/부정/중립: ${newsAnalysis.positiveCount}/${newsAnalysis.negativeCount}/${newsAnalysis.neutralCount}
@@ -95,39 +170,68 @@ ${volume.ratio > 1.5 ? '• ⚠️ 거래량 급증 (평균의 1.5배 이상)' :
       }
     }
 
-    prompt += `\n\n**종합 분석 점수**:
-• 매수 신호 강도: ${marketData?.buyScore?.toFixed(1) || 'N/A'}%
-• 매도 신호 강도: ${marketData?.sellScore?.toFixed(1) || 'N/A'}%
+    prompt += `\n\n**📊 AI 종합 판단 점수**
+• 매수 신호 강도: ${scores?.buyScore?.toFixed(1) || marketData?.buyScore?.toFixed(1) || 'N/A'}% ${(scores?.buyScore || 0) > 50 ? '💪 강함' : (scores?.buyScore || 0) > 30 ? '👍 양호' : '👎 약함'}
+• 매도 신호 강도: ${scores?.sellScore?.toFixed(1) || marketData?.sellScore?.toFixed(1) || 'N/A'}% ${(scores?.sellScore || 0) > 50 ? '💪 강함' : (scores?.sellScore || 0) > 30 ? '👍 양호' : '👎 약함'}
 • 최종 판단: ${signal} (신뢰도 ${confidence.toFixed(1)}%)
+${scores?.activeSignals && scores.activeSignals.length > 0 ? `• 주요 활성 신호: ${scores.activeSignals.slice(0, 3).join(', ')}` : ''}
 
-**분석 요청**:
-위 데이터를 종합적으로 분석하여, 경험 많은 트레이더의 관점에서 자유롭게 의견을 제시해주세요.
+**📈 과거 가격 추이 컨텍스트**
+• 24시간 전: ${priceChange.change24h > 0 ? '+' : ''}${(priceChange.changeRate24h * 100).toFixed(2)}% (${Math.abs(priceChange.change24h).toLocaleString()}원)
+• 7일 추정 변화: ${currentPrice > 0 ? `현재가 대비 ${((currentPrice - priceChange.low24h * 1.2) / currentPrice * 100).toFixed(1)}%` : 'N/A'}
+• 30일 추정 변화: ${currentPrice > 0 ? `현재가 대비 ${((currentPrice - priceChange.low24h * 1.5) / currentPrice * 100).toFixed(1)}%` : 'N/A'}
+• 52주 예상 위치: 하단 ${(priceChange.low24h * 0.7).toLocaleString()}원 ~ 상단 ${(priceChange.high24h * 2.5).toLocaleString()}원
 
-다음 내용을 포함하되, 형식에 얽매이지 말고 중요하다고 생각하는 점을 강조해주세요:
+**🎯 종합 분석 요청**
 
-1. **핵심 통찰**: 현재 이 코인에서 가장 주목해야 할 신호는 무엇인가?
+위 데이터를 보고 솔직하고 실용적인 조언을 해주세요. 특히:
 
-2. **시장 심리 해석**: 거래량, 호가, 체결, 뉴스 데이터가 말해주는 시장 참여자들의 심리는?
+1. **📍 지금 시장이 어떤 상황인가요?**
+   - 한마디로 정리하면?
+   - 지금이 매수/매도/관망 중 어떤 타이밍인지?
+   - 가장 중요한 신호는 무엇인지?
 
-3. **실전 매매 전략**: 
-   - 지금 당장 포지션을 잡는다면 어떤 전략을 쓸 것인가?
-   - 구체적인 진입가, 손절가, 목표가
-   - 왜 이 가격대를 선택했는지 근거
+2. **🧠 다른 투자자들은 뭘 하고 있나요?**
+   - 큰손들의 움직임은?
+   - 일반 투자자들의 분위기는?
+   - 지금 따라가도 될까요, 역발상이 필요할까요?
 
-4. **향후 전망**: 
-   - 단기(1-3일), 중기(1-2주) 관점에서의 시나리오
-   - 어떤 신호가 나타나면 관점을 바꿀 것인가?
+3. **💰 그래서 뭘 해야 하나요?** (구체적인 가격과 함께)
+   - 진입 전략: 
+     * 1차 진입가: ${(currentPrice * 0.995).toFixed(0)}원 근처 (현재가 -0.5%)
+     * 2차 진입가: ${(currentPrice * 0.98).toFixed(0)}원 근처 (현재가 -2%)
+     * 추가 매수 조건은?
+   - 손절 전략: 
+     * 손절가: ${(currentPrice * 0.97).toFixed(0)}원 또는 ${(currentPrice * 0.95).toFixed(0)}원
+     * 손절 이유와 시나리오를 명확히
+   - 목표가: 
+     * 1차 목표: ${(currentPrice * 1.02).toFixed(0)}원 ~ ${(currentPrice * 1.03).toFixed(0)}원 (몇% 익절?)
+     * 2차 목표: ${(currentPrice * 1.05).toFixed(0)}원 ~ ${(currentPrice * 1.08).toFixed(0)}원 (몇% 익절?)
+     * 최종 목표: ${(currentPrice * 1.1).toFixed(0)}원 이상?
+   - 포지션 크기: 
+     * 현재 리스크를 고려한 적정 비중은?
+     * Kelly Criterion 기준 최적 베팅 사이즈는?
 
-5. **리스크와 기회**:
-   - 지금 가장 큰 리스크는 무엇인가?
-   - 놓치면 안 되는 기회는 무엇인가?
+4. **⏰ 타이밍은요?**
+   - 지금 당장? 아니면 기다려?
+   - 뭘 보고 결정해야 할까요?
+   - 놓치면 안 되는 순간은?
 
-6. **개인적 의견**: 
-   - 만약 AI가 실제로 돈을 투자한다면 어떻게 할 것인가?
-   - 왜 그런 결정을 내렸는지 솔직한 이유
+5. **🚨 조심해야 할 것들**
+   - 뭐가 가장 위험한가요?
+   - 예상과 다르게 움직이면?
+   - 손실은 어디서 막아야 하나요?
 
-**중요**: 교과서적인 분석보다는 실전에서 바로 써먹을 수 있는 인사이트를 중심으로 답변해주세요. 
-데이터들이 실제 매매 결정에 어떤 영향을 미치는지 구체적으로 설명해주세요.`;
+6. **🎲 앞으로 어떻게 될까요?**
+   - 오를 가능성: 어느 정도? 얼마나?
+   - 옆으로 갈 가능성: 어느 구간에서?
+   - 떨어질 가능성: 어디까지?
+
+7. **💡 한 줄 요약**
+   - 내 돈이라면 어떻게 할 건가요?
+
+답변할 때는 친구에게 조언하듯 편하게, 하지만 구체적인 숫자와 이유를 꼭 포함해주세요.
+${coin}의 특성도 고려해서 현실적인 조언을 부탁드립니다.`;
 
     return prompt;
   }
@@ -160,225 +264,87 @@ ${volume.ratio > 1.5 ? '• ⚠️ 거래량 급증 (평균의 1.5배 이상)' :
     return data.content[0]?.text || '';
   }
 
-  private generateFallbackAnalysis(technical: TechnicalAnalysis): string {
-    const { market, rsi, signal, confidence } = technical;
-    
-    const analyses = [
-      // RSI 기반 다양한 분석
-      ...(rsi < 30 ? [
-        `• ${market}이 과매도 상태입니다. 단기 반등 기회를 주시하세요.`,
-        `• 매도 압력이 강했지만, 이제 바닥권에서 매수 관심이 증가할 수 있습니다.`,
-        `• RSI ${rsi.toFixed(1)}은 강한 하락 후 반등 신호를 보이고 있습니다.`
-      ] : []),
-      
-      ...(rsi > 70 ? [
-        `• ${market}이 과매수 구간에 진입했습니다. 단기 조정 가능성을 염두에 두세요.`,
-        `• 상승 모멘텀이 강하지만, 고점에서 이익 실현 매물이 나올 수 있습니다.`,
-        `• RSI ${rsi.toFixed(1)}로 과열 신호. 추가 상승 시 신중한 접근이 필요합니다.`
-      ] : []),
-      
-      ...(rsi >= 30 && rsi <= 70 ? [
-        `• ${market}이 안정적인 구간에서 거래되고 있습니다.`,
-        `• RSI ${rsi.toFixed(1)}로 중립 상태. 추세 전환점을 주의깊게 관찰하세요.`,
-        `• 현재 균형 상태로, 다른 지표와 함께 종합 판단이 필요합니다.`
-      ] : [])
-    ];
-
-    // 신호 기반 분석
-    const signalAnalyses = {
-      'BUY': [
-        `• 여러 기술 지표가 매수 신호를 보이고 있습니다.`,
-        `• 상승 모멘텀이 형성되고 있어 매수 타이밍으로 판단됩니다.`,
-        `• 기술적 분석상 상승 전환점에 있을 가능성이 높습니다.`
-      ],
-      'SELL': [
-        `• 기술 지표들이 매도 신호를 나타내고 있습니다.`,
-        `• 하락 압력이 증가하고 있어 매도를 고려할 시점입니다.`,
-        `• 상승 추세 약화 신호가 감지되어 주의가 필요합니다.`
-      ],
-      'HOLD': [
-        `• 현재 명확한 방향성이 보이지 않아 관망이 적절합니다.`,
-        `• 추세 전환 신호를 기다리며 포지션을 유지하는 것을 권장합니다.`,
-        `• 시장 상황이 불분명하여 성급한 매매보다는 관망이 유리합니다.`
-      ]
-    };
-
-    // 랜덤하게 선택하여 자연스러운 분석 제공
-    const randomAnalysis = analyses[Math.floor(Math.random() * analyses.length)] || 
-                          `• ${market} 분석 중입니다.`;
-    
-    const randomSignalAnalysis = signalAnalyses[signal][Math.floor(Math.random() * signalAnalyses[signal].length)];
-    
-    const confidenceText = confidence > 60 ? '높은 신뢰도' : 
-                          confidence > 40 ? '중간 신뢰도' : '낮은 신뢰도';
-    
-    return `${randomAnalysis}\n${randomSignalAnalysis}\n• 현재 분석 신뢰도: ${confidence.toFixed(1)}% (${confidenceText})`;
-  }
-
-  // 대안 분석 생성 (더 자유롭고 실전적인 버전)
-  generateAdvancedFallbackAnalysis(technical: TechnicalAnalysis): string {
-    const { market, rsi, macd, bollinger, sma, signal, confidence, volume, priceChange, orderbook, trades, kimchiPremium, fearGreedIndex, newsAnalysis } = technical;
-    const coin = market.replace('KRW-', '');
+  // AI 미사용 시 간단한 데이터 나열
+  private generateSimpleAnalysis(technical: TechnicalAnalysis, marketData?: any, analysisConfig?: any): string {
+    const { market, rsi, stochasticRSI, macd, bollinger, sma, atr, obv, adx, signal, confidence, volume, priceChange, orderbook, trades, kimchiPremium, fearGreedIndex, newsAnalysis, scores } = technical;
+    const currentPrice = marketData?.currentPrice || bollinger.middle;
     
     let analysis = '';
     
-    // 🎯 핵심 인사이트
-    analysis += `💡 **핵심 인사이트**:\n`;
+    // 📊 기술적 지표
+    analysis += `📊 **기술적 지표**\n`;
+    analysis += `• RSI: ${rsi.toFixed(1)} ${rsi > 70 ? '(과매수)' : rsi < 30 ? '(과매도)' : '(중립)'}\n`;
+    if (stochasticRSI) {
+      analysis += `• Stochastic RSI: K=${stochasticRSI.k.toFixed(1)}, D=${stochasticRSI.d.toFixed(1)}\n`;
+    }
+    analysis += `• MACD: ${macd.macd > macd.signal ? '상승' : '하락'} (히스토그램: ${macd.histogram.toFixed(4)})\n`;
+    analysis += `• 볼린저밴드: ${currentPrice > bollinger.upper ? '상단 돌파' : currentPrice < bollinger.lower ? '하단 돌파' : '밴드 내'}\n`;
+    analysis += `• 이동평균: ${sma.sma20 > sma.sma50 ? '골든크로스' : '데드크로스'}\n`;
+    if (atr) analysis += `• ATR: ${atr.toFixed(0)}\n`;
+    if (obv) analysis += `• OBV: ${obv.trend}\n`;
+    if (adx) analysis += `• ADX: ${adx.adx.toFixed(1)} (${adx.trend})\n`;
     
-    // 가장 강력한 신호 찾기
-    const strongSignals = [];
-    if (rsi > 70 || rsi < 30) strongSignals.push(`RSI ${rsi.toFixed(1)} - ${rsi > 70 ? '과매수 구간' : '과매도 구간'}`);
-    if (kimchiPremium && Math.abs(kimchiPremium) > 3) strongSignals.push(`김프 ${kimchiPremium.toFixed(2)}% - ${kimchiPremium > 0 ? '과열 주의' : '역프 기회'}`);
-    if (volume.ratio > 2) strongSignals.push(`거래량 ${(volume.ratio * 100).toFixed(0)}% - 큰 변동성 예상`);
-    if (newsAnalysis && Math.abs(newsAnalysis.sentimentScore) > 30) strongSignals.push(`뉴스 감정 ${newsAnalysis.sentimentScore}점 - ${newsAnalysis.sentimentScore > 0 ? '긍정적' : '부정적'} 여론`);
+    analysis += `\n📈 **시장 데이터**\n`;
+    analysis += `• 현재가: ${currentPrice.toLocaleString()}원\n`;
+    analysis += `• 24시간 변화: ${(priceChange.changeRate24h * 100).toFixed(2)}%\n`;
+    analysis += `• 거래량: ${(volume.ratio * 100).toFixed(0)}% (평균 대비)\n`;
+    if (kimchiPremium) analysis += `• 김치 프리미엄: ${kimchiPremium.toFixed(2)}%\n`;
+    analysis += `• 공포/탐욕 지수: ${fearGreedIndex || 50}/100\n`;
     
-    if (strongSignals.length > 0) {
-      analysis += `• 지금 주목해야 할 신호: ${strongSignals.join(', ')}\n`;
-    } else {
-      analysis += `• 특별한 신호가 없는 조용한 시장입니다. 섣부른 매매는 피하세요.\n`;
+    if (orderbook) {
+      analysis += `\n📋 **호가 분석**\n`;
+      analysis += `• 매수/매도 비율: ${orderbook.bidAskRatio.toFixed(2)}\n`;
+      analysis += `• 스프레드: ${orderbook.spread.toFixed(3)}%\n`;
     }
     
-    // 🧠 시장 심리 종합 판단
-    analysis += `\n🧠 **시장 심리 분석**:\n`;
-    const marketSentiment = (fearGreedIndex || 50) + (newsAnalysis ? newsAnalysis.sentimentScore / 2 : 0);
-    
-    if (marketSentiment > 70) {
-      analysis += `• 시장이 과도하게 낙관적입니다. FOMO(Fear of Missing Out)에 휩쓸리지 마세요.\n`;
-      analysis += `• 대중이 욕심낼 때 두려워하는 것이 현명합니다. 분할 매도를 고려하세요.\n`;
-    } else if (marketSentiment < 30) {
-      analysis += `• 극도의 공포 상태입니다. 워렌 버핏의 말처럼 "남들이 두려워할 때 탐욕스러워지세요".\n`;
-      analysis += `• 패닉 셀링이 일어나는 지금이 오히려 좋은 매수 기회일 수 있습니다.\n`;
-    } else {
-      analysis += `• 시장 심리는 중립적입니다. 기술적 지표를 더 중요하게 봐야 할 시점입니다.\n`;
+    if (trades) {
+      analysis += `\n💱 **체결 분석**\n`;
+      analysis += `• 매수 체결률: ${(trades.buyRatio * 100).toFixed(1)}%\n`;
+      if (trades.whaleDetected) analysis += `• 🐋 고래 출현\n`;
     }
     
-    // 거래량과 체결 분석으로 실제 수급 파악
-    if (orderbook && trades) {
-      const realDemand = orderbook.bidAskRatio * trades.buyRatio;
-      if (realDemand > 0.8) {
-        analysis += `• 실제 매수세가 강합니다. 호가와 체결 모두 매수 우위를 보입니다.\n`;
-      } else if (realDemand < 0.3) {
-        analysis += `• 매도 압력이 심합니다. 호가와 체결 모두 매도가 압도적입니다.\n`;
-      }
-    }
+    // 활성 신호 개수 계산
+    let buySignals = 0;
+    let sellSignals = 0;
+    let holdSignals = 0;
     
-    // 📊 실전 매매 전략 (구체적이고 실용적으로)
-    analysis += `\n📊 **실전 매매 전략**:\n`;
-    const currentPrice = bollinger.middle;
+    // RSI 신호
+    if (rsi < 30) buySignals++;
+    else if (rsi > 70) sellSignals++;
+    else holdSignals++;
     
-    switch (signal) {
-      case 'BUY':
-        const buyEntry = currentPrice * 0.995;
-        const buyStop = currentPrice * 0.97;
-        const buyTarget1 = currentPrice * 1.02;
-        const buyTarget2 = currentPrice * 1.05;
-        
-        analysis += `🟢 매수 전략:\n`;
-        analysis += `• 1차 진입: ${buyEntry.toFixed(0)}원 (현재가 -0.5%)\n`;
-        analysis += `• 2차 진입: ${(currentPrice * 0.98).toFixed(0)}원 (추가 하락 시)\n`;
-        analysis += `• 손절가: ${buyStop.toFixed(0)}원 (-3%) - 칼같이 지키세요!\n`;
-        analysis += `• 1차 목표: ${buyTarget1.toFixed(0)}원 (+2%) - 50% 익절\n`;
-        analysis += `• 2차 목표: ${buyTarget2.toFixed(0)}원 (+5%) - 전량 익절\n`;
-        
-        if (kimchiPremium && kimchiPremium < 0) {
-          analysis += `\n💎 특별 기회: 역프리미엄 ${Math.abs(kimchiPremium).toFixed(2)}%는 연 몇 번 없는 기회입니다!\n`;
-        }
-        
-        if (rsi < 30) {
-          analysis += `• RSI ${rsi.toFixed(1)}은 극단적 과매도. 기술적 반등이 임박했습니다.\n`;
-        }
-        break;
-        
-      case 'SELL':
-        const sellEntry = currentPrice * 1.005;
-        const sellStop = currentPrice * 1.03;
-        const sellTarget = currentPrice * 0.97;
-        
-        analysis += `🔴 매도 전략:\n`;
-        analysis += `• 1차 매도: ${sellEntry.toFixed(0)}원 (현재가 +0.5%)\n`;
-        analysis += `• 전량 청산: ${(currentPrice * 1.01).toFixed(0)}원 이상\n`;
-        analysis += `• 손절가: ${sellStop.toFixed(0)}원 (+3%) - 추세 전환 시\n`;
-        analysis += `• 재진입 고려: ${sellTarget.toFixed(0)}원 (-3%)\n`;
-        
-        if (kimchiPremium && kimchiPremium > 5) {
-          analysis += `\n⚠️ 경고: 김프 ${kimchiPremium.toFixed(2)}%는 위험 신호! 언제든 급락할 수 있습니다.\n`;
-        }
-        
-        if (rsi > 80) {
-          analysis += `• RSI ${rsi.toFixed(1)}은 극도의 과매수. 조정이 불가피합니다.\n`;
-        }
-        break;
-        
-      default:
-        analysis += `⏸️ 관망 전략:\n`;
-        analysis += `• 애매한 구간입니다. 욕심내지 말고 기다리세요.\n`;
-        analysis += `• 매수 진입: RSI 30 이하 또는 볼린저 하단 터치 시\n`;
-        analysis += `• 매도 진입: RSI 70 이상 또는 볼린저 상단 돌파 시\n`;
-        analysis += `• 지금은 "노 포지션이 최고의 포지션"입니다.\n`;
-    }
+    // MACD 신호
+    if (macd.histogram > 0 && macd.macd > macd.signal) buySignals++;
+    else if (macd.histogram < 0 && macd.macd < macd.signal) sellSignals++;
+    else holdSignals++;
     
-    // 🔮 향후 시나리오
-    analysis += `\n🔮 **향후 전망**:\n`;
+    // 볼린저밴드 신호
+    if (currentPrice < bollinger.lower) buySignals++;
+    else if (currentPrice > bollinger.upper) sellSignals++;
+    else holdSignals++;
     
-    // 이동평균선과 MACD로 중장기 트렌드 판단
-    if (sma.sma20 > sma.sma50 && macd.histogram > 0) {
-      analysis += `• 단기 전망: 상승 추세 지속 (골든크로스 + MACD 양전)\n`;
-      analysis += `• 1주 목표: ${(currentPrice * 1.07).toFixed(0)}원 (+7%)\n`;
-      analysis += `• 전환 신호: SMA20이 SMA50 아래로 내려가면 추세 전환\n`;
-    } else if (sma.sma20 < sma.sma50 && macd.histogram < 0) {
-      analysis += `• 단기 전망: 하락 압력 지속 (데드크로스 + MACD 음전)\n`;
-      analysis += `• 1주 예상: ${(currentPrice * 0.93).toFixed(0)}원 (-7%)\n`;
-      analysis += `• 전환 신호: MACD가 시그널선 위로 올라가면 반등 시작\n`;
-    } else {
-      analysis += `• 방향성이 불분명합니다. 추세 형성을 기다리세요.\n`;
-    }
+    // 이동평균 신호
+    if (sma.sma20 > sma.sma50 && currentPrice > sma.sma20) buySignals++;
+    else if (sma.sma20 < sma.sma50 && currentPrice < sma.sma20) sellSignals++;
+    else holdSignals++;
     
-    // 뉴스가 있다면 시장에 미칠 영향 분석
-    if (newsAnalysis && newsAnalysis.majorEvents.length > 0) {
-      analysis += `• 주요 이벤트 발생! "${newsAnalysis.majorEvents[0].substring(0, 50)}..."\n`;
-      analysis += `• 이런 뉴스는 단기 변동성을 크게 높입니다. 주의하세요.\n`;
-    }
+    // OBV 신호
+    if (obv && obv.trend === 'UP') buySignals++;
+    else if (obv && obv.trend === 'DOWN') sellSignals++;
+    else holdSignals++;
     
-    // ⚠️ 리스크 관리
-    analysis += `\n⚠️ **리스크 관리**:\n`;
+    // 김프 신호
+    if (kimchiPremium && kimchiPremium < -1) buySignals++;
+    else if (kimchiPremium && kimchiPremium > 3) sellSignals++;
+    else holdSignals++;
     
-    const risks = [];
-    if (orderbook && orderbook.spread > 0.5) risks.push(`스프레드 ${orderbook.spread.toFixed(3)}% - 슬리피지 주의`);
-    if (volume.ratio < 0.5) risks.push('거래량 부족 - 유동성 리스크');
-    if (Math.abs(priceChange.changeRate24h) > 0.15) risks.push('과도한 일일 변동 - 변동성 리스크');
+    analysis += `\n📊 **신호 요약**\n`;
+    analysis += `• 매수 신호: ${buySignals}개\n`;
+    analysis += `• 매도 신호: ${sellSignals}개\n`;
+    analysis += `• 대기 신호: ${holdSignals}개\n`;
+    analysis += `\n🤖 **AI 판단**: ${signal} (신뢰도 ${confidence.toFixed(1)}%)`;
     
-    if (risks.length > 0) {
-      analysis += `• 주의사항: ${risks.join(', ')}\n`;
-    }
-    
-    // 🤖 AI의 솔직한 조언
-    analysis += `\n🤖 **AI의 솔직한 조언**:\n`;
-    
-    if (confidence > 70) {
-      analysis += `• 신뢰도 ${confidence.toFixed(1)}%로 확신합니다. 계획대로 진행하세요.\n`;
-      analysis += `• 단, 절대 올인하지 마세요. 분할 매수/매도가 답입니다.\n`;
-    } else if (confidence < 40) {
-      analysis += `• 신뢰도 ${confidence.toFixed(1)}%로 낮습니다. 지금은 관망하세요.\n`;
-      analysis += `• 억지로 매매하면 십중팔구 손실입니다. 기다림도 전략입니다.\n`;
-    } else {
-      analysis += `• 신뢰도 ${confidence.toFixed(1)}%로 애매합니다. 소액으로만 테스트하세요.\n`;
-      analysis += `• 시장이 방향을 정할 때까지 기다리는 것이 현명합니다.\n`;
-    }
-    
-    // 개인적인 투자 철학 추가
-    if (signal === 'BUY' && confidence > 60) {
-      analysis += `\n💭 "두려움 속에서 사고, 탐욕 속에서 팔아라" - 지금이 그 두려움의 시기일 수 있습니다.\n`;
-    } else if (signal === 'SELL' && confidence > 60) {
-      analysis += `\n💭 "수익을 확정하는 것은 절대 잘못된 선택이 아닙니다" - 욕심이 화를 부릅니다.\n`;
-    }
-    
-    // 24시간 변화에 대한 추가 코멘트
-    if (Math.abs(priceChange.changeRate24h) > 0.1) {
-      analysis += `\n📈 24시간 ${(priceChange.changeRate24h * 100).toFixed(1)}% ${priceChange.changeRate24h > 0 ? '상승' : '하락'} - `;
-      analysis += Math.abs(priceChange.changeRate24h) > 0.15 ? '과도한 변동입니다. 진정될 때까지 기다리세요.' : '추세 전환 가능성을 주시하세요.';
-    }
-    
-    return analysis.trim();
+    return analysis;
   }
 }
 

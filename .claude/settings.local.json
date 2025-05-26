@@ -13,7 +13,12 @@
       "Bash(claude mcp:*)",
       "Bash(node:*)",
       "Bash(npx tsc:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run dev:*)",
+      "Bash(find:*)",
+      "Bash(mv:*)",
+      "mcp__filesystem__read_multiple_files",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
