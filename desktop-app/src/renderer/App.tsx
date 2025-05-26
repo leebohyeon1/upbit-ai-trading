@@ -2343,7 +2343,7 @@ const App: React.FC = () => {
                   fullWidth
                   label="기본 매수 비율 (%)"
                   type="number"
-                  value={(tradingConfig.tradingSettings.buying.defaultBuyRatio * 100).toFixed(0)}
+                  value={(tradingConfig.tradingSettings?.buying?.defaultBuyRatio ? tradingConfig.tradingSettings.buying.defaultBuyRatio * 100 : 30).toFixed(0)}
                   onChange={(e) => setTradingConfig({
                     ...tradingConfig,
                     tradingSettings: {
@@ -2362,7 +2362,7 @@ const App: React.FC = () => {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={tradingConfig.tradingSettings.buying.confidenceBasedAdjustment}
+                      checked={tradingConfig.tradingSettings?.buying?.confidenceBasedAdjustment || true}
                       onChange={(e) => setTradingConfig({
                         ...tradingConfig,
                         tradingSettings: {
@@ -2379,14 +2379,14 @@ const App: React.FC = () => {
                 />
               </Grid>
               
-              {tradingConfig.tradingSettings.buying.confidenceBasedAdjustment && (
+              {(tradingConfig.tradingSettings?.buying?.confidenceBasedAdjustment || true) && (
                 <>
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
                       label="고신뢰도 배율 (90% 이상)"
                       type="number"
-                      value={tradingConfig.tradingSettings.buying.highConfidenceMultiplier.toFixed(1)}
+                      value={(tradingConfig.tradingSettings?.buying?.highConfidenceMultiplier || 1.8).toFixed(1)}
                       onChange={(e) => setTradingConfig({
                         ...tradingConfig,
                         tradingSettings: {
@@ -2406,7 +2406,7 @@ const App: React.FC = () => {
                       fullWidth
                       label="저신뢰도 배율 (70% 미만)"
                       type="number"
-                      value={tradingConfig.tradingSettings.buying.lowConfidenceMultiplier.toFixed(1)}
+                      value={(tradingConfig.tradingSettings?.buying?.lowConfidenceMultiplier || 0.6).toFixed(1)}
                       onChange={(e) => setTradingConfig({
                         ...tradingConfig,
                         tradingSettings: {
@@ -2432,28 +2432,28 @@ const App: React.FC = () => {
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 95%</Typography>
                           <Typography variant="body2" fontWeight="bold" color="success.main">
-                            {Math.min(100, (tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.highConfidenceMultiplier * 100)).toFixed(0)}%
+                            {Math.min(100, ((tradingConfig.tradingSettings?.buying?.defaultBuyRatio || 0.3) * (tradingConfig.tradingSettings?.buying?.highConfidenceMultiplier || 1.8) * 100)).toFixed(0)}%
                           </Typography>
                           <Typography variant="caption" color="text.secondary" display="block">
-                            ₩{(100000 * Math.min(1, tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.highConfidenceMultiplier)).toLocaleString()}
+                            ₩{(100000 * Math.min(1, (tradingConfig.tradingSettings?.buying?.defaultBuyRatio || 0.3) * (tradingConfig.tradingSettings?.buying?.highConfidenceMultiplier || 1.8))).toLocaleString()}
                           </Typography>
                         </Grid>
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 75%</Typography>
                           <Typography variant="body2" fontWeight="bold" color="primary.main">
-                            {(tradingConfig.tradingSettings.buying.defaultBuyRatio * 100).toFixed(0)}%
+                            {((tradingConfig.tradingSettings?.buying?.defaultBuyRatio || 0.3) * 100).toFixed(0)}%
                           </Typography>
                           <Typography variant="caption" color="text.secondary" display="block">
-                            ₩{(100000 * tradingConfig.tradingSettings.buying.defaultBuyRatio).toLocaleString()}
+                            ₩{(100000 * (tradingConfig.tradingSettings?.buying?.defaultBuyRatio || 0.3)).toLocaleString()}
                           </Typography>
                         </Grid>
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 65%</Typography>
                           <Typography variant="body2" fontWeight="bold" color="warning.main">
-                            {(tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.lowConfidenceMultiplier * 100).toFixed(0)}%
+                            {((tradingConfig.tradingSettings?.buying?.defaultBuyRatio || 0.3) * (tradingConfig.tradingSettings?.buying?.lowConfidenceMultiplier || 0.6) * 100).toFixed(0)}%
                           </Typography>
                           <Typography variant="caption" color="text.secondary" display="block">
-                            ₩{(100000 * tradingConfig.tradingSettings.buying.defaultBuyRatio * tradingConfig.tradingSettings.buying.lowConfidenceMultiplier).toLocaleString()}
+                            ₩{(100000 * (tradingConfig.tradingSettings?.buying?.defaultBuyRatio || 0.3) * (tradingConfig.tradingSettings?.buying?.lowConfidenceMultiplier || 0.6)).toLocaleString()}
                           </Typography>
                         </Grid>
                       </Grid>
@@ -2471,7 +2471,7 @@ const App: React.FC = () => {
                   fullWidth
                   label="기본 매도 비율 (%)"
                   type="number"
-                  value={(tradingConfig.tradingSettings.selling.defaultSellRatio * 100).toFixed(0)}
+                  value={(tradingConfig.tradingSettings?.selling?.defaultSellRatio ? tradingConfig.tradingSettings.selling.defaultSellRatio * 100 : 50).toFixed(0)}
                   onChange={(e) => setTradingConfig({
                     ...tradingConfig,
                     tradingSettings: {
@@ -2490,7 +2490,7 @@ const App: React.FC = () => {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={tradingConfig.tradingSettings.selling.confidenceBasedAdjustment}
+                      checked={tradingConfig.tradingSettings?.selling?.confidenceBasedAdjustment || true}
                       onChange={(e) => setTradingConfig({
                         ...tradingConfig,
                         tradingSettings: {
@@ -2507,14 +2507,14 @@ const App: React.FC = () => {
                 />
               </Grid>
               
-              {tradingConfig.tradingSettings.selling.confidenceBasedAdjustment && (
+              {(tradingConfig.tradingSettings?.selling?.confidenceBasedAdjustment || true) && (
                 <>
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
                       label="고신뢰도 배율 (90% 이상)"
                       type="number"
-                      value={tradingConfig.tradingSettings.selling.highConfidenceMultiplier.toFixed(1)}
+                      value={(tradingConfig.tradingSettings?.selling?.highConfidenceMultiplier || 1.5).toFixed(1)}
                       onChange={(e) => setTradingConfig({
                         ...tradingConfig,
                         tradingSettings: {
@@ -2534,7 +2534,7 @@ const App: React.FC = () => {
                       fullWidth
                       label="저신뢰도 배율 (70% 미만)"
                       type="number"
-                      value={tradingConfig.tradingSettings.selling.lowConfidenceMultiplier.toFixed(1)}
+                      value={(tradingConfig.tradingSettings?.selling?.lowConfidenceMultiplier || 0.7).toFixed(1)}
                       onChange={(e) => setTradingConfig({
                         ...tradingConfig,
                         tradingSettings: {
@@ -2560,19 +2560,19 @@ const App: React.FC = () => {
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 95%</Typography>
                           <Typography variant="body2" fontWeight="bold" color="success.main">
-                            {Math.min(100, (tradingConfig.tradingSettings.selling.defaultSellRatio * tradingConfig.tradingSettings.selling.highConfidenceMultiplier * 100)).toFixed(0)}%
+                            {Math.min(100, ((tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * (tradingConfig.tradingSettings?.selling?.highConfidenceMultiplier || 1.5) * 100)).toFixed(0)}%
                           </Typography>
                         </Grid>
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 75%</Typography>
                           <Typography variant="body2" fontWeight="bold" color="primary.main">
-                            {(tradingConfig.tradingSettings.selling.defaultSellRatio * 100).toFixed(0)}%
+                            {((tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * 100).toFixed(0)}%
                           </Typography>
                         </Grid>
                         <Grid item xs={4}>
                           <Typography variant="caption" color="text.secondary">신뢰도 65%</Typography>
                           <Typography variant="body2" fontWeight="bold" color="warning.main">
-                            {(tradingConfig.tradingSettings.selling.defaultSellRatio * tradingConfig.tradingSettings.selling.lowConfidenceMultiplier * 100).toFixed(0)}%
+                            {((tradingConfig.tradingSettings?.selling?.defaultSellRatio || 0.5) * (tradingConfig.tradingSettings?.selling?.lowConfidenceMultiplier || 0.7) * 100).toFixed(0)}%
                           </Typography>
                         </Grid>
                       </Grid>
