@@ -4,8 +4,13 @@ import axios from 'axios';
 export interface UpbitTicker {
   market: string;
   trade_price: number;
+  change: string;
   change_rate: number;
+  change_price: number;
+  high_price: number;
+  low_price: number;
   acc_trade_volume_24h: number;
+  acc_trade_price_24h: number;
   timestamp: number;
 }
 
@@ -85,6 +90,19 @@ class UpbitService {
     } catch (error) {
       console.error('Failed to get tickers:', error);
       return [];
+    }
+  }
+
+  // 단일 마켓 현재가 조회
+  async getTicker(market: string): Promise<any> {
+    try {
+      const response = await axios.get(`${this.baseURL}/v1/ticker`, {
+        params: { markets: market }
+      });
+      return response.data[0];
+    } catch (error) {
+      console.error('Failed to get ticker:', error);
+      return null;
     }
   }
 
@@ -193,6 +211,95 @@ class UpbitService {
       console.error('Failed to place sell order:', error);
       throw error;
     }
+  }
+
+  // 호가 정보 조회
+  async getOrderbook(market: string): Promise<any> {
+    try {
+      const response = await axios.get(`${this.baseURL}/v1/orderbook`, {
+        params: { markets: market }
+      });
+      return response.data[0];
+    } catch (error) {
+      console.error('Failed to get orderbook:', error);
+      return null;
+    }
+  }
+
+  // 체결 내역 조회
+  async getTrades(market: string, count: number = 20): Promise<any[]> {
+    try {
+      const response = await axios.get(`${this.baseURL}/v1/trades/ticks`, {
+        params: { market, count }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get trades:', error);
+      return [];
+    }
+  }
+
+  // 김치 프리미엄 계산
+  async getKimchiPremium(market: string): Promise<number> {
+    try {
+      // 코인 심볼 추출 (KRW-BTC -> BTC)
+      const symbol = market.split('-')[1];
+      
+      // 환율 정보 가져오기
+      const exchangeRateResponse = await axios.get('https://api.exchangerate-api.com/v4/latest/USD');
+      const usdToKrw = exchangeRateResponse.data.rates.KRW;
+      
+      // Binance 가격 가져오기
+      const binanceSymbol = symbol === 'BTC' ? 'BTCUSDT' : `${symbol}USDT`;
+      const binanceResponse = await axios.get('https://api.binance.com/api/v3/ticker/price', {
+        params: { symbol: binanceSymbol }
+      });
+      const usdPrice = parseFloat(binanceResponse.data.price);
+      const krwPriceBinance = usdPrice * usdToKrw;
+      
+      // Upbit 가격 가져오기
+      const upbitResponse = await axios.get(`${this.baseURL}/v1/ticker`, {
+        params: { markets: market }
+      });
+      const krwPriceUpbit = upbitResponse.data[0].trade_price;
+      
+      // 김프 계산
+      const kimchiPremium = ((krwPriceUpbit - krwPriceBinance) / krwPriceBinance) * 100;
+      
+      return kimchiPremium;
+    } catch (error) {
+      console.error('Failed to calculate kimchi premium:', error);
+      return 0; // 에러 시 0 반환
+    }
+  }
+
+  // 공포/탐욕 지수 (간단한 계산)
+  calculateFearGreedIndex(rsi: number, volumeRatio: number, priceChange24h: number): number {
+    // RSI 기반 점수 (0-100)
+    let rsiScore = 0;
+    if (rsi < 30) rsiScore = 20; // 극도의 공포
+    else if (rsi < 40) rsiScore = 35; // 공포
+    else if (rsi < 60) rsiScore = 50; // 중립
+    else if (rsi < 70) rsiScore = 65; // 탐욕
+    else rsiScore = 80; // 극도의 탐욕
+    
+    // 거래량 기반 점수
+    let volumeScore = 50;
+    if (volumeRatio > 2) volumeScore = 70; // 높은 관심
+    else if (volumeRatio > 1.5) volumeScore = 60;
+    else if (volumeRatio < 0.5) volumeScore = 30; // 낮은 관심
+    
+    // 가격 변화 기반 점수
+    let priceScore = 50;
+    if (priceChange24h > 0.1) priceScore = 80; // 급등
+    else if (priceChange24h > 0.05) priceScore = 65;
+    else if (priceChange24h < -0.1) priceScore = 20; // 급락
+    else if (priceChange24h < -0.05) priceScore = 35;
+    
+    // 가중 평균 (RSI 40%, 거래량 30%, 가격변화 30%)
+    const fearGreedIndex = (rsiScore * 0.4) + (volumeScore * 0.3) + (priceScore * 0.3);
+    
+    return Math.round(fearGreedIndex);
   }
 }
 

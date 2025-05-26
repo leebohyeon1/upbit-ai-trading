@@ -157,14 +157,26 @@ class TradingEngine extends EventEmitter {
 
           // 현재가 가져오기
           const tickers = await upbitService.getTickers([market]);
-          const currentPrice = tickers[0]?.trade_price || candles[candles.length - 1].trade_price;
+          const ticker = tickers[0];
+          const currentPrice = ticker?.trade_price || candles[candles.length - 1].trade_price;
 
-          // 기술적 분석 수행
-          const technicalAnalysis = analysisService.analyzeTechnicals(candles);
+          // 추가 데이터 가져오기
+          const [orderbook, trades] = await Promise.all([
+            upbitService.getOrderbook(market),
+            upbitService.getTrades(market, 50)
+          ]);
+
+          // 기술적 분석 수행 (추가 데이터 포함)
+          const technicalAnalysis = await analysisService.analyzeTechnicals(candles, ticker, orderbook, trades);
           
           // AI 분석 (실제 Claude API 사용)
           const aiAnalysis = this.aiEnabled 
-            ? await aiService.generateTradingAnalysis(technicalAnalysis, { currentPrice, market })
+            ? await aiService.generateTradingAnalysis(technicalAnalysis, { 
+                currentPrice, 
+                market,
+                buyScore: technicalAnalysis.scores?.buyScore,
+                sellScore: technicalAnalysis.scores?.sellScore
+              })
             : aiService.generateAdvancedFallbackAnalysis(technicalAnalysis);
 
           // 결과 저장

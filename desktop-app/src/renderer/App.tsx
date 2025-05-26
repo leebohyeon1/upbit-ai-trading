@@ -28,6 +28,7 @@ import {
   InputAdornment,
   Avatar,
   Grid,
+  Slider,
   LinearProgress,
   Dialog,
   DialogTitle,
@@ -1451,6 +1452,170 @@ const App: React.FC = () => {
                       </Grid>
                     </Grid>
                     
+                    <Divider sx={{ my: 3 }} />
+                    
+                    {/* 새로운 데이터 소스 설정 */}
+                    <Typography variant="subtitle2" gutterBottom color="text.secondary" sx={{ mt: 3 }}>
+                      📊 데이터 소스 설정
+                    </Typography>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={config.useOrderbook !== false}
+                              onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { useOrderbook: e.target.checked })}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body1">호가 데이터 사용</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                매수/매도 호가 비율과 스프레드를 분석에 포함합니다
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={config.useTrades !== false}
+                              onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { useTrades: e.target.checked })}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body1">체결 데이터 사용</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                실제 매수/매도 체결 내역을 분석에 포함합니다
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={config.useNews !== false}
+                              onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { useNews: e.target.checked })}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body1">뉴스 데이터 사용</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Google News, Reddit, CoinGecko의 뉴스와 감정 분석을 포함합니다
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={config.useKimchiPremium !== false}
+                              onChange={(e) => updateConfigForTicker(selectedAnalysisCoin, { useKimchiPremium: e.target.checked })}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body1">김치 프리미엄 분석</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                한국과 해외 거래소 가격 차이를 실시간으로 추적합니다
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+                    
+                    <Divider sx={{ my: 3 }} />
+                    
+                    {/* 가중치 설정 */}
+                    <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                      ⚖️ 신호 가중치 설정
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="caption" gutterBottom>기술적 지표 가중치</Typography>
+                        <Slider
+                          value={config.technicalWeight || 40}
+                          onChange={(e, value) => updateConfigForTicker(selectedAnalysisCoin, { technicalWeight: value as number })}
+                          valueLabelDisplay="auto"
+                          marks={[
+                            { value: 0, label: '0%' },
+                            { value: 50, label: '50%' },
+                            { value: 100, label: '100%' }
+                          ]}
+                          sx={{ mb: 2 }}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          RSI, MACD, 볼린저밴드 등의 중요도
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="caption" gutterBottom>시장 심리 가중치</Typography>
+                        <Slider
+                          value={config.sentimentWeight || 30}
+                          onChange={(e, value) => updateConfigForTicker(selectedAnalysisCoin, { sentimentWeight: value as number })}
+                          valueLabelDisplay="auto"
+                          marks={[
+                            { value: 0, label: '0%' },
+                            { value: 50, label: '50%' },
+                            { value: 100, label: '100%' }
+                          ]}
+                          sx={{ mb: 2 }}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          뉴스, 공포/탐욕 지수의 중요도
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="caption" gutterBottom>거래량 가중치</Typography>
+                        <Slider
+                          value={config.volumeWeight || 20}
+                          onChange={(e, value) => updateConfigForTicker(selectedAnalysisCoin, { volumeWeight: value as number })}
+                          valueLabelDisplay="auto"
+                          marks={[
+                            { value: 0, label: '0%' },
+                            { value: 50, label: '50%' },
+                            { value: 100, label: '100%' }
+                          ]}
+                          sx={{ mb: 2 }}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          거래량 변화의 중요도
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="caption" gutterBottom>호가/체결 가중치</Typography>
+                        <Slider
+                          value={config.orderbookWeight || 10}
+                          onChange={(e, value) => updateConfigForTicker(selectedAnalysisCoin, { orderbookWeight: value as number })}
+                          valueLabelDisplay="auto"
+                          marks={[
+                            { value: 0, label: '0%' },
+                            { value: 50, label: '50%' },
+                            { value: 100, label: '100%' }
+                          ]}
+                          sx={{ mb: 2 }}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          실시간 수급의 중요도
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                    
                     <Box mt={4}>
                       <Button
                         variant="contained"
@@ -1767,6 +1932,7 @@ const App: React.FC = () => {
             <Tab label="신호 강도" />
             <Tab label="지표 가중치" />
             <Tab label="거래 설정" />
+            <Tab label="데이터 소스" />
           </Tabs>
 
           {/* Tab 0: 결정 임계값 설정 */}
@@ -2335,6 +2501,304 @@ const App: React.FC = () => {
                 </>
               )}
             </Grid>
+            </Box>
+          )}
+          
+          {/* Tab 4: 데이터 소스 설정 */}
+          {advancedConfigTab === 4 && (
+            <Box>
+              <Typography variant="h6" gutterBottom>데이터 소스 설정</Typography>
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                각 데이터 소스의 사용 여부와 중요도를 설정합니다. 더 많은 데이터를 사용할수록 정확한 분석이 가능합니다.
+              </Typography>
+              
+              {/* 기본 데이터 소스 */}
+              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                📊 기본 데이터 소스
+              </Typography>
+              <Grid container spacing={3} mb={4}>
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={tradingConfig.dataSourceUsage?.technicalIndicators !== false}
+                          onChange={(e) => setTradingConfig({
+                            ...tradingConfig,
+                            dataSourceUsage: {
+                              ...tradingConfig.dataSourceUsage,
+                              technicalIndicators: e.target.checked
+                            }
+                          })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" fontWeight="bold">기술적 지표</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            RSI, MACD, 볼린저밴드, 이동평균선 등
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={tradingConfig.dataSourceUsage?.volume !== false}
+                          onChange={(e) => setTradingConfig({
+                            ...tradingConfig,
+                            dataSourceUsage: {
+                              ...tradingConfig.dataSourceUsage,
+                              volume: e.target.checked
+                            }
+                          })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" fontWeight="bold">거래량 분석</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            거래량 변화, 평균 대비 비율 등
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Card>
+                </Grid>
+              </Grid>
+              
+              {/* 고급 데이터 소스 */}
+              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                🔍 고급 데이터 소스
+              </Typography>
+              <Grid container spacing={3} mb={4}>
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={tradingConfig.dataSourceUsage?.orderbook !== false}
+                          onChange={(e) => setTradingConfig({
+                            ...tradingConfig,
+                            dataSourceUsage: {
+                              ...tradingConfig.dataSourceUsage,
+                              orderbook: e.target.checked
+                            }
+                          })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" fontWeight="bold">호가 데이터</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            매수/매도 호가 비율, 스프레드 분석
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={tradingConfig.dataSourceUsage?.trades !== false}
+                          onChange={(e) => setTradingConfig({
+                            ...tradingConfig,
+                            dataSourceUsage: {
+                              ...tradingConfig.dataSourceUsage,
+                              trades: e.target.checked
+                            }
+                          })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" fontWeight="bold">체결 데이터</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            실시간 매수/매도 체결 내역 분석
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={tradingConfig.dataSourceUsage?.kimchiPremium !== false}
+                          onChange={(e) => setTradingConfig({
+                            ...tradingConfig,
+                            dataSourceUsage: {
+                              ...tradingConfig.dataSourceUsage,
+                              kimchiPremium: e.target.checked
+                            }
+                          })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" fontWeight="bold">김치 프리미엄</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            한국/해외 가격 차이 실시간 추적
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={tradingConfig.dataSourceUsage?.news !== false}
+                          onChange={(e) => setTradingConfig({
+                            ...tradingConfig,
+                            dataSourceUsage: {
+                              ...tradingConfig.dataSourceUsage,
+                              news: e.target.checked
+                            }
+                          })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" fontWeight="bold">뉴스 분석</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Google News, Reddit, CoinGecko 감정 분석
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Card>
+                </Grid>
+              </Grid>
+              
+              {/* 데이터 가중치 설정 */}
+              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                ⚖️ 데이터 중요도 가중치
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                각 데이터 유형의 상대적 중요도를 설정합니다. 합계가 100%가 되도록 자동 조정됩니다.
+              </Typography>
+              
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="caption" gutterBottom>기술적 지표 가중치</Typography>
+                  <Slider
+                    value={tradingConfig.dataWeights?.technical || 40}
+                    onChange={(e, value) => setTradingConfig({
+                      ...tradingConfig,
+                      dataWeights: {
+                        ...tradingConfig.dataWeights,
+                        technical: value as number
+                      }
+                    })}
+                    valueLabelDisplay="auto"
+                    marks={[
+                      { value: 0, label: '0%' },
+                      { value: 50, label: '50%' },
+                      { value: 100, label: '100%' }
+                    ]}
+                    disabled={!tradingConfig.dataSourceUsage?.technicalIndicators}
+                    sx={{ mb: 3 }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="caption" gutterBottom>시장 데이터 가중치</Typography>
+                  <Slider
+                    value={tradingConfig.dataWeights?.market || 30}
+                    onChange={(e, value) => setTradingConfig({
+                      ...tradingConfig,
+                      dataWeights: {
+                        ...tradingConfig.dataWeights,
+                        market: value as number
+                      }
+                    })}
+                    valueLabelDisplay="auto"
+                    marks={[
+                      { value: 0, label: '0%' },
+                      { value: 50, label: '50%' },
+                      { value: 100, label: '100%' }
+                    ]}
+                    disabled={!tradingConfig.dataSourceUsage?.orderbook && !tradingConfig.dataSourceUsage?.trades}
+                    sx={{ mb: 3 }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="caption" gutterBottom>뉴스/감정 가중치</Typography>
+                  <Slider
+                    value={tradingConfig.dataWeights?.sentiment || 20}
+                    onChange={(e, value) => setTradingConfig({
+                      ...tradingConfig,
+                      dataWeights: {
+                        ...tradingConfig.dataWeights,
+                        sentiment: value as number
+                      }
+                    })}
+                    valueLabelDisplay="auto"
+                    marks={[
+                      { value: 0, label: '0%' },
+                      { value: 50, label: '50%' },
+                      { value: 100, label: '100%' }
+                    ]}
+                    disabled={!tradingConfig.dataSourceUsage?.news}
+                    sx={{ mb: 3 }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="caption" gutterBottom>거래량 가중치</Typography>
+                  <Slider
+                    value={tradingConfig.dataWeights?.volume || 10}
+                    onChange={(e, value) => setTradingConfig({
+                      ...tradingConfig,
+                      dataWeights: {
+                        ...tradingConfig.dataWeights,
+                        volume: value as number
+                      }
+                    })}
+                    valueLabelDisplay="auto"
+                    marks={[
+                      { value: 0, label: '0%' },
+                      { value: 50, label: '50%' },
+                      { value: 100, label: '100%' }
+                    ]}
+                    disabled={!tradingConfig.dataSourceUsage?.volume}
+                    sx={{ mb: 3 }}
+                  />
+                </Grid>
+              </Grid>
+              
+              {/* 가중치 합계 표시 */}
+              <Card variant="outlined" sx={{ p: 2, bgcolor: 'info.50', mt: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  가중치 합계
+                </Typography>
+                <Typography variant="h6" color="primary">
+                  {((tradingConfig.dataWeights?.technical || 40) + 
+                    (tradingConfig.dataWeights?.market || 30) + 
+                    (tradingConfig.dataWeights?.sentiment || 20) + 
+                    (tradingConfig.dataWeights?.volume || 10))}%
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  합계가 100%가 아닌 경우 자동으로 비율 조정됩니다
+                </Typography>
+              </Card>
             </Box>
           )}
         </DialogContent>
