@@ -136,6 +136,12 @@ interface TradingConfig {
       sellMinutes: number;
       minConfidenceOverride: number;
     };
+    selling: {
+      defaultSellRatio: number; // 기본 매도 비율
+      confidenceBasedAdjustment: boolean; // 신뢰도 기반 조정 활성화
+      highConfidenceMultiplier: number; // 고신뢰도 배율
+      lowConfidenceMultiplier: number; // 저신뢰도 배율
+    };
   };
 }
 
@@ -221,6 +227,12 @@ const App: React.FC = () => {
         buyMinutes: 30,
         sellMinutes: 20,
         minConfidenceOverride: 0.85
+      },
+      selling: {
+        defaultSellRatio: 0.5,
+        confidenceBasedAdjustment: true,
+        highConfidenceMultiplier: 1.5,
+        lowConfidenceMultiplier: 0.7
       }
     }
   });
@@ -602,7 +614,13 @@ const App: React.FC = () => {
         minOrderAmount: 5000,
         maxSlippage: 0.005,
         tradingInterval: 1,
-        cooldown: { enabled: true, buyMinutes: 30, sellMinutes: 20, minConfidenceOverride: 0.85 }
+        cooldown: { enabled: true, buyMinutes: 30, sellMinutes: 20, minConfidenceOverride: 0.85 },
+        selling: {
+          defaultSellRatio: 0.5, // 기본 50% 매도
+          confidenceBasedAdjustment: true, // 신뢰도 기반 조정 활성화
+          highConfidenceMultiplier: 1.5, // 고신뢰도 배율 (×1.5)
+          lowConfidenceMultiplier: 0.7 // 저신뢰도 배율 (×0.7)
+        }
       }
     });
   };
@@ -2294,6 +2312,125 @@ const App: React.FC = () => {
                       InputProps={{ inputProps: { min: 50, max: 100 } }}
                       helperText="이 신뢰도 이상이면 쿨다운 무시"
                     />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+            
+            {/* 매도 설정 섹션 */}
+            <Typography variant="h6" gutterBottom mt={4}>매도 설정</Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="기본 매도 비율 (%)"
+                  type="number"
+                  value={(tradingConfig.tradingSettings.selling.defaultSellRatio * 100).toFixed(0)}
+                  onChange={(e) => setTradingConfig({
+                    ...tradingConfig,
+                    tradingSettings: {
+                      ...tradingConfig.tradingSettings,
+                      selling: {
+                        ...tradingConfig.tradingSettings.selling,
+                        defaultSellRatio: parseFloat(e.target.value) / 100 || 0.5
+                      }
+                    }
+                  })}
+                  InputProps={{ inputProps: { min: 10, max: 100 } }}
+                  helperText="매도 신호 발생시 기본적으로 매도할 비율"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={tradingConfig.tradingSettings.selling.confidenceBasedAdjustment}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          selling: {
+                            ...tradingConfig.tradingSettings.selling,
+                            confidenceBasedAdjustment: e.target.checked
+                          }
+                        }
+                      })}
+                    />
+                  }
+                  label="신뢰도 기반 매도 비율 조정"
+                />
+              </Grid>
+              
+              {tradingConfig.tradingSettings.selling.confidenceBasedAdjustment && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="고신뢰도 배율 (90% 이상)"
+                      type="number"
+                      value={tradingConfig.tradingSettings.selling.highConfidenceMultiplier.toFixed(1)}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          selling: {
+                            ...tradingConfig.tradingSettings.selling,
+                            highConfidenceMultiplier: parseFloat(e.target.value) || 1.5
+                          }
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 1.0, max: 2.0, step: 0.1 } }}
+                      helperText="신뢰도 90% 이상일 때 매도 비율 증가 배율"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="저신뢰도 배율 (70% 미만)"
+                      type="number"
+                      value={tradingConfig.tradingSettings.selling.lowConfidenceMultiplier.toFixed(1)}
+                      onChange={(e) => setTradingConfig({
+                        ...tradingConfig,
+                        tradingSettings: {
+                          ...tradingConfig.tradingSettings,
+                          selling: {
+                            ...tradingConfig.tradingSettings.selling,
+                            lowConfidenceMultiplier: parseFloat(e.target.value) || 0.7
+                          }
+                        }
+                      })}
+                      InputProps={{ inputProps: { min: 0.3, max: 1.0, step: 0.1 } }}
+                      helperText="신뢰도 70% 미만일 때 매도 비율 감소 배율"
+                    />
+                  </Grid>
+                  
+                  {/* 매도 비율 계산 예시 */}
+                  <Grid item xs={12}>
+                    <Card variant="outlined" sx={{ p: 2, bgcolor: 'info.50' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        📊 매도 비율 계산 예시
+                      </Typography>
+                      <Grid container spacing={2}>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">신뢰도 95%</Typography>
+                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                            {Math.min(100, (tradingConfig.tradingSettings.selling.defaultSellRatio * tradingConfig.tradingSettings.selling.highConfidenceMultiplier * 100)).toFixed(0)}%
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">신뢰도 75%</Typography>
+                          <Typography variant="body2" fontWeight="bold" color="primary.main">
+                            {(tradingConfig.tradingSettings.selling.defaultSellRatio * 100).toFixed(0)}%
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">신뢰도 65%</Typography>
+                          <Typography variant="body2" fontWeight="bold" color="warning.main">
+                            {(tradingConfig.tradingSettings.selling.defaultSellRatio * tradingConfig.tradingSettings.selling.lowConfidenceMultiplier * 100).toFixed(0)}%
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Card>
                   </Grid>
                 </>
               )}
