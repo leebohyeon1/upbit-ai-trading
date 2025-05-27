@@ -27,7 +27,9 @@
       "Bash(npm install)",
       "mcp__sequential-thinking__sequentialthinking",
       "Bash(sed:*)",
-      "Bash(npm start 2 >& 1)"
+      "Bash(npm start 2 >& 1)",
+      "Bash(npx webpack:*)",
+      "Bash(npm start)"
     ],
     "deny": []
   }

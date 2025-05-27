@@ -122,8 +122,8 @@ class BacktestService {
       const adjustedConfig = this.adjustParametersForBacktest(config, trades);
       
       // 거래 신호 확인
-      const minConfidenceForBuy = (adjustedConfig as any).minConfidenceForBuy || 50;
-      const minConfidenceForSell = (adjustedConfig as any).minConfidenceForSell || 50;
+      const minConfidenceForBuy = adjustedConfig.minConfidenceForTrade || 50;
+      const minConfidenceForSell = adjustedConfig.minConfidenceForTrade || 50;
       
       // 신호 카운트
       if (analysis.signal === 'BUY') buySignals++;
@@ -186,7 +186,6 @@ class BacktestService {
           maxCapital = Math.max(maxCapital, capital);
           minCapital = Math.min(minCapital, capital);
         }
-      }
     }
     
     // 마지막 포지션 청산
@@ -249,8 +248,7 @@ class BacktestService {
         ...baseConfig,
         rsiOverbought: params.rsiOverbought,
         rsiOversold: params.rsiOversold,
-        minConfidenceForBuy: params.minConfidenceForTrade,
-        minConfidenceForSell: params.minConfidenceForTrade,
+        minConfidenceForTrade: params.minConfidenceForTrade,
         buyRatio: params.buyRatio,
         sellRatio: params.sellRatio
       };
@@ -348,8 +346,7 @@ class BacktestService {
     
     // 연속 손실 시 신뢰도 임계값 상향
     if (losses >= 3) {
-      adjustedConfig.minConfidenceForBuy = Math.min(90, (config as any).minConfidenceForBuy + 10);
-      adjustedConfig.minConfidenceForSell = Math.min(90, (config as any).minConfidenceForSell + 10);
+      adjustedConfig.minConfidenceForTrade = Math.min(90, config.minConfidenceForTrade + 10);
     }
     
     return adjustedConfig;

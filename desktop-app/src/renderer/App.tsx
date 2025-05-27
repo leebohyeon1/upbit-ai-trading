@@ -128,15 +128,31 @@ const AppContent: React.FC = () => {
 
   const renderContent = () => {
     return (
-      <Box sx={{ width: '100%' }}>
-        <Box sx={{ display: activeTab === TAB_INDEX.OVERVIEW ? 'block' : 'none' }}>
+      <Box sx={{ 
+        width: '100%', 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        position: 'relative'
+      }}>
+        <Box sx={{ 
+          display: activeTab === TAB_INDEX.OVERVIEW ? 'flex' : 'none',
+          flex: 1,
+          width: '100%',
+          minWidth: 0 // Important for flex items
+        }}>
           <Dashboard 
             onTabChange={handleTabChange}
             onAnalysisClick={handleAnalysisClick}
           />
         </Box>
         
-        <Box sx={{ display: activeTab === TAB_INDEX.PORTFOLIO ? 'block' : 'none' }}>
+        <Box sx={{ 
+          display: activeTab === TAB_INDEX.PORTFOLIO ? 'flex' : 'none',
+          flex: 1,
+          width: '100%',
+          minWidth: 0
+        }}>
           <PortfolioManager
             portfolio={context.portfolio}
             accounts={context.accounts}
@@ -145,35 +161,63 @@ const AppContent: React.FC = () => {
           />
         </Box>
         
-        <Box sx={{ display: activeTab === TAB_INDEX.ANALYSIS ? 'block' : 'none' }}>
+        <Box sx={{ 
+          display: activeTab === TAB_INDEX.ANALYSIS ? 'flex' : 'none',
+          flex: 1,
+          width: '100%',
+          minWidth: 0
+        }}>
           <AnalysisSettings />
         </Box>
         
-        <Box sx={{ display: activeTab === TAB_INDEX.SETTINGS ? 'block' : 'none' }}>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            거래 설정
-          </Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <ApiKeySettings
-                apiKeyStatus={context.apiKeyStatus}
-                onValidate={context.validateApiKey}
-              />
+        <Box sx={{ 
+          display: activeTab === TAB_INDEX.SETTINGS ? 'flex' : 'none',
+          flex: 1,
+          width: '100%',
+          minWidth: 0,
+          flexDirection: 'column'
+        }}>
+          <Box sx={{ 
+            flex: 1,
+            width: '100%',
+            p: { xs: 2, sm: 3, md: 4 },
+            boxSizing: 'border-box'
+          }}>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              거래 설정
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <ApiKeySettings
+                  apiKeyStatus={context.apiKeyStatus}
+                  onValidate={context.validateApiKey}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TradingSettings
+                  config={context.tradingConfig}
+                  onChange={context.updateTradingConfig}
+                />
+              </Grid>
             </Grid>
-            <Grid item xs={12}>
-              <TradingSettings
-                config={context.tradingConfig}
-                onChange={context.updateTradingConfig}
-              />
-            </Grid>
-          </Grid>
+          </Box>
         </Box>
         
-        <Box sx={{ display: activeTab === TAB_INDEX.LEARNING ? 'block' : 'none' }}>
+        <Box sx={{ 
+          display: activeTab === TAB_INDEX.LEARNING ? 'flex' : 'none',
+          flex: 1,
+          width: '100%',
+          minWidth: 0
+        }}>
           <LearningStatus />
         </Box>
         
-        <Box sx={{ display: activeTab === TAB_INDEX.BACKTEST ? 'block' : 'none' }}>
+        <Box sx={{ 
+          display: activeTab === TAB_INDEX.BACKTEST ? 'flex' : 'none',
+          flex: 1,
+          width: '100%',
+          minWidth: 0
+        }}>
           <BacktestPanel />
         </Box>
       </Box>

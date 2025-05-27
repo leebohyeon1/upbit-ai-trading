@@ -48,6 +48,7 @@ class TradingApp {
       setTimeout(async () => {
         this.loadInitialState();
         await this.loadSavedApiKeys();
+        await this.loadSavedLearningStates();
         
         // 독립적인 거래 엔진 이벤트 연결은 이미 setupTradingEngine()에서 설정됨
       }, 3000);
@@ -279,20 +280,45 @@ class TradingApp {
       this.tradingState.aiEnabled = true; // AI 분석 항상 활성화
       this.tradingState.lastUpdate = new Date().toISOString();
       
-      // 저장된 학습 상태 복원
-      const savedLearningStates = await this.getLearningStates();
-      if (savedLearningStates && savedLearningStates.length > 0) {
-        console.log('Restoring saved learning states:', savedLearningStates);
-        tradingEngine.setLearningStates(savedLearningStates);
-        
-        // 프론트엔드에 학습 상태 전송
-        this.mainWindow?.webContents.send('learning-progress', savedLearningStates);
-      }
-      
       this.updateTrayMenu();
       this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
     } catch (error) {
       console.error('Failed to load initial state:', error);
+    }
+  }
+
+  private async loadSavedLearningStates() {
+    try {
+      console.log('[Main] Loading saved learning states...');
+      const savedStates = await this.getLearningStates();
+      console.log('[Main] Saved states:', savedStates);
+      
+      if (savedStates && savedStates.length > 0) {
+        console.log('[Main] Found saved learning states:', savedStates);
+        
+        const learningService = tradingEngine.getLearningService();
+        if (learningService) {
+          // 저장된 상태 복원
+          savedStates.forEach(state => {
+            if (state.isRunning) {
+              console.log(`[Main] Restoring learning for ${state.ticker}`);
+              learningService.startLearning(state.ticker);
+            }
+          });
+          
+          // 프론트엔드에 학습 상태 전송
+          setTimeout(() => {
+            console.log('[Main] Sending learning states to frontend');
+            this.mainWindow?.webContents.send('learning-progress', savedStates);
+          }, 1000);
+        } else {
+          console.log('[Main] Learning service not available');
+        }
+      } else {
+        console.log('[Main] No saved learning states found');
+      }
+    } catch (error) {
+      console.error('[Main] Failed to load saved learning states:', error);
     }
   }
 
@@ -524,11 +550,17 @@ class TradingApp {
     }
   }
 
-  private async saveLearningStates(states: any[]): Promise<boolean> {
+  private async saveLearningStates(states?: any[]): Promise<boolean> {
     try {
+      const learningService = tradingEngine.getLearningService();
+      if (!learningService) return false;
+      
+      // states가 제공되지 않으면 현재 상태 가져오기
+      const statesToSave = states || learningService.getLearningStates();
+      
       fs.writeFileSync(
         this.getLearningStatesPath(),
-        JSON.stringify(states, null, 2)
+        JSON.stringify(statesToSave, null, 2)
       );
       return true;
     } catch (error) {
@@ -1091,6 +1123,9 @@ class TradingApp {
           learningService.stopLearning(ticker);
         }
         
+        // 학습 상태 저장
+        await this.saveLearningStates();
+        
         // 변경된 학습 상태를 프론트엔드로 전달
         const states = learningService.getLearningStates();
         this.mainWindow?.webContents.send('learning-progress', states);
@@ -1105,18 +1140,6 @@ class TradingApp {
     // Settings methods - already registered above
 
     // reset-all-settings 핸들러는 이미 존재함
-    
-    // 학습 상태 리스트 조회
-    ipcMain.handle('get-learning-states', async () => {
-      try {
-        const learningService = tradingEngine.getLearningService();
-        if (!learningService) return [];
-        return learningService.getLearningStates();
-      } catch (error) {
-        console.error('Failed to get learning states:', error);
-        return [];
-      }
-    });
 
     // 쿨타임 정보 조회
     ipcMain.handle('get-cooldown-info', async (event, market: string) => {

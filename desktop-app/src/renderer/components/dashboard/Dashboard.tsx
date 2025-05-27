@@ -114,11 +114,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <Box sx={{ 
+      flex: 1,
       width: '100%',
-      minWidth: '100%',
-      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 },
+      boxSizing: 'border-box',
+      overflow: 'auto',
+      '& > *': {
+        width: '100%'
+      }
     }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} sx={{ width: '100%' }}>
         <Box>
           <Typography variant="h5" gutterBottom>
             대시보드
@@ -130,7 +138,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Box>
 
       {/* Stats Grid */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 4, width: '100%' }}>
         <Grid item xs={12} sm={6} lg={3}>
           <StatCard
             icon={<AttachMoney />}
@@ -167,8 +175,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Grid>
 
       {/* Recent Analyses */}
-      <Box mb={4}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+      <Box mb={4} sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} sx={{ width: '100%' }}>
           <Typography variant="h6" fontWeight="bold">
             최근 분석 결과
           </Typography>
@@ -186,7 +194,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             아직 분석 결과가 없습니다. 자동매매를 시작하면 분석 결과가 표시됩니다.
           </Alert>
         ) : (
-          <Grid container spacing={2}>
+          <Grid container spacing={2} sx={{ width: '100%' }}>
             {recentAnalyses.map((analysis, index) => (
               <Grid item xs={12} md={6} lg={4} key={index}>
                 <AnalysisCard
@@ -201,8 +209,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Box>
 
       {/* Portfolio Summary */}
-      <Box>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+      <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} sx={{ width: '100%' }}>
           <Typography variant="h6" fontWeight="bold">
             포트폴리오 요약 (활성 코인: {activeCoins}개)
           </Typography>
@@ -231,7 +239,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </CardContent>
           </Card>
         ) : (
-          <Grid container spacing={2}>
+          <Grid container spacing={2} sx={{ width: '100%' }}>
             {portfolio && Array.isArray(portfolio) && portfolio
               .filter(p => p.enabled)
               .map((coin) => {

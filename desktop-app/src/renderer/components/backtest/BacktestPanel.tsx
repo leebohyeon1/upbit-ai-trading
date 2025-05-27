@@ -166,9 +166,13 @@ export const BacktestPanel: React.FC = () => {
 
   return (
     <Box sx={{ 
+      flex: 1,
       width: '100%',
-      minWidth: '100%',
-      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+      display: 'flex',
+      flexDirection: 'column',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 },
+      boxSizing: 'border-box',
+      overflow: 'auto'
     }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5">
