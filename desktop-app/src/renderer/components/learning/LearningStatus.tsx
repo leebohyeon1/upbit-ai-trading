@@ -72,6 +72,7 @@ export const LearningStatus: React.FC = () => {
 
   // 학습 메트릭 가져오기
   const fetchLearningMetrics = async () => {
+    console.log('[LearningStatus] Fetching learning metrics...');
     setIsRefreshing(true);
     try {
       const metrics: Record<string, LearningMetrics> = {};
@@ -81,6 +82,7 @@ export const LearningStatus: React.FC = () => {
         try {
           const ticker = `KRW-${coin.symbol}`;
           const learningData = await window.electronAPI.getLearningMetrics(ticker);
+          console.log(`[LearningStatus] Metrics for ${ticker}:`, learningData);
           
           if (learningData) {
             metrics[coin.symbol] = learningData;
@@ -135,9 +137,23 @@ export const LearningStatus: React.FC = () => {
   }, [portfolio, learningStates]);
 
   const handleToggleLearning = async (ticker: string) => {
+    console.log('[LearningStatus] Toggle learning for:', ticker);
+    console.log('[LearningStatus] Current learningStates:', learningStates);
+    
     const currentState = learningStates.find(ls => ls.ticker === ticker)?.isRunning || false;
-    await toggleLearning(ticker, !currentState);
-    fetchLearningMetrics();
+    console.log('[LearningStatus] Current state:', currentState, '-> New state:', !currentState);
+    
+    try {
+      await toggleLearning(ticker, !currentState);
+      console.log('[LearningStatus] Toggle successful');
+      
+      // 즉시 메트릭 업데이트
+      setTimeout(() => {
+        fetchLearningMetrics();
+      }, 500);
+    } catch (error) {
+      console.error('[LearningStatus] Toggle failed:', error);
+    }
   };
 
   const getPerformanceColor = (value: number) => {
@@ -172,6 +188,8 @@ export const LearningStatus: React.FC = () => {
                 {portfolio.filter(p => p.enabled).map(coin => {
                   const metrics = learningMetrics[coin.symbol];
                   const isRunning = metrics?.isRunning || false;
+                  
+                  console.log(`[LearningStatus] Coin ${coin.symbol} - isRunning:`, isRunning, 'metrics:', metrics);
                   
                   return (
                     <Grid item xs={12} sm={6} md={3} key={coin.symbol}>

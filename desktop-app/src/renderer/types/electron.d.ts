@@ -36,6 +36,7 @@ declare global {
       toggleLearning: (ticker: string, isRunning: boolean) => Promise<void>;
       getLearningMetrics: (ticker: string) => Promise<any>;
       getLearningStatus: () => Promise<any>;
+      getLearningStates: () => Promise<Array<{ ticker: string; isRunning: boolean }>>;
       
       // Cooldown methods
       getCooldownInfo: (market: string) => Promise<{

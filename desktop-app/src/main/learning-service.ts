@@ -436,18 +436,20 @@ export class LearningService extends EventEmitter {
   private learningStates: Map<string, boolean> = new Map();
 
   public startLearning(ticker: string): void {
+    console.log(`[LearningService] Starting learning for ${ticker}`);
     this.learningStates.set(ticker, true);
-    console.log(`Learning started for ${ticker}`);
-    this.emit('learning-started', { ticker, isRunning: true });
+    this.emit('learning-state-changed', { ticker, isRunning: true });
+    console.log(`[LearningService] Learning started for ${ticker}`);
   }
 
   public stopLearning(ticker: string): void {
+    console.log(`[LearningService] Stopping learning for ${ticker}`);
     this.learningStates.set(ticker, false);
-    console.log(`Learning stopped for ${ticker}`);
-    this.emit('learning-stopped', { ticker, isRunning: false });
+    this.emit('learning-state-changed', { ticker, isRunning: false });
+    console.log(`[LearningService] Learning stopped for ${ticker}`);
   }
 
-  public isLearning(ticker: string): boolean {
+  public isLearningEnabled(ticker: string): boolean {
     return this.learningStates.get(ticker) || false;
   }
 

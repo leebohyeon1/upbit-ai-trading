@@ -96,7 +96,7 @@ export const BacktestPanel: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h4" fontWeight="bold" gutterBottom>
         백테스트
       </Typography>
 
@@ -118,8 +118,7 @@ export const BacktestPanel: React.FC = () => {
                   onChange={(e) => setSelectedCoin(e.target.value)}
                   SelectProps={{ native: true }}
                   margin="normal"
-                >
-                  <option value="">선택하세요</option>
+                >                 
                   {portfolio.filter(p => p.enabled).map(coin => (
                     <option key={coin.symbol} value={coin.symbol}>
                       {coin.name} ({coin.symbol})

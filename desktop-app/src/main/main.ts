@@ -504,15 +504,7 @@ class TradingApp {
   }
 
   private setupIPC() {
-    // 거래 상태 조회
-    ipcMain.handle('get-trading-state', async () => {
-      return this.tradingState;
-    });
-
-    // 자동매매 시작
-    ipcMain.handle('start-trading', async (event, tickers: string[]) => {
-      return await this.startTrading(tickers);
-    });
+    // start-trading은 setupIpcHandlers()에서 처리하므로 여기서는 제거
 
     // 자동매매 중지
     ipcMain.handle('stop-trading', async () => {
@@ -591,24 +583,6 @@ class TradingApp {
       }
     });
 
-    // 쿨타임 정보 조회
-    console.log('Registering get-cooldown-info handler...');
-    ipcMain.handle('get-cooldown-info', async (event, market: string) => {
-      try {
-        console.log('Getting cooldown info for:', market);
-        if (!tradingEngine) {
-          console.error('TradingEngine is not initialized');
-          return { buyRemaining: 0, sellRemaining: 0, buyTotal: 30, sellTotal: 20 };
-        }
-        const result = tradingEngine.getCooldownInfo(market);
-        console.log('Cooldown info result:', result);
-        return result;
-      } catch (error) {
-        console.error('Failed to get cooldown info:', error);
-        return { buyRemaining: 0, sellRemaining: 0, buyTotal: 30, sellTotal: 20 };
-      }
-    });
-    console.log('get-cooldown-info handler registered');
 
     // 설정 초기화
     ipcMain.handle('reset-all-settings', async () => {
@@ -895,6 +869,29 @@ class TradingApp {
         // 설정 업데이트
         tradingEngine.updateConfig(tradingConfig);
         
+        // 쿨타임 속성명 마이그레이션 (기존 buyingCooldown/sellingCooldown → buyCooldown/sellCooldown)
+        if (analysisConfigs && analysisConfigs.length > 0) {
+          analysisConfigs = analysisConfigs.map(config => {
+            if ('buyingCooldown' in config && !('buyCooldown' in config)) {
+              config.buyCooldown = config.buyingCooldown;
+              delete config.buyingCooldown;
+            }
+            if ('sellingCooldown' in config && !('sellCooldown' in config)) {
+              config.sellCooldown = config.sellingCooldown;
+              delete config.sellingCooldown;
+            }
+            return config;
+          });
+          
+          console.log('First config cooldowns after migration:', {
+            ticker: analysisConfigs[0].ticker,
+            buyCooldown: analysisConfigs[0].buyCooldown,
+            sellCooldown: analysisConfigs[0].sellCooldown,
+            originalBuyingCooldown: analysisConfigs[0].buyingCooldown,
+            originalSellingCooldown: analysisConfigs[0].sellingCooldown
+          });
+        }
+        
         // 분석 설정 전달 (UI에서 설정한 코인별 거래 파라미터)
         tradingEngine.setAnalysisConfigs(analysisConfigs);
         
@@ -978,7 +975,7 @@ class TradingApp {
 
         return {
           ticker,
-          isRunning: learningService.isLearning(ticker),
+          isRunning: learningService.isLearningEnabled(ticker),
           totalTrades: stats.total_trades,
           winRate: stats.win_rate * 100,
           averageProfit: stats.average_profit,
@@ -1015,6 +1012,11 @@ class TradingApp {
         } else {
           learningService.stopLearning(ticker);
         }
+        
+        // 변경된 학습 상태를 프론트엔드로 전달
+        const states = learningService.getLearningStates();
+        this.mainWindow?.webContents.send('learning-progress', states);
+        
         return true;
       } catch (error) {
         console.error('Failed to toggle learning:', error);
@@ -1101,6 +1103,36 @@ class TradingApp {
     });
 
     // reset-all-settings 핸들러는 이미 존재함
+    
+    // 학습 상태 리스트 조회
+    ipcMain.handle('get-learning-states', async () => {
+      try {
+        const learningService = tradingEngine.getLearningService();
+        if (!learningService) return [];
+        return learningService.getLearningStates();
+      } catch (error) {
+        console.error('Failed to get learning states:', error);
+        return [];
+      }
+    });
+
+    // 쿨타임 정보 조회
+    ipcMain.handle('get-cooldown-info', async (event, market: string) => {
+      try {
+        const cooldownInfo = tradingEngine.getCooldownInfo(market);
+        console.log(`[IPC] Cooldown info for ${market}:`, cooldownInfo);
+        return cooldownInfo;
+      } catch (error) {
+        console.error('Failed to get cooldown info:', error);
+        return {
+          market,
+          buyRemaining: 0,
+          sellRemaining: 0,
+          canBuy: true,
+          canSell: true
+        };
+      }
+    });
     
     console.log('All IPC handlers registered successfully');
   }

@@ -104,7 +104,7 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h6" fontWeight="bold">
+        <Typography variant="h4" fontWeight="bold" gutterBottom>
           포트폴리오 관리
         </Typography>
         <FormControlLabel

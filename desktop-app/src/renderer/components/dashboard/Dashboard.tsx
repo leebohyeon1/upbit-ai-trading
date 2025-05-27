@@ -61,26 +61,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }, []);
 
-  // 쿨타임 정보 업데이트 - 일시적으로 비활성화
+  // 쿨타임 정보 업데이트
   useEffect(() => {
-    // 쿨타임 기능 일시적으로 비활성화
-    console.log('Cooldown feature temporarily disabled due to IPC handler issues');
+    const updateCooldowns = async () => {
+      const newCooldowns: CooldownInfo = {};
+      const enabledCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(p => p.enabled) : [];
+      
+      for (const coin of enabledCoins) {
+        const market = `KRW-${coin.symbol}`;
+        try {
+          const cooldownInfo = await window.electronAPI.getCooldownInfo(market);
+          newCooldowns[market] = cooldownInfo;
+        } catch (error) {
+          console.error(`Failed to get cooldown info for ${market}:`, error);
+          // 에러 시 기본값 사용
+          newCooldowns[market] = {
+            buyRemaining: 0,
+            sellRemaining: 0,
+            buyTotal: 30,
+            sellTotal: 20
+          };
+        }
+      }
+      
+      setCooldowns(newCooldowns);
+    };
     
-    // 기본값으로 설정
-    const defaultCooldowns: CooldownInfo = {};
-    const enabledCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(p => p.enabled) : [];
+    // 초기 로드
+    updateCooldowns();
     
-    for (const coin of enabledCoins) {
-      const market = `KRW-${coin.symbol}`;
-      defaultCooldowns[market] = {
-        buyRemaining: 0,
-        sellRemaining: 0,
-        buyTotal: 30,
-        sellTotal: 20
-      };
-    }
+    // 5초마다 업데이트
+    const interval = setInterval(updateCooldowns, 5000);
     
-    setCooldowns(defaultCooldowns);
+    return () => clearInterval(interval);
   }, [portfolio]);
 
   // 계산된 통계
@@ -99,13 +112,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <Box sx={{ bgcolor: 'transparent' }}>
-      {/* Header */}
-      <Typography variant="h4" fontWeight="bold" gutterBottom>
-        대시보드
-      </Typography>
-      <Typography variant="body1" color="text.secondary" mb={4}>
-        AI 기반 자동매매 시스템 현황을 한눈에 확인하세요
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        {/* Header */}
+        <Typography variant="h5">
+          대시보드
+        </Typography>
+        <Typography variant="body1" color="text.secondary" mb={4}>
+          AI 기반 자동매매 시스템 현황을 한눈에 확인하세요
+        </Typography>
+      </Box>
 
       {/* Stats Grid */}
       <Grid container spacing={3} mb={4}>
@@ -236,7 +251,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           )}
                         </Box>
                         
-                        {/* 쿨타임 정보 - 간소화된 버전 */}
+                        {/* 쿨타임 정보 */}
                         {cooldownInfo && (
                           <Box sx={{ mt: 2 }}>
                             {/* 매수 쿨타임 */}
@@ -248,9 +263,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 </Box>
                                 <Chip 
                                   size="small" 
-                                  label="대기 중" 
-                                  color="success"
-                                  icon={<TimerOff sx={{ fontSize: 14 }} />}
+                                  label={cooldownInfo.buyRemaining > 0 ? `${cooldownInfo.buyRemaining}분` : "대기 중"} 
+                                  color={cooldownInfo.buyRemaining > 0 ? "warning" : "success"}
+                                  icon={cooldownInfo.buyRemaining > 0 ? <Timer sx={{ fontSize: 14 }} /> : <TimerOff sx={{ fontSize: 14 }} />}
                                 />
                               </Box>
                             </Box>
@@ -264,9 +279,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 </Box>
                                 <Chip 
                                   size="small" 
-                                  label="대기 중" 
-                                  color="success"
-                                  icon={<TimerOff sx={{ fontSize: 14 }} />}
+                                  label={cooldownInfo.sellRemaining > 0 ? `${cooldownInfo.sellRemaining}분` : "대기 중"} 
+                                  color={cooldownInfo.sellRemaining > 0 ? "warning" : "success"}
+                                  icon={cooldownInfo.sellRemaining > 0 ? <Timer sx={{ fontSize: 14 }} /> : <TimerOff sx={{ fontSize: 14 }} />}
                                 />
                               </Box>
                             </Box>

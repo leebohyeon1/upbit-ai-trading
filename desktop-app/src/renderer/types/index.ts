@@ -52,6 +52,11 @@ export interface Analysis {
 }
 
 export interface LearningState {
+  ticker: string;
+  isRunning: boolean;
+}
+
+export interface LearningProgress {
   model: string;
   ticker: string;
   progress: number;
@@ -61,7 +66,6 @@ export interface LearningState {
   bestReward: number;
   status: 'training' | 'completed' | 'idle';
   error?: string;
-  isRunning?: boolean;
 }
 
 export interface TradingState {

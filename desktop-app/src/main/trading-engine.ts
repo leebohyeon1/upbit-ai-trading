@@ -590,17 +590,30 @@ class TradingEngine extends EventEmitter {
           const sellAmount = totalBalance * adjustedSellRatio;
           const sellAmountStr = sellAmount.toFixed(8); // 소수점 8자리까지
           
+          // 매도할 금액 계산 (현재 가격 * 수량)
+          const sellValue = analysis.currentPrice * sellAmount;
+          
+          // 최소 주문 금액 확인 (기본 5,000원, UI 설정 사용 가능)
+          const minOrderAmount = analysisConfig?.minOrderAmount || 5000;
+          if (sellValue < minOrderAmount) {
+            console.log(`[${market}] 매도 금액 ₩${sellValue.toLocaleString()}이 최소 주문 금액 ₩${minOrderAmount.toLocaleString()} 미만`);
+            console.log(`  - 코인 수량: ${sellAmount} ${market.split('-')[1]}`);
+            console.log(`  - 현재 가격: ₩${analysis.currentPrice.toLocaleString()}`);
+            console.log(`  - 매도 비율: ${(adjustedSellRatio * 100).toFixed(1)}%`);
+            return;
+          }
+          
           console.log(`Sell signal for ${market} - confidence: ${technical.confidence.toFixed(1)}%`);
           console.log(`Base ratio: ${(this.config.sellRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedSellRatio * 100).toFixed(1)}%`);
-          console.log(`Total balance: ${totalBalance}, Sell amount: ${sellAmount}`);
+          console.log(`Total balance: ${totalBalance}, Sell amount: ${sellAmount}, Value: ₩${sellValue.toLocaleString()}`);
           
           // 실제 거래 실행 (테스트 모드에서는 로그만)
           console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
-            console.log(`Executing REAL SELL order for ${market}: ${sellAmount} ${market.split('-')[1]}`);
+            console.log(`Executing REAL SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
             await upbitService.sellOrder(market, sellAmountStr);
           } else {
-            console.log(`TEST MODE - Simulating SELL order for ${market}: ${sellAmount} ${market.split('-')[1]}`);
+            console.log(`TEST MODE - Simulating SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
           }
           
           // 거래 시간 기록
@@ -986,8 +999,8 @@ class TradingEngine extends EventEmitter {
     if (configs.length > 0) {
       console.log('First config cooldowns:', {
         ticker: configs[0].ticker,
-        buyingCooldown: configs[0].buyingCooldown,
-        sellingCooldown: configs[0].sellingCooldown
+        buyCooldown: configs[0].buyCooldown,
+        sellCooldown: configs[0].sellCooldown
       });
     }
   }
@@ -1094,6 +1107,13 @@ class TradingEngine extends EventEmitter {
     const entry = this.entryPoints.get(market);
     if (!entry) {
       console.log(`[학습] ${market} 진입점 기록이 없어 학습 건너뜀`);
+      return;
+    }
+    
+    // 학습이 활성화되어 있는지 확인
+    const ticker = market.split('-')[1]; // KRW-BTC -> BTC
+    if (!this.learningService.isLearningEnabled(ticker)) {
+      console.log(`[학습] ${ticker} 학습이 비활성화되어 있어 건너뜀`);
       return;
     }
     

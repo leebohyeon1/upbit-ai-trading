@@ -130,6 +130,11 @@ export const useElectronAPI = () => {
     const removeLearningListener = window.electronAPI.onLearningProgress((states) => {
       setLearningStates(states);
     });
+    
+    // 초기 학습 상태 로드
+    window.electronAPI.getLearningStates().then((states) => {
+      setLearningStates(states);
+    }).catch(console.error);
 
     return () => {
       removeApiKeyListener();
