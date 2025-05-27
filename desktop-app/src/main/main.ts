@@ -279,6 +279,16 @@ class TradingApp {
       this.tradingState.aiEnabled = true; // AI 분석 항상 활성화
       this.tradingState.lastUpdate = new Date().toISOString();
       
+      // 저장된 학습 상태 복원
+      const savedLearningStates = await this.getLearningStates();
+      if (savedLearningStates && savedLearningStates.length > 0) {
+        console.log('Restoring saved learning states:', savedLearningStates);
+        tradingEngine.setLearningStates(savedLearningStates);
+        
+        // 프론트엔드에 학습 상태 전송
+        this.mainWindow?.webContents.send('learning-progress', savedLearningStates);
+      }
+      
       this.updateTrayMenu();
       this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
     } catch (error) {
@@ -344,6 +354,10 @@ class TradingApp {
 
   private getTradingConfigPath(): string {
     return path.join(app.getPath('userData'), 'trading-config.json');
+  }
+
+  private getLearningStatesPath(): string {
+    return path.join(app.getPath('userData'), 'learning-states.json');
   }
 
   private async saveApiKeys(keys: any): Promise<boolean> {
@@ -510,6 +524,34 @@ class TradingApp {
     }
   }
 
+  private async saveLearningStates(states: any[]): Promise<boolean> {
+    try {
+      fs.writeFileSync(
+        this.getLearningStatesPath(),
+        JSON.stringify(states, null, 2)
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to save learning states:', error);
+      return false;
+    }
+  }
+
+  private async getLearningStates(): Promise<any[]> {
+    try {
+      const statesPath = this.getLearningStatesPath();
+      
+      if (!fs.existsSync(statesPath)) {
+        return [];
+      }
+
+      return JSON.parse(fs.readFileSync(statesPath, 'utf-8'));
+    } catch (error) {
+      console.error('Failed to load learning states:', error);
+      return [];
+    }
+  }
+
   private setupIPC() {
     // start-trading은 setupIpcHandlers()에서 처리하므로 여기서는 제거
 
@@ -588,6 +630,16 @@ class TradingApp {
         console.error('Failed to get learning status:', error);
         return null;
       }
+    });
+
+    // 학습 상태 저장
+    ipcMain.handle('save-learning-states', async (event, states: any[]) => {
+      return await this.saveLearningStates(states);
+    });
+
+    // 학습 상태 조회
+    ipcMain.handle('get-learning-states', async () => {
+      return await this.getLearningStates();
     });
 
 
@@ -742,6 +794,16 @@ class TradingApp {
     tradingEngine.on('configChanged', (config: any) => {
       if (this.mainWindow) {
         this.mainWindow.webContents.send('trading-config-changed', config);
+      }
+    });
+
+    // 학습 상태 변경 이벤트 처리
+    tradingEngine.on('learningStateChanged', async (states: any[]) => {
+      console.log('Learning state changed, saving...', states);
+      await this.saveLearningStates(states);
+      
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('learning-progress', states);
       }
     });
   }

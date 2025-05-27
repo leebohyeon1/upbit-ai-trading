@@ -102,7 +102,11 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
     : AVAILABLE_COINS;
 
   return (
-    <Box>
+    <Box sx={{ 
+      width: '100%',
+      minWidth: '100%',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+    }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5">
           포트폴리오 관리

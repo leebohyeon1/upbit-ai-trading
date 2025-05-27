@@ -121,6 +121,14 @@ class TradingEngine extends EventEmitter {
     this.learningService.on('trade-recorded', (result) => {
       console.log('Trade recorded for learning:', result.market, result.profitRate + '%');
     });
+
+    // 학습 상태 변경 이벤트 리스닝
+    this.learningService.on('learning-state-changed', (state) => {
+      console.log('Learning state changed:', state);
+      // 현재 학습 상태 목록을 전체로 전송
+      const allStates = this.learningService.getLearningStates();
+      this.emit('learningStateChanged', allStates);
+    });
   }
 
   private setupApiClient(): void {
@@ -203,6 +211,13 @@ class TradingEngine extends EventEmitter {
 
   isRunning(): boolean {
     return this._isRunning;
+  }
+
+  setLearningStates(states: any[]): void {
+    // learningService에 상태 복원
+    states.forEach(state => {
+      this.learningService.setLearningState(state.ticker, state.isRunning);
+    });
   }
 
   async start(): Promise<boolean> {

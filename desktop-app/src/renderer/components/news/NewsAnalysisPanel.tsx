@@ -191,7 +191,11 @@ export const NewsAnalysisPanel: React.FC = () => {
   ) || [];
 
   return (
-    <Box>
+    <Box sx={{ 
+      width: '100%',
+      minWidth: '100%',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+    }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5">
           뉴스 분석
@@ -277,8 +281,8 @@ export const NewsAnalysisPanel: React.FC = () => {
                     <Typography variant="h6" gutterBottom>
                       뉴스 감성 분포
                     </Typography>
-                    <Box sx={{ height: 200 }}>
-                      <ResponsiveContainer width="100%" height="100%">
+                    <Box sx={{ height: 200, minHeight: 200, width: '100%' }}>
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <PieChart>
                           <Pie
                             data={sentimentData}

@@ -128,7 +128,7 @@ const AppContent: React.FC = () => {
 
   const renderContent = () => {
     return (
-      <>
+      <Box sx={{ width: '100%' }}>
         <Box sx={{ display: activeTab === TAB_INDEX.OVERVIEW ? 'block' : 'none' }}>
           <Dashboard 
             onTabChange={handleTabChange}
@@ -176,7 +176,7 @@ const AppContent: React.FC = () => {
         <Box sx={{ display: activeTab === TAB_INDEX.BACKTEST ? 'block' : 'none' }}>
           <BacktestPanel />
         </Box>
-      </>
+      </Box>
     );
   };
 

@@ -140,7 +140,11 @@ export const MarketCorrelationPanel: React.FC = () => {
   }));
 
   return (
-    <Box>
+    <Box sx={{ 
+      width: '100%',
+      minWidth: '100%',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+    }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5">
           시장 상관관계 분석
@@ -171,8 +175,8 @@ export const MarketCorrelationPanel: React.FC = () => {
                       BTC 도미넌스
                     </Typography>
                     <Box display="flex" alignItems="center">
-                      <Box sx={{ width: 120, height: 120, mr: 2 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                      <Box sx={{ width: 120, height: 120, minWidth: 120, minHeight: 120, mr: 2 }}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                           <PieChart>
                             <Pie
                               data={dominanceData}

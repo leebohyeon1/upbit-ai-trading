@@ -460,4 +460,9 @@ export class LearningService extends EventEmitter {
     });
     return states;
   }
+
+  public setLearningState(ticker: string, isRunning: boolean): void {
+    console.log(`[LearningService] Restoring learning state for ${ticker}: ${isRunning}`);
+    this.learningStates.set(ticker, isRunning);
+  }
 }

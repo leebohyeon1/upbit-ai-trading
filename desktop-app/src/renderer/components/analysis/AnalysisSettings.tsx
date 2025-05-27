@@ -565,10 +565,16 @@ export const AnalysisSettings: React.FC = () => {
   const enabledCoins = portfolio.filter(p => p.enabled);
 
   return (
-    <Box>
-      <Typography variant="h5" gutterBottom>
-        분석 설정
-      </Typography>
+    <Box sx={{ 
+      width: '100%',
+      minWidth: '100%',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+    }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h5">
+          분석 설정
+        </Typography>
+      </Box>
 
       {/* 프리셋 선택 */}
       <Card sx={{ mb: 3 }}>

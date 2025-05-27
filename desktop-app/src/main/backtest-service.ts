@@ -71,17 +71,17 @@ class BacktestService {
     // 기간 계산 (개월 수)
     const months = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
     
-    console.log(`Starting backtest for ${market} from ${startDate} to ${endDate} (약 ${months}개월)...`);
+    console.log('Starting backtest for ' + market + ' from ' + startDate + ' to ' + endDate + ' (약 ' + months + '개월)...');
     
     // market이 이미 KRW-BTC 형태인 경우와 BTC만 있는 경우 처리
-    const ticker = market.startsWith('KRW-') ? market : `KRW-${market}`;
+    const ticker = market.startsWith('KRW-') ? market : 'KRW-' + market;
     
     // 과거 데이터 가져오기
-    const candles = await this.fetchHistoricalData(ticker, months);
-    console.log(`Fetched ${candles.length} candles for ${ticker}`);
+    const candles = await this.fetchHistoricalData(ticker, start, end);
+    console.log('Fetched ' + candles.length + ' candles for ' + ticker);
     
     if (candles.length < 50) { // 최소 50개 캔들로 요구사항 완화
-      throw new Error(`Insufficient historical data for backtest. Only ${candles.length} candles found.`);
+      throw new Error('Insufficient historical data for backtest. Only ' + candles.length + ' candles found.');
     }
     
     // 날짜 범위에 맞는 캔들만 필터링
@@ -90,10 +90,10 @@ class BacktestService {
       return candleDate >= start && candleDate <= end;
     });
     
-    console.log(`Using ${filteredCandles.length} candles within date range`);
+    console.log('Using ' + filteredCandles.length + ' candles within date range');
     
     if (filteredCandles.length < 50) {
-      throw new Error(`Insufficient data in selected period. Only ${filteredCandles.length} candles found.`);
+      throw new Error('Insufficient data in selected period. Only ' + filteredCandles.length + ' candles found.');
     }
     
     // 백테스트 실행
@@ -105,7 +105,11 @@ class BacktestService {
     
     // 슬라이딩 윈도우로 캔들 데이터 분석 (최소 50개 캔들 필요)
     const windowSize = Math.min(200, filteredCandles.length - 1);
-    console.log(`Using window size: ${windowSize}`);
+    console.log('Using window size: ' + windowSize);
+    
+    let buySignals = 0;
+    let sellSignals = 0;
+    let neutralSignals = 0;
     
     for (let i = windowSize; i < filteredCandles.length; i++) {
       const window = filteredCandles.slice(Math.max(0, i - windowSize), i + 1);
@@ -118,8 +122,20 @@ class BacktestService {
       const adjustedConfig = this.adjustParametersForBacktest(config, trades);
       
       // 거래 신호 확인
-      if (analysis.confidence >= adjustedConfig.minConfidenceForTrade) {
-        if (analysis.signal === 'BUY' && !position) {
+      const minConfidenceForBuy = (adjustedConfig as any).minConfidenceForBuy || 50;
+      const minConfidenceForSell = (adjustedConfig as any).minConfidenceForSell || 50;
+      
+      // 신호 카운트
+      if (analysis.signal === 'BUY') buySignals++;
+      else if (analysis.signal === 'SELL') sellSignals++;
+      else neutralSignals++;
+      
+      // 100번째마다 로그 출력
+      if (i % 100 === 0) {
+        console.log('[Backtest ' + i + '/' + filteredCandles.length + '] Signal: ' + analysis.signal + ', Confidence: ' + analysis.confidence + ', MinBuy: ' + minConfidenceForBuy + ', MinSell: ' + minConfidenceForSell);
+      }
+      
+      if (analysis.signal === 'BUY' && !position && analysis.confidence >= minConfidenceForBuy) {
           // 매수
           const buyAmount = capital * adjustedConfig.buyRatio;
           const shares = buyAmount / currentCandle.trade_price;
@@ -140,7 +156,7 @@ class BacktestService {
           });
           
           capital -= buyAmount;
-        } else if (analysis.signal === 'SELL' && position) {
+        } else if (analysis.signal === 'SELL' && position && analysis.confidence >= minConfidenceForSell) {
           // 매도
           const sellAmount = position.amount * adjustedConfig.sellRatio;
           const sellValue = sellAmount * currentCandle.trade_price;
@@ -194,6 +210,9 @@ class BacktestService {
       capital += sellValue;
     }
     
+    console.log('[Backtest Summary] Total signals - Buy: ' + buySignals + ', Sell: ' + sellSignals + ', Neutral: ' + neutralSignals);
+    console.log('[Backtest Summary] Total trades executed: ' + trades.length);
+    
     // 성과 계산
     const performance = this.calculatePerformance(trades, capital, maxCapital, minCapital);
     
@@ -219,7 +238,7 @@ class BacktestService {
     baseConfig: TradingConfig,
     months: number = 6
   ): Promise<OptimalParameters> {
-    console.log(`Searching for optimal parameters for ${market}...`);
+    console.log('Searching for optimal parameters for ' + market + '...');
     
     const parameterSets = this.generateParameterCombinations();
     let bestParams: OptimalParameters | null = null;
@@ -230,7 +249,8 @@ class BacktestService {
         ...baseConfig,
         rsiOverbought: params.rsiOverbought,
         rsiOversold: params.rsiOversold,
-        minConfidenceForTrade: params.minConfidenceForTrade,
+        minConfidenceForBuy: params.minConfidenceForTrade,
+        minConfidenceForSell: params.minConfidenceForTrade,
         buyRatio: params.buyRatio,
         sellRatio: params.sellRatio
       };
@@ -275,10 +295,11 @@ class BacktestService {
   }
   
   // 과거 데이터 가져오기
-  private async fetchHistoricalData(market: string, months: number): Promise<CandleData[]> {
+  private async fetchHistoricalData(market: string, startDate: Date, endDate: Date): Promise<CandleData[]> {
     const allCandles: CandleData[] = [];
     const candlesPerDay = 288; // 5분봉 기준 하루 288개
-    const totalCandles = candlesPerDay * 30 * months;
+    const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const totalCandles = candlesPerDay * days;
     const requestsNeeded = Math.ceil(totalCandles / 200); // API 한 번에 200개까지
     
     let lastDateTime: string | null = null;
@@ -327,7 +348,8 @@ class BacktestService {
     
     // 연속 손실 시 신뢰도 임계값 상향
     if (losses >= 3) {
-      adjustedConfig.minConfidenceForTrade = Math.min(90, config.minConfidenceForTrade + 10);
+      adjustedConfig.minConfidenceForBuy = Math.min(90, (config as any).minConfidenceForBuy + 10);
+      adjustedConfig.minConfidenceForSell = Math.min(90, (config as any).minConfidenceForSell + 10);
     }
     
     return adjustedConfig;

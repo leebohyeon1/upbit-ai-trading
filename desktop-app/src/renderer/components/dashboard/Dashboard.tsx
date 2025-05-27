@@ -113,20 +113,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
   
 
   return (
-    <Box sx={{ bgcolor: 'transparent' }}>
+    <Box sx={{ 
+      width: '100%',
+      minWidth: '100%',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+    }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        {/* Header */}
-        <Typography variant="h5">
-          대시보드
-        </Typography>
-        <Typography variant="body1" color="text.secondary" mb={4}>
-          AI 기반 자동매매 시스템 현황을 한눈에 확인하세요
-        </Typography>
+        <Box>
+          <Typography variant="h5" gutterBottom>
+            대시보드
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            AI 기반 자동매매 시스템 현황을 한눈에 확인하세요
+          </Typography>
+        </Box>
       </Box>
 
       {/* Stats Grid */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
             icon={<AttachMoney />}
             title="KRW 잔액"
@@ -134,7 +139,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             color="primary"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
             icon={<AccountBalance />}
             title="활성 코인"
@@ -143,7 +148,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             color="success"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
             icon={<Timeline />}
             title="분석 완료"
@@ -151,7 +156,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             color="info"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
             icon={<Psychology />}
             title="AI 상태"
@@ -162,7 +167,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Grid>
 
       {/* Recent Analyses */}
-      <Box mb={4} sx={{ bgcolor: 'transparent' }}>
+      <Box mb={4}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6" fontWeight="bold">
             최근 분석 결과
@@ -177,7 +182,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </Box>
 
         {recentAnalyses.length === 0 ? (
-          <Alert severity="info">
+          <Alert severity="info" sx={{ width: '100%' }}>
             아직 분석 결과가 없습니다. 자동매매를 시작하면 분석 결과가 표시됩니다.
           </Alert>
         ) : (
@@ -196,7 +201,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Box>
 
       {/* Portfolio Summary */}
-      <Box sx={{ bgcolor: 'transparent' }}>
+      <Box>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6" fontWeight="bold">
             포트폴리오 요약 (활성 코인: {activeCoins}개)

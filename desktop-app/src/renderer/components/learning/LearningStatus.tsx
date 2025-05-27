@@ -81,14 +81,7 @@ const pulse = keyframes`
   }
 `;
 
-const rotate = keyframes`
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-`;
+// 회전 애니메이션 제거됨
 
 export const LearningStatus: React.FC = () => {
   const { portfolio, learningStates, toggleLearning } = useTradingContext();
@@ -190,7 +183,11 @@ export const LearningStatus: React.FC = () => {
   const selectedMetrics = selectedCoin ? learningMetrics[selectedCoin] : null;
 
   return (
-    <Box>
+    <Box sx={{ 
+      width: '100%',
+      minWidth: '100%',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+    }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5">
           학습 상태
@@ -252,8 +249,7 @@ export const LearningStatus: React.FC = () => {
                             >
                               <School 
                                 sx={{
-                                  color: isRunning ? 'success.main' : 'action.disabled',
-                                  animation: isRunning ? `${rotate} 4s linear infinite` : 'none'
+                                  color: isRunning ? 'success.main' : 'action.disabled'
                                 }}
                               />
                             </Badge>

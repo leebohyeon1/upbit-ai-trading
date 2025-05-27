@@ -70,7 +70,17 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
   };
 
   return (
-    <Box>
+    <Box sx={{ 
+      width: '100%',
+      minWidth: '100%',
+      p: { xs: 1, sm: 2, md: 3, lg: 4 }
+    }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h5">
+          거래 설정
+        </Typography>
+      </Box>
+      
       <Grid container spacing={3}>
         {/* 기본 거래 설정 */}
         <Grid item xs={12}>

@@ -151,13 +151,26 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     const loadSavedData = async () => {
       try {
         // 백엔드에서 불러오기
-        const savedPortfolio = await (window as any).electronAPI.loadPortfolio?.();
+        const savedPortfolio = await (window as any).electronAPI.getPortfolio();
+        console.log('[TradingContext] Portfolio loaded from backend:', savedPortfolio);
         if (savedPortfolio && savedPortfolio.length > 0) {
           setPortfolio(savedPortfolio);
+        } else {
+          // 백엔드에 데이터가 없으면 localStorage에서 로드
+          const localPortfolio = localStorage.getItem('portfolio');
+          if (localPortfolio) {
+            try {
+              const parsed = JSON.parse(localPortfolio);
+              console.log('[TradingContext] Portfolio loaded from localStorage:', parsed);
+              setPortfolio(parsed);
+            } catch (e) {
+              console.error('Failed to parse localStorage portfolio:', e);
+            }
+          }
         }
 
-        const savedTradingConfig = await (window as any).electronAPI.loadTradingConfig?.();
-        if (savedTradingConfig) {
+        const savedTradingConfig = await (window as any).electronAPI.getTradingConfig();
+        if (savedTradingConfig && Object.keys(savedTradingConfig).length > 0) {
           // 백엔드에서 로드한 설정도 기본값과 병합
           setTradingConfig({
             ...defaultTradingConfig,
@@ -184,23 +197,17 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           });
         }
 
-        const savedAnalysisConfigs = await (window as any).electronAPI.loadAnalysisConfigs?.();
+        const savedAnalysisConfigs = await (window as any).electronAPI.getAnalysisConfigs();
         if (savedAnalysisConfigs && savedAnalysisConfigs.length > 0) {
           setAnalysisConfigs(savedAnalysisConfigs);
         }
+
+        // 학습 상태는 electronAPI에서 자동으로 관리됨
       } catch (error) {
         console.error('Failed to load saved data:', error);
       }
       
-      // localStorage에서 로드 (백엔드 로드 실패 여부와 관계없이 실행)
-      const savedPortfolio = localStorage.getItem('portfolio');
-      if (savedPortfolio) {
-        try {
-          setPortfolio(JSON.parse(savedPortfolio));
-        } catch (e) {
-          console.error('Failed to parse saved portfolio:', e);
-        }
-      }
+      // localStorage에서 tradingConfig 로드 (포트폴리오는 이미 위에서 처리함)
 
       const savedConfig = localStorage.getItem('tradingConfig');
       if (savedConfig) {
@@ -265,10 +272,14 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
 
   // Save configurations when they change
   useEffect(() => {
-    localStorage.setItem('portfolio', JSON.stringify(portfolio));
-    // 백엔드에도 저장
-    (window as any).electronAPI.savePortfolio(portfolio);
-  }, [portfolio]);
+    // isLoading이 false일 때만 저장 (초기 로딩 중에는 저장하지 않음)
+    if (!isLoading && portfolio.length >= 0) {
+      console.log('[TradingContext] Saving portfolio:', portfolio);
+      localStorage.setItem('portfolio', JSON.stringify(portfolio));
+      // 백엔드에도 저장
+      (window as any).electronAPI.savePortfolio(portfolio);
+    }
+  }, [portfolio, isLoading]);
 
   useEffect(() => {
     // null이 아닌 경우에만 저장 (초기 로딩 중에는 저장하지 않음)
@@ -285,6 +296,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     // 백엔드에도 저장
     (window as any).electronAPI.saveAnalysisConfigs(analysisConfigs);
   }, [analysisConfigs]);
+
+  // 학습 상태는 electronAPI에서 자동으로 저장됨
 
   // 로딩 중이면 로딩 화면 표시
   if (isLoading || tradingConfig === null) {

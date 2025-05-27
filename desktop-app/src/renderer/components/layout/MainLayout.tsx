@@ -207,9 +207,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         sx={{
           flexGrow: 1,
           bgcolor: 'grey.50',
-          p: 3,
+          p: 0,
           overflow: 'auto',
-          height: '100vh'
+          height: '100vh',
+          width: '100%'
         }}
       >
         {children}
