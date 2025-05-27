@@ -48,7 +48,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     portfolio, 
     analyses, 
     tradingState,
-    tradingConfig 
+    tradingConfig,
+    tickers 
   } = useTradingContext();
   
   const [cooldowns, setCooldowns] = useState<CooldownInfo>({});
@@ -233,6 +234,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 const hasHoldings = account && parseFloat(account.balance) > 0;
                 const market = `KRW-${coin.symbol}`;
                 const cooldownInfo = cooldowns[market];
+                const ticker = tickers.find(t => t.market === market);
+                
+                // 수익률 계산
+                let profitRate = 0;
+                let profitAmount = 0;
+                if (hasHoldings && account && ticker) {
+                  const avgPrice = parseFloat(account.avg_buy_price || '0');
+                  const currentPrice = ticker.trade_price;
+                  const balance = parseFloat(account.balance);
+                  
+                  if (avgPrice > 0) {
+                    profitRate = ((currentPrice - avgPrice) / avgPrice) * 100;
+                    profitAmount = (currentPrice - avgPrice) * balance;
+                  }
+                }
                 
                 return (
                   <Grid item xs={12} sm={6} md={4} key={coin.symbol}>
@@ -248,9 +264,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             </Typography>
                           </Box>
                           {hasHoldings && (
-                            <TrendingUp color="success" />
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <TrendingUp color={profitRate >= 0 ? "success" : "error"} />
+                              <Typography 
+                                variant="body2" 
+                                color={profitRate >= 0 ? "success.main" : "error.main"}
+                                fontWeight="bold"
+                              >
+                                {profitRate.toFixed(2)}%
+                              </Typography>
+                            </Box>
                           )}
                         </Box>
+                        
+                        {/* 보유 정보 */}
+                        {hasHoldings && account && ticker && (
+                          <Box sx={{ mb: 2 }}>
+                            <Box display="flex" justifyContent="space-between" mb={0.5}>
+                              <Typography variant="caption" color="text.secondary">
+                                평균 매수가
+                              </Typography>
+                              <Typography variant="caption">
+                                {formatCurrency(account.avg_buy_price || '0')}
+                              </Typography>
+                            </Box>
+                            <Box display="flex" justifyContent="space-between" mb={0.5}>
+                              <Typography variant="caption" color="text.secondary">
+                                현재가
+                              </Typography>
+                              <Typography variant="caption">
+                                {formatCurrency(ticker.trade_price)}
+                              </Typography>
+                            </Box>
+                            <Box display="flex" justifyContent="space-between">
+                              <Typography variant="caption" color="text.secondary">
+                                평가손익
+                              </Typography>
+                              <Typography 
+                                variant="caption" 
+                                color={profitAmount >= 0 ? "success.main" : "error.main"}
+                                fontWeight="bold"
+                              >
+                                {formatCurrency(profitAmount)}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        )}
                         
                         {/* 쿨타임 정보 */}
                         {cooldownInfo && (
