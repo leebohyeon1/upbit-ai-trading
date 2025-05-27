@@ -49,6 +49,7 @@ interface LearningMetrics {
   bestTrade: number;
   worstTrade: number;
   sharpeRatio: number;
+  kellyFraction?: number;
   lastUpdated: Date;
   indicatorWeights: {
     name: string;
@@ -73,39 +74,39 @@ export const LearningStatus: React.FC = () => {
   const fetchLearningMetrics = async () => {
     setIsRefreshing(true);
     try {
-      // TODO: 실제 학습 메트릭을 가져오는 IPC 호출 필요
-      // 임시 더미 데이터
-      const dummyMetrics: Record<string, LearningMetrics> = {};
+      const metrics: Record<string, LearningMetrics> = {};
       
-      portfolio.filter(p => p.enabled).forEach(coin => {
-        const isRunning = learningStates.find(ls => ls.ticker === coin.symbol)?.isRunning || false;
-        
-        dummyMetrics[coin.symbol] = {
-          ticker: coin.symbol,
-          isRunning,
-          totalTrades: Math.floor(Math.random() * 1000) + 100,
-          winRate: Math.random() * 30 + 40, // 40-70%
-          averageProfit: Math.random() * 10 - 2, // -2% ~ 8%
-          bestTrade: Math.random() * 20 + 5,
-          worstTrade: -(Math.random() * 10 + 2),
-          sharpeRatio: Math.random() * 2 + 0.5,
-          lastUpdated: new Date(),
-          indicatorWeights: [
-            { name: 'RSI', weight: 0.85, successRate: 0.68, confidence: 0.9 },
-            { name: 'MACD', weight: 0.78, successRate: 0.65, confidence: 0.85 },
-            { name: 'BB', weight: 0.72, successRate: 0.62, confidence: 0.8 },
-            { name: 'Volume', weight: 0.65, successRate: 0.58, confidence: 0.75 },
-            { name: 'ATR', weight: 0.6, successRate: 0.55, confidence: 0.7 }
-          ],
-          performanceHistory: Array.from({ length: 30 }, (_, i) => ({
-            date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            winRate: Math.random() * 20 + 45,
-            profit: Math.random() * 10 - 3
-          }))
-        };
-      });
+      // 활성화된 코인들에 대해 학습 메트릭 가져오기
+      for (const coin of portfolio.filter(p => p.enabled)) {
+        try {
+          const ticker = `KRW-${coin.symbol}`;
+          const learningData = await window.electronAPI.getLearningMetrics(ticker);
+          
+          if (learningData) {
+            metrics[coin.symbol] = learningData;
+          } else {
+            // 데이터가 없는 경우 기본값
+            const isRunning = learningStates.find(ls => ls.ticker === coin.symbol)?.isRunning || false;
+            metrics[coin.symbol] = {
+              ticker: coin.symbol,
+              isRunning,
+              totalTrades: 0,
+              winRate: 0,
+              averageProfit: 0,
+              bestTrade: 0,
+              worstTrade: 0,
+              sharpeRatio: 0,
+              lastUpdated: new Date(),
+              indicatorWeights: [],
+              performanceHistory: []
+            };
+          }
+        } catch (error) {
+          console.error(`Failed to fetch metrics for ${coin.symbol}:`, error);
+        }
+      }
       
-      setLearningMetrics(dummyMetrics);
+      setLearningMetrics(metrics);
     } catch (error) {
       console.error('Failed to fetch learning metrics:', error);
     } finally {
@@ -116,7 +117,21 @@ export const LearningStatus: React.FC = () => {
   useEffect(() => {
     fetchLearningMetrics();
     const interval = setInterval(fetchLearningMetrics, 60000); // 1분마다 갱신
-    return () => clearInterval(interval);
+    
+    // 거래 완료 시 즉시 업데이트
+    const unsubscribe = window.electronAPI.onLearningUpdated((data: any) => {
+      console.log('[LearningStatus] 거래 완료 알림 수신:', data);
+      // 해당 코인의 메트릭만 다시 가져오기
+      setTimeout(() => {
+        console.log('[LearningStatus] 학습 메트릭 새로고침 시작');
+        fetchLearningMetrics();
+      }, 1000); // 1초 후 업데이트 (데이터 저장 시간 고려)
+    });
+    
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [portfolio, learningStates]);
 
   const handleToggleLearning = async (ticker: string) => {
@@ -329,6 +344,24 @@ export const LearningStatus: React.FC = () => {
                     </Box>
                     
                     <Divider sx={{ my: 2 }} />
+                    
+                    {selectedMetrics.totalTrades >= 10 && (
+                      <>
+                        <Box mb={2}>
+                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                            Kelly Criterion
+                          </Typography>
+                          <Typography variant="h6" color="primary.main">
+                            {((selectedMetrics.kellyFraction || 0) * 100).toFixed(1)}%
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            최적 베팅 크기
+                          </Typography>
+                        </Box>
+                        
+                        <Divider sx={{ my: 2 }} />
+                      </>
+                    )}
                     
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       마지막 업데이트

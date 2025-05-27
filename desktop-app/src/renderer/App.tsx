@@ -20,11 +20,9 @@ import { Dashboard } from './components/dashboard/Dashboard';
 import { PortfolioManager } from './components/portfolio/PortfolioManager';
 import { ApiKeySettings } from './components/settings/ApiKeySettings';
 import { TradingSettings } from './components/settings/TradingSettings';
-import { BacktestPanel } from './components/backtest/BacktestPanel';
-import { MarketCorrelationPanel } from './components/market/MarketCorrelationPanel';
-import { NewsAnalysisPanel } from './components/news/NewsAnalysisPanel';
 import { AnalysisSettings } from './components/analysis/AnalysisSettings';
 import { LearningStatus } from './components/learning/LearningStatus';
+import { BacktestPanel } from './components/backtest/BacktestPanel';
 import { Analysis } from './types';
 import { TAB_INDEX } from './constants';
 import { formatAIReason, getDecisionText, getDecisionColor } from './utils/formatters';
@@ -80,7 +78,7 @@ const AppContent: React.FC = () => {
       
       // 포트폴리오의 활성 코인들의 티커 정보 가져오기
       const enabledSymbols = context.portfolio
-        .filter(coin => coin.enabled)
+        .filter(coin => coin && coin.enabled && coin.symbol)
         .map(coin => `KRW-${coin.symbol}`);
       
       if (enabledSymbols.length > 0) {
@@ -95,7 +93,7 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(async () => {
       const enabledSymbols = context.portfolio
-        .filter(coin => coin.enabled)
+        .filter(coin => coin && coin.enabled && coin.symbol)
         .map(coin => `KRW-${coin.symbol}`);
       
       if (enabledSymbols.length > 0) {
@@ -112,66 +110,57 @@ const AppContent: React.FC = () => {
   };
 
   const renderContent = () => {
-    switch (activeTab) {
-      case TAB_INDEX.OVERVIEW:
-        return (
+    return (
+      <>
+        <Box sx={{ display: activeTab === TAB_INDEX.OVERVIEW ? 'block' : 'none' }}>
           <Dashboard 
             onTabChange={setActiveTab}
             onAnalysisClick={handleAnalysisClick}
           />
-        );
-      
-      case TAB_INDEX.PORTFOLIO:
-        return (
+        </Box>
+        
+        <Box sx={{ display: activeTab === TAB_INDEX.PORTFOLIO ? 'block' : 'none' }}>
           <PortfolioManager
             portfolio={context.portfolio}
             accounts={context.accounts}
             tickers={context.tickers}
             onUpdatePortfolio={context.updatePortfolio}
           />
-        );
-      
-      case TAB_INDEX.ANALYSIS:
-        return <AnalysisSettings />;
-      
-      case TAB_INDEX.SETTINGS:
-        return (
-          <Box>
-            <Typography variant="h4" fontWeight="bold" gutterBottom>
-              거래 설정
-            </Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <ApiKeySettings
-                  apiKeyStatus={context.apiKeyStatus}
-                  onValidate={context.validateApiKey}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TradingSettings
-                  config={context.tradingConfig}
-                  onChange={context.updateTradingConfig}
-                />
-              </Grid>
+        </Box>
+        
+        <Box sx={{ display: activeTab === TAB_INDEX.ANALYSIS ? 'block' : 'none' }}>
+          <AnalysisSettings />
+        </Box>
+        
+        <Box sx={{ display: activeTab === TAB_INDEX.SETTINGS ? 'block' : 'none' }}>
+          <Typography variant="h4" fontWeight="bold" gutterBottom>
+            거래 설정
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <ApiKeySettings
+                apiKeyStatus={context.apiKeyStatus}
+                onValidate={context.validateApiKey}
+              />
             </Grid>
-          </Box>
-        );
-      
-      case TAB_INDEX.LEARNING:
-        return <LearningStatus />;
-
-      case TAB_INDEX.BACKTEST:
-        return <BacktestPanel />;
-
-      case TAB_INDEX.MARKET_CORRELATION:
-        return <MarketCorrelationPanel />;
-
-      case TAB_INDEX.NEWS:
-        return <NewsAnalysisPanel />;
-      
-      default:
-        return null;
-    }
+            <Grid item xs={12}>
+              <TradingSettings
+                config={context.tradingConfig}
+                onChange={context.updateTradingConfig}
+              />
+            </Grid>
+          </Grid>
+        </Box>
+        
+        <Box sx={{ display: activeTab === TAB_INDEX.LEARNING ? 'block' : 'none' }}>
+          <LearningStatus />
+        </Box>
+        
+        <Box sx={{ display: activeTab === TAB_INDEX.BACKTEST ? 'block' : 'none' }}>
+          <BacktestPanel />
+        </Box>
+      </>
+    );
   };
 
   return (

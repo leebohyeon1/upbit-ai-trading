@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // API Key methods
-  validateApiKey: (accessKey, secretKey) => ipcRenderer.invoke('validate-api-key', accessKey, secretKey),
+  validateApiKey: (accessKey, secretKey, claudeApiKey) => ipcRenderer.invoke('validate-api-key', accessKey, secretKey, claudeApiKey),
   
   // Account methods
   fetchAccounts: () => ipcRenderer.invoke('get-accounts'),
@@ -21,12 +21,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Learning methods
   toggleLearning: async (ticker, isRunning) => {
-    if (isRunning) {
-      return await ipcRenderer.invoke('start-learning', ticker);
-    } else {
-      return await ipcRenderer.invoke('stop-learning', ticker);
-    }
+    return await ipcRenderer.invoke('toggle-learning', ticker, isRunning);
   },
+  getLearningMetrics: (ticker) => ipcRenderer.invoke('get-learning-metrics', ticker),
   
   // Settings methods
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
@@ -63,5 +60,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLearningProgress: (callback) => {
     ipcRenderer.on('learning-progress', (event, states) => callback(states));
     return () => ipcRenderer.removeAllListeners('learning-progress');
+  },
+  
+  onLearningUpdated: (callback) => {
+    ipcRenderer.on('learning-updated', (event, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners('learning-updated');
   }
 });

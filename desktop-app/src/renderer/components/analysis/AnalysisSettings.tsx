@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -48,7 +48,45 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
   onSettingsChange
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const [localSettings, setLocalSettings] = useState(settings);
+  const [localSettings, setLocalSettings] = useState({
+    rsiOverbought: 70,
+    rsiOversold: 30,
+    minVolume: 0,
+    minConfidenceForBuy: 60,
+    minConfidenceForSell: 70,
+    maxPositionSize: 100000,
+    defaultBuyRatio: 0.1,
+    defaultSellRatio: 0.5,
+    buyingCooldown: 60,
+    sellingCooldown: 30,
+    stopLossPercent: 5,
+    takeProfitPercent: 10,
+    useKellyOptimization: false,
+    volatilityAdjustment: false,
+    newsImpactMultiplier: 1.0,
+    ...settings
+  });
+
+  // settings prop이 변경될 때 localSettings 업데이트
+  useEffect(() => {
+    setLocalSettings({
+      rsiOverbought: settings.rsiOverbought || 70,
+      rsiOversold: settings.rsiOversold || 30,
+      minVolume: settings.minVolume || 0,
+      minConfidenceForBuy: settings.minConfidenceForBuy || 60,
+      minConfidenceForSell: settings.minConfidenceForSell || 70,
+      maxPositionSize: settings.maxPositionSize || 100000,
+      defaultBuyRatio: settings.defaultBuyRatio || 0.1,
+      defaultSellRatio: settings.defaultSellRatio || 0.5,
+      buyingCooldown: settings.buyingCooldown || 60,
+      sellingCooldown: settings.sellingCooldown || 30,
+      stopLossPercent: settings.stopLossPercent || 5,
+      takeProfitPercent: settings.takeProfitPercent || 10,
+      useKellyOptimization: settings.useKellyOptimization || false,
+      volatilityAdjustment: settings.volatilityAdjustment || false,
+      newsImpactMultiplier: settings.newsImpactMultiplier || 1.0,
+    });
+  }, [settings]);
 
   const handleChange = (field: string, value: any) => {
     const newSettings = { ...localSettings, [field]: value };
@@ -82,7 +120,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     과매수 기준: {localSettings.rsiOverbought}
                   </Typography>
                   <Slider
-                    value={localSettings.rsiOverbought}
+                    value={localSettings.rsiOverbought || 70}
                     onChange={(e, value) => handleChange('rsiOverbought', value)}
                     min={60}
                     max={90}
@@ -94,7 +132,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     과매도 기준: {localSettings.rsiOversold}
                   </Typography>
                   <Slider
-                    value={localSettings.rsiOversold}
+                    value={localSettings.rsiOversold || 30}
                     onChange={(e, value) => handleChange('rsiOversold', value)}
                     min={10}
                     max={40}
@@ -114,7 +152,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     매수 최소 신뢰도: {localSettings.minConfidenceForBuy}%
                   </Typography>
                   <Slider
-                    value={localSettings.minConfidenceForBuy}
+                    value={localSettings.minConfidenceForBuy || 60}
                     onChange={(e, value) => handleChange('minConfidenceForBuy', value)}
                     min={50}
                     max={95}
@@ -126,7 +164,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     매도 최소 신뢰도: {localSettings.minConfidenceForSell}%
                   </Typography>
                   <Slider
-                    value={localSettings.minConfidenceForSell}
+                    value={localSettings.minConfidenceForSell || 70}
                     onChange={(e, value) => handleChange('minConfidenceForSell', value)}
                     min={50}
                     max={95}
@@ -145,17 +183,17 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                   fullWidth
                   label="최대 투자 금액 (KRW)"
                   type="number"
-                  value={localSettings.maxPositionSize}
-                  onChange={(e) => handleChange('maxPositionSize', parseInt(e.target.value))}
+                  value={localSettings.maxPositionSize || 100000}
+                  onChange={(e) => handleChange('maxPositionSize', parseInt(e.target.value) || 0)}
                   sx={{ mb: 2 }}
                 />
                 
                 <Box sx={{ px: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    기본 매수 비율: {(localSettings.defaultBuyRatio * 100).toFixed(0)}%
+                    기본 매수 비율: {((localSettings.defaultBuyRatio || 0.1) * 100).toFixed(0)}%
                   </Typography>
                   <Slider
-                    value={localSettings.defaultBuyRatio * 100}
+                    value={(localSettings.defaultBuyRatio || 0.1) * 100}
                     onChange={(e, value) => handleChange('defaultBuyRatio', value as number / 100)}
                     min={5}
                     max={100}
@@ -172,10 +210,10 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                 </Typography>
                 <Box sx={{ px: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    손절 기준: -{localSettings.stopLossPercent}%
+                    손절 기준: -{localSettings.stopLossPercent || 5}%
                   </Typography>
                   <Slider
-                    value={localSettings.stopLossPercent}
+                    value={localSettings.stopLossPercent || 5}
                     onChange={(e, value) => handleChange('stopLossPercent', value)}
                     min={1}
                     max={20}
@@ -185,10 +223,10 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                   />
                   
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    익절 기준: +{localSettings.takeProfitPercent}%
+                    익절 기준: +{localSettings.takeProfitPercent || 10}%
                   </Typography>
                   <Slider
-                    value={localSettings.takeProfitPercent}
+                    value={localSettings.takeProfitPercent || 10}
                     onChange={(e, value) => handleChange('takeProfitPercent', value)}
                     min={2}
                     max={30}
@@ -210,8 +248,8 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                       fullWidth
                       label="매수 쿨다운"
                       type="number"
-                      value={localSettings.buyingCooldown}
-                      onChange={(e) => handleChange('buyingCooldown', parseInt(e.target.value))}
+                      value={localSettings.buyingCooldown || 60}
+                      onChange={(e) => handleChange('buyingCooldown', parseInt(e.target.value) || 0)}
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -219,8 +257,8 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                       fullWidth
                       label="매도 쿨다운"
                       type="number"
-                      value={localSettings.sellingCooldown}
-                      onChange={(e) => handleChange('sellingCooldown', parseInt(e.target.value))}
+                      value={localSettings.sellingCooldown || 30}
+                      onChange={(e) => handleChange('sellingCooldown', parseInt(e.target.value) || 0)}
                     />
                   </Grid>
                 </Grid>
@@ -265,6 +303,17 @@ export const AnalysisSettings: React.FC = () => {
   const [localConfigs, setLocalConfigs] = useState<any>({});
   const [saveMessage, setSaveMessage] = useState('');
   const [selectedPreset, setSelectedPreset] = useState<string>('balanced');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+      }
+    };
+  }, []);
 
   // 프리셋 정의
   const presets = {
@@ -272,101 +321,193 @@ export const AnalysisSettings: React.FC = () => {
       name: '보수적',
       description: '낮은 리스크, 안정적인 수익 추구',
       settings: {
+        rsiOverbought: 80,
+        rsiOversold: 20,
         minConfidenceForBuy: 80,
         minConfidenceForSell: 70,
         defaultBuyRatio: 0.1,
+        defaultSellRatio: 0.3,
         stopLossPercent: 3,
-        takeProfitPercent: 5
+        takeProfitPercent: 5,
+        buyingCooldown: 60,
+        sellingCooldown: 40,
+        maxPositionSize: 100000,
+        minVolume: 200000000,
+        volatilityAdjustment: true,
+        useKellyOptimization: false
       }
     },
     balanced: {
       name: '균형',
       description: '리스크와 수익의 균형',
       settings: {
+        rsiOverbought: 75,
+        rsiOversold: 25,
         minConfidenceForBuy: 65,
         minConfidenceForSell: 60,
         defaultBuyRatio: 0.25,
+        defaultSellRatio: 0.5,
         stopLossPercent: 5,
-        takeProfitPercent: 10
+        takeProfitPercent: 10,
+        buyingCooldown: 35,
+        sellingCooldown: 25,
+        maxPositionSize: 150000,
+        minVolume: 100000000,
+        volatilityAdjustment: true,
+        useKellyOptimization: false
       }
     },
     aggressive: {
       name: '공격적',
       description: '높은 리스크, 높은 수익 추구',
       settings: {
+        rsiOverbought: 70,
+        rsiOversold: 30,
         minConfidenceForBuy: 55,
         minConfidenceForSell: 50,
         defaultBuyRatio: 0.4,
+        defaultSellRatio: 0.7,
         stopLossPercent: 7,
-        takeProfitPercent: 15
+        takeProfitPercent: 15,
+        buyingCooldown: 20,
+        sellingCooldown: 15,
+        maxPositionSize: 200000,
+        minVolume: 50000000,
+        volatilityAdjustment: false,
+        useKellyOptimization: true
       }
     }
   };
 
+  // 초기 로드 시에만 실행
   useEffect(() => {
-    // trading-config.ts에서 기본값 로드
-    const loadDefaultConfigs = async () => {
-      try {
-        const savedConfigs = await (window as any).electronAPI.getAnalysisConfigs();
-        
-        if (savedConfigs && savedConfigs.length > 0) {
-          const configMap: any = {};
-          savedConfigs.forEach((config: any) => {
-            configMap[config.ticker] = config;
-          });
-          setLocalConfigs(configMap);
-        } else {
-          // 기본값 설정
-          const defaultConfigs: any = {};
-          portfolio.filter(p => p.enabled).forEach(coin => {
-            // trading-config.ts의 DEFAULT_COIN_CONFIGS 사용
-            defaultConfigs[coin.symbol] = {
-              ticker: `KRW-${coin.symbol}`,
-              rsiOverbought: 75,
-              rsiOversold: 25,
-              minVolume: 100000000,
-              minConfidenceForBuy: 65,
-              minConfidenceForSell: 60,
-              maxPositionSize: 150000,
-              defaultBuyRatio: 0.25,
-              defaultSellRatio: 0.5,
-              buyingCooldown: 35,
-              sellingCooldown: 25,
-              stopLossPercent: 7,
-              takeProfitPercent: 12,
-              volatilityAdjustment: true,
-              useKellyOptimization: false
-            };
-          });
-          setLocalConfigs(defaultConfigs);
+    if (!isInitialized && portfolio.length > 0) {
+      const loadDefaultConfigs = async () => {
+        try {
+          // Context의 analysisConfigs가 있으면 사용
+          if (analysisConfigs && analysisConfigs.length > 0) {
+            const configMap: any = {};
+            analysisConfigs.forEach((config: any) => {
+              const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+              configMap[symbol] = config;
+            });
+            setLocalConfigs(configMap);
+          } else {
+            // 저장된 설정 로드
+            const savedConfigs = await (window as any).electronAPI.getAnalysisConfigs();
+            
+            if (savedConfigs && savedConfigs.length > 0) {
+              const configMap: any = {};
+              savedConfigs.forEach((config: any) => {
+                const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+                configMap[symbol] = config;
+              });
+              setLocalConfigs(configMap);
+            } else {
+              // 기본값 설정
+              const defaultConfigs: any = {};
+              portfolio.filter(p => p.enabled).forEach(coin => {
+                defaultConfigs[coin.symbol] = {
+                  ticker: `KRW-${coin.symbol}`,
+                  rsiOverbought: 75,
+                  rsiOversold: 25,
+                  minVolume: 100000000,
+                  minConfidenceForBuy: 65,
+                  minConfidenceForSell: 60,
+                  maxPositionSize: 150000,
+                  defaultBuyRatio: 0.25,
+                  defaultSellRatio: 0.5,
+                  buyingCooldown: 35,
+                  sellingCooldown: 25,
+                  stopLossPercent: 7,
+                  takeProfitPercent: 12,
+                  volatilityAdjustment: true,
+                  useKellyOptimization: false
+                };
+              });
+              setLocalConfigs(defaultConfigs);
+            }
+          }
+          setIsInitialized(true);
+        } catch (error) {
+          console.error('Failed to load analysis configs:', error);
         }
-      } catch (error) {
-        console.error('Failed to load analysis configs:', error);
-      }
-    };
+      };
 
-    loadDefaultConfigs();
-  }, [portfolio]);
+      loadDefaultConfigs();
+    }
+  }, [isInitialized, portfolio.length, analysisConfigs]);
+
+  // analysisConfigs가 변경될 때 localConfigs 업데이트 (외부에서 변경된 경우)
+  useEffect(() => {
+    if (isInitialized && analysisConfigs && analysisConfigs.length > 0) {
+      const configMap: any = {};
+      analysisConfigs.forEach((config: any) => {
+        const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+        configMap[symbol] = config;
+      });
+      
+      // 현재 localConfigs와 다른 경우에만 업데이트
+      const currentKeys = Object.keys(localConfigs);
+      const newKeys = Object.keys(configMap);
+      const isDifferent = currentKeys.length !== newKeys.length || 
+        currentKeys.some(key => JSON.stringify(localConfigs[key]) !== JSON.stringify(configMap[key]));
+      
+      if (isDifferent) {
+        setLocalConfigs(configMap);
+      }
+    }
+  }, [analysisConfigs, isInitialized]);
 
   const handleSettingsChange = (coin: string, settings: any) => {
-    setLocalConfigs({
+    const updatedConfigs = {
       ...localConfigs,
       [coin]: { ...settings, ticker: `KRW-${coin}` }
-    });
+    };
+    setLocalConfigs(updatedConfigs);
+    
+    // 자동 저장 (디바운스 처리를 위해 setTimeout 사용)
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+    }
+    
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        const configArray = Object.values(updatedConfigs) as any[];
+        await updateAnalysisConfigs(configArray);
+        await (window as any).electronAPI.saveAnalysisConfigs(configArray);
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    }, 1000); // 1초 후 자동 저장
   };
 
-  const handleApplyPreset = () => {
+  const handleApplyPreset = async () => {
     const preset = presets[selectedPreset as keyof typeof presets];
     const updatedConfigs = { ...localConfigs };
     
     Object.keys(updatedConfigs).forEach(coin => {
       updatedConfigs[coin] = {
         ...updatedConfigs[coin],
-        ...preset.settings
+        ...preset.settings,
+        ticker: updatedConfigs[coin].ticker // ticker는 유지
       };
     });
     
     setLocalConfigs(updatedConfigs);
+    
+    // 즉시 저장
+    try {
+      const configArray = Object.values(updatedConfigs) as any[];
+      await updateAnalysisConfigs(configArray);
+      await (window as any).electronAPI.saveAnalysisConfigs(configArray);
+      
+      setSaveMessage(`${preset.name} 프리셋이 적용되었습니다.`);
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (error) {
+      console.error('Failed to apply preset:', error);
+      setSaveMessage('프리셋 적용에 실패했습니다.');
+    }
   };
 
   const handleSave = async () => {
@@ -406,6 +547,19 @@ export const AnalysisSettings: React.FC = () => {
       };
     });
     setLocalConfigs(defaultConfigs);
+    
+    // 즉시 저장
+    try {
+      const configArray = Object.values(defaultConfigs) as any[];
+      await updateAnalysisConfigs(configArray);
+      await (window as any).electronAPI.saveAnalysisConfigs(configArray);
+      
+      setSaveMessage('설정이 기본값으로 초기화되었습니다.');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (error) {
+      console.error('Failed to reset configs:', error);
+      setSaveMessage('설정 초기화에 실패했습니다.');
+    }
   };
 
   const enabledCoins = portfolio.filter(p => p.enabled);

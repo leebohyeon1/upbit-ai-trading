@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -19,6 +19,7 @@ import {
   CheckCircle
 } from '@mui/icons-material';
 import { ApiKeyStatus } from '../../types';
+import { useTradingContext } from '../../contexts/TradingContext';
 
 interface ApiKeySettingsProps {
   apiKeyStatus: ApiKeyStatus;
@@ -29,6 +30,7 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
   apiKeyStatus,
   onValidate
 }) => {
+  const { fetchAccounts } = useTradingContext();
   const [accessKey, setAccessKey] = useState('');
   const [secretKey, setSecretKey] = useState('');
   const [claudeApiKey, setClaudeApiKey] = useState('');
@@ -36,6 +38,30 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
   const [showClaudeKey, setShowClaudeKey] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  
+  // 컴포넌트 마운트 시 저장된 API 키 불러오기
+  React.useEffect(() => {
+    const loadSavedKeys = async () => {
+      try {
+        const savedKeys = await (window as any).electronAPI.getApiKeys();
+        if (savedKeys) {
+          if (savedKeys.upbitAccessKey) setAccessKey(savedKeys.upbitAccessKey);
+          if (savedKeys.upbitSecretKey) setSecretKey(savedKeys.upbitSecretKey);
+          if (savedKeys.anthropicApiKey) setClaudeApiKey(savedKeys.anthropicApiKey);
+        }
+      } catch (error) {
+        console.error('Failed to load saved API keys:', error);
+      }
+    };
+    loadSavedKeys();
+  }, []);
+
+  // API 키가 유효한 경우 계좌 정보 불러오기
+  React.useEffect(() => {
+    if (apiKeyStatus.isValid) {
+      fetchAccounts();
+    }
+  }, [apiKeyStatus.isValid]);
 
   const handleValidate = async () => {
     if (!accessKey || !secretKey) {
@@ -53,10 +79,17 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
       } else {
         // API 키가 유효하면 저장
         await (window as any).electronAPI.saveApiKeys({
-          accessKey,
-          secretKey,
+          upbitAccessKey: accessKey,
+          upbitSecretKey: secretKey,
           anthropicApiKey: claudeApiKey
         });
+        
+        // 계좌 정보 다시 불러오기
+        try {
+          await fetchAccounts();
+        } catch (err) {
+          console.error('Failed to fetch accounts after API key validation:', err);
+        }
       }
     } catch (error) {
       setValidationError('API 키 검증 중 오류가 발생했습니다.');

@@ -53,9 +53,7 @@ export const TAB_INDEX = {
   ANALYSIS: 2,
   SETTINGS: 3,
   LEARNING: 4,
-  BACKTEST: 5,
-  MARKET_CORRELATION: 6,
-  NEWS: 7
+  BACKTEST: 5
 };
 
 // 색상 정의
@@ -70,7 +68,7 @@ export const COLORS = {
 export const DECISION_TEXT = {
   buy: '매수',
   sell: '매도',
-  hold: '보유'
+  hold: '보류'
 };
 
 // 신뢰도 임계값

@@ -139,9 +139,14 @@ export class LearningService extends EventEmitter {
   }
 
   public recordTrade(result: TradeResult): void {
+    console.log(`[LearningService] 거래 기록: ${result.market}, 수익률: ${result.profitRate.toFixed(2)}%`);
     this.tradeHistory.push(result);
     this.updateWeights(result);
     this.emit('trade-recorded', result);
+    
+    // 즉시 저장
+    this.saveData();
+    console.log(`[LearningService] 데이터 저장 완료. 총 거래: ${this.tradeHistory.length}`);
   }
 
   private updateWeights(result: TradeResult): void {

@@ -113,11 +113,14 @@ export interface TradingConfig {
   dynamicConfidence: boolean;
   riskLevel: number;
   useKellyCriterion: boolean;
+  maxKellyFraction?: number;
   volatilityWindow: number;
   correlationThreshold: number;
   minConfidenceForBuy: number;
   minConfidenceForSell: number;
   confidenceWindowSize: number;
+  buyingCooldown: number;
+  sellingCooldown: number;
   decisionThresholds: {
     buyThreshold: number;
     sellThreshold: number;

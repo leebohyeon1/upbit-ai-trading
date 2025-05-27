@@ -57,18 +57,43 @@ export interface OptimalParameters {
 }
 
 class BacktestService {
-  // 백테스트 실행 (과거 6개월)
+  // 백테스트 실행
   async runBacktest(
     market: string,
-    config: TradingConfig,
-    months: number = 6
+    startDate: string,
+    endDate: string,
+    config: TradingConfig
   ): Promise<BacktestResult> {
-    console.log(`Starting backtest for ${market} over ${months} months...`);
+    // 날짜를 Date 객체로 변환
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // 기간 계산 (개월 수)
+    const months = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    
+    console.log(`Starting backtest for ${market} from ${startDate} to ${endDate} (약 ${months}개월)...`);
+    
+    // market이 이미 KRW-BTC 형태인 경우와 BTC만 있는 경우 처리
+    const ticker = market.startsWith('KRW-') ? market : `KRW-${market}`;
     
     // 과거 데이터 가져오기
-    const candles = await this.fetchHistoricalData(market, months);
-    if (candles.length < 200) {
-      throw new Error('Insufficient historical data for backtest');
+    const candles = await this.fetchHistoricalData(ticker, months);
+    console.log(`Fetched ${candles.length} candles for ${ticker}`);
+    
+    if (candles.length < 50) { // 최소 50개 캔들로 요구사항 완화
+      throw new Error(`Insufficient historical data for backtest. Only ${candles.length} candles found.`);
+    }
+    
+    // 날짜 범위에 맞는 캔들만 필터링
+    const filteredCandles = candles.filter(candle => {
+      const candleDate = new Date(candle.candle_date_time_utc);
+      return candleDate >= start && candleDate <= end;
+    });
+    
+    console.log(`Using ${filteredCandles.length} candles within date range`);
+    
+    if (filteredCandles.length < 50) {
+      throw new Error(`Insufficient data in selected period. Only ${filteredCandles.length} candles found.`);
     }
     
     // 백테스트 실행
@@ -78,9 +103,12 @@ class BacktestService {
     let maxCapital = capital;
     let minCapital = capital;
     
-    // 슬라이딩 윈도우로 캔들 데이터 분석
-    for (let i = 200; i < candles.length; i++) {
-      const window = candles.slice(i - 200, i + 1);
+    // 슬라이딩 윈도우로 캔들 데이터 분석 (최소 50개 캔들 필요)
+    const windowSize = Math.min(200, filteredCandles.length - 1);
+    console.log(`Using window size: ${windowSize}`);
+    
+    for (let i = windowSize; i < filteredCandles.length; i++) {
+      const window = filteredCandles.slice(Math.max(0, i - windowSize), i + 1);
       const currentCandle = window[window.length - 1];
       
       // 기술적 분석 수행
@@ -147,7 +175,7 @@ class BacktestService {
     
     // 마지막 포지션 청산
     if (position) {
-      const lastCandle = candles[candles.length - 1];
+      const lastCandle = filteredCandles[filteredCandles.length - 1];
       const sellValue = position.amount * lastCandle.trade_price;
       const profit = (lastCandle.trade_price - position.price) * position.amount;
       const profitPercent = ((lastCandle.trade_price - position.price) / position.price) * 100;
@@ -170,15 +198,14 @@ class BacktestService {
     const performance = this.calculatePerformance(trades, capital, maxCapital, minCapital);
     
     // 시장 상황별 성과 분석
-    const marketConditions = await this.analyzeMarketConditions(market, candles, trades);
+    const marketConditions = await this.analyzeMarketConditions(ticker, filteredCandles, trades);
     
     return {
-      market,
+      market: ticker,
       period: {
-        start: new Date(candles[0].candle_date_time_utc),
-        end: new Date(candles[candles.length - 1].candle_date_time_utc),
-        days: Math.round((new Date(candles[candles.length - 1].candle_date_time_utc).getTime() - 
-                         new Date(candles[0].candle_date_time_utc).getTime()) / (1000 * 60 * 60 * 24))
+        start: start,
+        end: end,
+        days: Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
       },
       trades,
       performance,
@@ -209,7 +236,17 @@ class BacktestService {
       };
       
       try {
-        const result = await this.runBacktest(market, testConfig, months);
+        // 임시로 전체 기간 사용 (최적화용)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setMonth(startDate.getMonth() - months);
+        
+        const result = await this.runBacktest(
+          market, 
+          startDate.toISOString().split('T')[0],
+          endDate.toISOString().split('T')[0],
+          testConfig
+        );
         
         // 점수 계산 (승률 * 평균 수익률 - 최대 낙폭)
         const score = result.performance.winRate * result.performance.averageReturn - 

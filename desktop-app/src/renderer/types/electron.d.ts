@@ -15,7 +15,7 @@ declare global {
   interface Window {
     electronAPI: {
       // API Key methods
-      validateApiKey: (accessKey: string, secretKey: string) => Promise<ApiKeyStatus>;
+      validateApiKey: (accessKey: string, secretKey: string, claudeApiKey?: string) => Promise<ApiKeyStatus>;
       
       // Account methods
       fetchAccounts: () => Promise<Account[]>;
@@ -34,6 +34,7 @@ declare global {
       
       // Learning methods
       toggleLearning: (ticker: string, isRunning: boolean) => Promise<void>;
+      getLearningMetrics: (ticker: string) => Promise<any>;
       
       // Settings methods
       saveApiKeys: (keys: { accessKey: string; secretKey: string }) => Promise<void>;
@@ -52,6 +53,7 @@ declare global {
       onSingleAnalysisCompleted: (callback: (analysis: Analysis) => void) => () => void;
       onTradingStateChanged: (callback: (state: TradingState) => void) => () => void;
       onLearningProgress: (callback: (states: LearningState[]) => void) => () => void;
+      onLearningUpdated: (callback: (data: any) => void) => () => void;
     };
   }
 }

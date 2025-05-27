@@ -2,9 +2,10 @@ import upbitService, { UpbitTicker } from './upbit-service';
 import analysisService, { TechnicalAnalysis } from './analysis-service';
 import aiService from './ai-service';
 import { EventEmitter } from 'events';
-import TradingConfigHelper, { CoinSpecificConfig } from './trading-config';
+import { CoinSpecificConfig } from './trading-config';
 import { LearningService } from './learning-service';
 import { ApiClient } from './api-client';
+import kellyService from './kelly-criterion-service';
 
 export interface TradingConfig {
   enableRealTrading: boolean;
@@ -188,6 +189,10 @@ class TradingEngine extends EventEmitter {
 
   updateConfig(newConfig: Partial<TradingConfig>) {
     this.config = { ...this.config, ...newConfig };
+    // maxInvestmentPerCoin이 0이면 기본값 설정
+    if (this.config.maxInvestmentPerCoin === 0) {
+      this.config.maxInvestmentPerCoin = 100000; // 10만원 기본값
+    }
     console.log('Trading config updated:', this.config);
   }
 
@@ -253,6 +258,13 @@ class TradingEngine extends EventEmitter {
 
     try {
       console.log('Performing market analysis...');
+      console.log('Active markets:', this.activeMarkets);
+      console.log('Analysis configs:', this.analysisConfigs.length);
+      
+      if (this.activeMarkets.length === 0) {
+        console.log('No active markets to analyze');
+        return;
+      }
       
       for (const market of this.activeMarkets) {
         try {
@@ -276,7 +288,11 @@ class TradingEngine extends EventEmitter {
 
           // 분석 설정 찾기 (market에서 코인 심볼 추출)
           const coinSymbol = market.split('-')[1];
-          const analysisConfig = this.analysisConfigs.find(config => config.ticker === coinSymbol);
+          const analysisConfig = this.analysisConfigs.find(config => {
+            // config.ticker가 KRW-BTC 형태일 수도 있고 BTC 형태일 수도 있음
+            const configTicker = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+            return configTicker === coinSymbol;
+          });
           
           // 기술적 분석 수행 (추가 데이터 및 설정 포함)
           const technicalAnalysis = await analysisService.analyzeTechnicals(candles, ticker, orderbook, trades, analysisConfig);
@@ -352,19 +368,30 @@ class TradingEngine extends EventEmitter {
     try {
       // 코인별 설정 가져오기
       const ticker = market.split('-')[1];
-      const analysisConfig = this.analysisConfigs.find(config => config.ticker === ticker);
+      const analysisConfig = this.analysisConfigs.find(config => {
+        // config.ticker가 KRW-BTC 형태일 수도 있고 BTC 형태일 수도 있음
+        const configTicker = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+        return configTicker === ticker;
+      });
       
       if (!analysisConfig) {
         console.log(`No analysis config found for ${market}, skipping trade signal`);
         return;
       }
       
-      // UI에서 설정한 값들 사용 (기본값 없음)
+      // UI에서 설정한 값들 사용 (전체 설정에서 기본값 가져오기)
+      console.log(`[${market}] Analysis config:`, {
+        buyingCooldown: analysisConfig.buyingCooldown,
+        sellingCooldown: analysisConfig.sellingCooldown,
+        globalBuyingCooldown: this.config.buyingCooldown,
+        globalSellingCooldown: this.config.sellingCooldown
+      });
+      
       let coinConfig: CoinSpecificConfig = {
         minConfidenceForBuy: analysisConfig.buyConfidenceThreshold || 50,
         minConfidenceForSell: analysisConfig.sellConfidenceThreshold || 50,
-        buyingCooldown: analysisConfig.buyCooldown || 0,
-        sellingCooldown: analysisConfig.sellCooldown || 0,
+        buyingCooldown: analysisConfig.buyingCooldown || this.config.buyingCooldown,
+        sellingCooldown: analysisConfig.sellingCooldown || this.config.sellingCooldown,
         defaultBuyRatio: analysisConfig.buying?.defaultBuyRatio || 0.1,
         defaultSellRatio: analysisConfig.selling?.defaultSellRatio || 0.5,
         stopLossPercent: analysisConfig.stopLossMode === 'signal' ? 100 : (analysisConfig.stopLoss || 5),
@@ -379,21 +406,13 @@ class TradingEngine extends EventEmitter {
         preferredTradingHours: analysisConfig.preferredTradingHours || []
       };
       
-      // 현재 시간 확인
-      const currentHour = new Date().getHours();
-      if (!TradingConfigHelper.shouldTradeAtHour(coinConfig, currentHour)) {
-        console.log(`${market}: Trading not preferred at hour ${currentHour}`);
-        return;
-      }
-      
-      // 시장 상황 판단 (간단한 버전)
-      const marketCondition = this.determineMarketCondition(technical);
-      coinConfig = TradingConfigHelper.adjustConfigForMarketCondition(coinConfig, marketCondition);
-      
-      // 변동성에 따른 조정
-      if (technical.atr) {
-        const volatility = technical.atr / technical.bollinger.middle;
-        coinConfig = TradingConfigHelper.adjustConfigForVolatility(coinConfig, volatility);
+      // UI에서 설정한 preferredTradingHours가 있으면 확인
+      if (coinConfig.preferredTradingHours && coinConfig.preferredTradingHours.length > 0) {
+        const currentHour = new Date().getHours();
+        if (!coinConfig.preferredTradingHours.includes(currentHour)) {
+          console.log(`${market}: Trading not preferred at hour ${currentHour}`);
+          return;
+        }
       }
       
       // 동적 파라미터 계산
@@ -424,23 +443,27 @@ class TradingEngine extends EventEmitter {
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
         if (!skipCooldown && this.isInCooldownWithConfig(market, 'buy', coinConfig.buyingCooldown)) {
+          console.log(`[${market}] 매수 쿨타임 중 (설정: ${coinConfig.buyingCooldown}분)`);
           return;
+        } else if (skipCooldown) {
+          console.log(`[${market}] 높은 신뢰도(${technical.confidence.toFixed(1)}%)로 쿨타임 무시`);
         }
 
         // 매수 로직
-        const maxInvestment = Math.min(this.config.maxInvestmentPerCoin, coinConfig.maxPositionSize);
-        if (krwAccount && parseFloat(krwAccount.balance) > maxInvestment) {
+        const maxPositionSize = coinConfig.maxPositionSize || this.config.maxInvestmentPerCoin;
+        const maxInvestment = Math.min(this.config.maxInvestmentPerCoin, maxPositionSize);
+        if (krwAccount && parseFloat(krwAccount.balance) > 0) {
           // Kelly Criterion 계산
           let adjustedBuyRatio = coinConfig.defaultBuyRatio;
           
-          if (this.config.useKellyCriterion) {
+          if (coinConfig.useKellyOptimization && this.config.useKellyCriterion) {
             const metrics = this.performanceMetrics.get(market);
             if (metrics && (metrics.wins + metrics.losses) > 5) { // 최소 5회 거래 후부터 Kelly 적용
               const winRate = metrics.wins / (metrics.wins + metrics.losses);
               const avgWin = metrics.wins > 0 ? metrics.totalProfit / metrics.wins : 0;
               const avgLoss = metrics.losses > 0 ? Math.abs(metrics.totalProfit / metrics.losses) : 1;
               
-              const kellyFraction = this.calculateKellyFraction(winRate, avgWin, avgLoss);
+              const kellyFraction = this.calculateKellyFraction(winRate, avgWin, avgLoss, market);
               adjustedBuyRatio = kellyFraction > 0 ? kellyFraction : this.config.buyRatio * 0.5;
             }
           } else {
@@ -456,13 +479,15 @@ class TradingEngine extends EventEmitter {
             }
           }
           
-          // 변동성에 따른 추가 조정 (더 보수적으로)
-          if (dynamicParams.currentVolatility > 0.05) {
-            adjustedBuyRatio *= 0.3; // 극도의 변동성에서는 70% 축소
-          } else if (dynamicParams.currentVolatility > 0.03) {
-            adjustedBuyRatio *= 0.5; // 높은 변동성에서는 50% 축소
-          } else if (dynamicParams.currentVolatility > 0.02) {
-            adjustedBuyRatio *= 0.7; // 중간 변동성에서는 30% 축소
+          // 변동성에 따른 추가 조정 (UI 설정에 따라)
+          if (coinConfig.volatilityAdjustment) {
+            if (dynamicParams.currentVolatility > 0.05) {
+              adjustedBuyRatio *= 0.3; // 극도의 변동성에서는 70% 쵵소
+            } else if (dynamicParams.currentVolatility > 0.03) {
+              adjustedBuyRatio *= 0.5; // 높은 변동성에서는 50% 축소
+            } else if (dynamicParams.currentVolatility > 0.02) {
+              adjustedBuyRatio *= 0.7; // 중간 변동성에서는 30% 축소
+            }
           }
           
           // 매수할 금액 계산
@@ -473,6 +498,7 @@ class TradingEngine extends EventEmitter {
           const minOrderAmount = analysisConfig?.minOrderAmount || 5000;
           if (buyAmount < minOrderAmount) {
             console.log(`Buy amount ₩${buyAmount.toLocaleString()} is below minimum order amount ₩${minOrderAmount.toLocaleString()}`);
+            console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy ratio: ${adjustedBuyRatio}`);
             return;
           }
           
@@ -504,6 +530,10 @@ class TradingEngine extends EventEmitter {
           // 학습 시스템에 매수 진입점 기록
           this.recordEntryForLearning(market, technical, analysis);
           
+          // 매수 시에도 거래 횟수 증가를 위해 임시 기록 (매도 시점에 승/패 결정)
+          // performanceMetrics는 wins, losses, totalProfit만 추적
+          // 전체 거래 횟수는 wins + losses로 계산
+          
           this.emit('tradeExecuted', {
             type: 'BUY',
             market,
@@ -520,7 +550,10 @@ class TradingEngine extends EventEmitter {
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
         if (!skipCooldown && this.isInCooldownWithConfig(market, 'sell', coinConfig.sellingCooldown)) {
+          console.log(`[${market}] 매도 쿨타임 중 (설정: ${coinConfig.sellingCooldown}분)`);
           return;
+        } else if (skipCooldown) {
+          console.log(`[${market}] 높은 신뢰도(${technical.confidence.toFixed(1)}%)로 쿨타임 무시`);
         }
 
         // 매도 로직
@@ -653,6 +686,7 @@ class TradingEngine extends EventEmitter {
     const existing = this.lastTradeTime.get(market) || {};
     existing[action] = Date.now();
     this.lastTradeTime.set(market, existing);
+    console.log(`[${market}] ${action === 'buy' ? '매수' : '매도'} 시간 기록: ${new Date().toLocaleString('ko-KR')}`);
   }
 
   // 동적 파라미터 조정 메서드들
@@ -661,30 +695,45 @@ class TradingEngine extends EventEmitter {
     const history = this.getMarketTradeHistory(market);
     const performance = this.calculateRecentPerformance(market, history);
     
+    // 코인별 설정 가져오기
+    const coinSymbol = market.split('-')[1];
+    const coinConfig = this.analysisConfigs.find(config => {
+      // config.ticker가 KRW-BTC 형태일 수도 있고 BTC 형태일 수도 있음
+      const configTicker = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+      return configTicker === coinSymbol;
+    });
+    
     // 현재 변동성 계산 (ATR 기반)
     const currentVolatility = analysis.atr ? (analysis.atr / analysis.bollinger.middle) : 0.02;
     
     // RSI 임계값 동적 조정
-    let adjustedRSIOverbought = baseConfig.rsiOverbought;
-    let adjustedRSIOversold = baseConfig.rsiOversold;
+    let adjustedRSIOverbought = coinConfig?.rsiOverbought || baseConfig.rsiOverbought;
+    let adjustedRSIOversold = coinConfig?.rsiOversold || baseConfig.rsiOversold;
     
-    if (baseConfig.dynamicRSI) {
+    // 코인별 volatilityAdjustment 설정 확인
+    const useVolatilityAdjustment = coinConfig?.volatilityAdjustment || false;
+    
+    if (useVolatilityAdjustment || baseConfig.dynamicRSI) {
       // 고변동성 시장: RSI 임계값을 더 극단적으로 (더 조심스럽게)
       if (currentVolatility > 0.03) {
-        adjustedRSIOverbought = 85; // 75 → 85
-        adjustedRSIOversold = 15; // 25 → 15
+        adjustedRSIOverbought = Math.min(90, adjustedRSIOverbought + 10); // +10
+        adjustedRSIOversold = Math.max(10, adjustedRSIOversold - 10); // -10
       }
       // 저변동성 시장: RSI 임계값을 보통 수준으로
       else if (currentVolatility < 0.01) {
-        adjustedRSIOverbought = 75; // 65 → 75
-        adjustedRSIOversold = 25; // 35 → 25
+        // 원래 설정값 유지
+      }
+      // 중간 변동성: 약간 조정
+      else {
+        adjustedRSIOverbought = Math.min(85, adjustedRSIOverbought + 5); // +5
+        adjustedRSIOversold = Math.max(15, adjustedRSIOversold - 5); // -5
       }
     }
     
     // 신뢰도 임계값 동적 조정
-    let adjustedMinConfidence = baseConfig.minConfidenceForTrade;
+    let adjustedMinConfidence = coinConfig?.minConfidenceForBuy || baseConfig.minConfidenceForTrade;
     
-    if (baseConfig.dynamicConfidence) {
+    if (useVolatilityAdjustment || baseConfig.dynamicConfidence) {
       // 최근 2회 연속 손실: 신뢰도 임계값 크게 상향
       if (performance.consecutiveLosses >= 2) {
         adjustedMinConfidence = Math.min(95, baseConfig.minConfidenceForTrade + 15);
@@ -695,7 +744,13 @@ class TradingEngine extends EventEmitter {
       }
       // 낮은 승률: 신뢰도 임계값 크게 상향
       else if (performance.winRate < 0.4) {
-        adjustedMinConfidence = Math.min(90, baseConfig.minConfidenceForTrade + 10);
+        adjustedMinConfidence = Math.min(90, adjustedMinConfidence + 10);
+      }
+      
+      // 변동성에 따른 추가 조정
+      if (currentVolatility > 0.03) {
+        // 고변동성: 신뢰도 임계값 추가 상향
+        adjustedMinConfidence = Math.min(95, adjustedMinConfidence + 5);
       }
     }
     
@@ -708,23 +763,118 @@ class TradingEngine extends EventEmitter {
       recentPerformance: performance
     };
     
+    // 변동성 조정이 적용된 경우 로그
+    if (useVolatilityAdjustment) {
+      console.log(`[${market}] 변동성 자동 조정 적용:`);
+      console.log(`  - 현재 변동성: ${(currentVolatility * 100).toFixed(2)}%`);
+      console.log(`  - RSI: ${coinConfig?.rsiOverbought}/${coinConfig?.rsiOversold} → ${adjustedRSIOverbought}/${adjustedRSIOversold}`);
+      console.log(`  - 신뢰도: ${coinConfig?.minConfidenceForBuy}% → ${adjustedMinConfidence}%`);
+    }
+    
     this.dynamicParameters.set(market, params);
     return params;
   }
   
-  // Kelly Criterion 계산
-  private calculateKellyFraction(winRate: number, avgWin: number, avgLoss: number): number {
+  // Kelly Criterion 계산 (새로운 서비스 사용)
+  private calculateKellyFraction(winRate: number, avgWin: number, avgLoss: number, market: string): number {
     if (avgLoss === 0 || winRate === 0) return 0;
     
-    const winLossRatio = Math.abs(avgWin / avgLoss);
-    const kellyFraction = (winRate * winLossRatio - (1 - winRate)) / winLossRatio;
+    const metrics = this.performanceMetrics.get(market);
+    if (!metrics || (metrics.wins + metrics.losses) < 10) {
+      // 거래 데이터가 부족한 경우 보수적인 기본값
+      return this.config.buyRatio * 0.5;
+    }
     
-    // Kelly Criterion은 종종 너무 공격적이므로 제한
-    const limitedKelly = Math.max(0, Math.min(kellyFraction, this.config.maxKellyFraction));
+    // 성과 메트릭 준비
+    const performanceMetrics = {
+      winRate,
+      avgWin: Math.abs(avgWin),
+      avgLoss: Math.abs(avgLoss),
+      winLossRatio: Math.abs(avgWin / avgLoss),
+      totalTrades: metrics.wins + metrics.losses,
+      profitFactor: avgLoss !== 0 ? (winRate * avgWin) / ((1 - winRate) * Math.abs(avgLoss)) : 0,
+      sharpeRatio: this.calculateSharpeRatio(market),
+      maxDrawdown: this.calculateMaxDrawdown(market)
+    };
     
-    console.log(`Kelly Criterion: Win rate ${(winRate * 100).toFixed(1)}%, W/L ratio ${winLossRatio.toFixed(2)}, Kelly ${(kellyFraction * 100).toFixed(1)}%, Limited ${(limitedKelly * 100).toFixed(1)}%`);
+    // Kelly 계산
+    const kellyResult = kellyService.calculateKelly(performanceMetrics);
     
-    return limitedKelly;
+    // 시장 상황 고려한 동적 Kelly
+    const marketConditions = {
+      volatility: this.getCurrentVolatility(market),
+      trend: this.determineMarketTrend(market),
+      recentDrawdown: this.getRecentDrawdown(market)
+    };
+    
+    const dynamicKelly = kellyService.calculateDynamicKelly(performanceMetrics, marketConditions);
+    
+    console.log(`Kelly Criterion for ${market}:`);
+    console.log(`  - Base Kelly: ${(kellyResult.kellyFraction * 100).toFixed(1)}%`);
+    console.log(`  - Recommended: ${(dynamicKelly.recommendedFraction * 100).toFixed(1)}%`);
+    console.log(`  - Confidence: ${(dynamicKelly.confidence * 100).toFixed(1)}%`);
+    
+    return dynamicKelly.recommendedFraction;
+  }
+  
+  // 샤프 비율 계산
+  private calculateSharpeRatio(market: string): number {
+    const trades = this.getMarketTradeHistory(market).filter(t => t.profit !== undefined);
+    if (trades.length < 5) return 0;
+    
+    const returns = trades.map(t => t.profit || 0);
+    const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+    
+    return stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(365) : 0;
+  }
+  
+  // 최대 손실 계산
+  private calculateMaxDrawdown(market: string): number {
+    const trades = this.getMarketTradeHistory(market).filter(t => t.profit !== undefined);
+    if (trades.length < 2) return 0;
+    
+    let peak = 0;
+    let maxDrawdown = 0;
+    let cumulative = 0;
+    
+    for (const trade of trades) {
+      cumulative += trade.profit || 0;
+      if (cumulative > peak) {
+        peak = cumulative;
+      }
+      const drawdown = peak > 0 ? (peak - cumulative) / peak : 0;
+      maxDrawdown = Math.max(maxDrawdown, drawdown);
+    }
+    
+    return maxDrawdown;
+  }
+  
+  // 현재 변동성 가져오기
+  private getCurrentVolatility(market: string): number {
+    const analysis = this.analysisResults.get(market);
+    if (!analysis || !analysis.analysis.atr) return 0.5;
+    
+    const volatility = analysis.analysis.atr / analysis.currentPrice;
+    return Math.min(1, volatility * 10); // 0-1 범위로 정규화
+  }
+  
+  // 시장 추세 판단
+  private determineMarketTrend(market: string): 'bull' | 'bear' | 'sideways' {
+    const analysis = this.analysisResults.get(market);
+    if (!analysis) return 'sideways';
+    
+    return this.determineMarketCondition(analysis.analysis);
+  }
+  
+  // 최근 손실률 계산
+  private getRecentDrawdown(market: string): number {
+    const recentTrades = this.getMarketTradeHistory(market).slice(-10);
+    if (recentTrades.length === 0) return 0;
+    
+    const totalReturn = recentTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
+    return Math.max(0, -totalReturn / 100); // 음수면 손실
   }
   
   // 최근 거래 성과 계산
@@ -808,10 +958,23 @@ class TradingEngine extends EventEmitter {
   // 코인별 거래 설정 업데이트 메서드
   setAnalysisConfigs(configs: any[]): void {
     this.analysisConfigs = configs;
-    // 활성 시장 업데이트
-    this.activeMarkets = configs.map(config => `KRW-${config.ticker}`);
+    // 활성 시장 업데이트 - 이미 KRW-가 포함되어 있는지 확인
+    this.activeMarkets = configs.map(config => {
+      const ticker = config.ticker;
+      // 이미 KRW-로 시작하면 그대로 사용, 아니면 KRW- 추가
+      return ticker.startsWith('KRW-') ? ticker : `KRW-${ticker}`;
+    });
     console.log('Analysis configs updated:', configs.length, 'coins');
     console.log('Active markets:', this.activeMarkets);
+    
+    // 디버깅: 첫 번째 설정의 쿨다운 확인
+    if (configs.length > 0) {
+      console.log('First config cooldowns:', {
+        ticker: configs[0].ticker,
+        buyingCooldown: configs[0].buyingCooldown,
+        sellingCooldown: configs[0].sellingCooldown
+      });
+    }
   }
   
   // 시장 상황 판단
@@ -876,6 +1039,7 @@ class TradingEngine extends EventEmitter {
   private entryPoints: Map<string, { price: number; indicators: any; conditions: any; timestamp: number }> = new Map();
 
   private recordEntryForLearning(market: string, technical: TechnicalAnalysis, analysis: CoinAnalysis): void {
+    console.log(`[학습] ${market} 매수 진입점 기록: 가격 ${analysis.currentPrice}`);
     // 매수 진입점 기록
     this.entryPoints.set(market, {
       price: analysis.currentPrice,
@@ -900,7 +1064,12 @@ class TradingEngine extends EventEmitter {
 
   private recordTradeResultForLearning(market: string, profitRate: number, technical: TechnicalAnalysis, analysis: CoinAnalysis): void {
     const entry = this.entryPoints.get(market);
-    if (!entry) return;
+    if (!entry) {
+      console.log(`[학습] ${market} 진입점 기록이 없어 학습 건너뜀`);
+      return;
+    }
+    
+    console.log(`[학습] ${market} 거래 결과 기록: 수익률 ${profitRate.toFixed(2)}%`);
 
     // 거래 결과를 학습 시스템에 기록
     this.learningService.recordTrade({
@@ -1012,6 +1181,53 @@ class TradingEngine extends EventEmitter {
       performance: this.learningService.getPerformanceStats(),
       indicatorWeights: this.learningService.getIndicatorPerformance()
     };
+  }
+
+  // 거래 이력 조회
+  public getTradeHistory(market?: string, days?: number): any[] {
+    const cutoffDate = days ? Date.now() - days * 24 * 60 * 60 * 1000 : 0;
+    
+    return this.tradeHistory
+      .filter(trade => 
+        (!market || trade.market === market) && 
+        trade.timestamp > cutoffDate
+      )
+      .map(trade => ({
+        market: trade.market,
+        timestamp: trade.timestamp,
+        action: trade.type,
+        price: trade.price,
+        amount: trade.amount,
+        profitRate: trade.profit || 0,
+        winRate: this.calculateWinRate(trade.market, trade.timestamp)
+      }));
+  }
+
+  private calculateWinRate(market: string, upToTimestamp: number): number {
+    const marketTrades = this.tradeHistory.filter(t => 
+      t.market === market && 
+      t.timestamp <= upToTimestamp &&
+      t.profit !== undefined
+    );
+    
+    if (marketTrades.length === 0) return 0;
+    
+    const wins = marketTrades.filter(t => t.profit && t.profit > 0).length;
+    return (wins / marketTrades.length) * 100;
+  }
+
+  // 특정 마켓의 Kelly Criterion 계산 (외부 호출용)
+  public calculateKellyForMarket(market: string): number {
+    const metrics = this.performanceMetrics.get(market);
+    if (!metrics || (metrics.wins + metrics.losses) < 10) {
+      return 0;
+    }
+    
+    const winRate = metrics.wins / (metrics.wins + metrics.losses);
+    const avgWin = metrics.wins > 0 ? Math.abs(metrics.totalProfit / metrics.wins) : 0;
+    const avgLoss = metrics.losses > 0 ? Math.abs(metrics.totalProfit / metrics.losses) : 1;
+    
+    return this.calculateKellyFraction(winRate, avgWin, avgLoss, market);
   }
 
   // 종료 시 학습 데이터 저장

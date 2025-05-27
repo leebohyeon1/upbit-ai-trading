@@ -26,9 +26,7 @@ import {
   Psychology,
   ChevronLeft,
   Menu as MenuIcon,
-  Timeline,
-  ShowChart,
-  Newspaper
+  ShowChart
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
 import { TAB_INDEX } from '../../constants';
@@ -54,11 +52,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     { text: '대시보드', icon: <Dashboard />, value: TAB_INDEX.OVERVIEW },
     { text: '포트폴리오', icon: <AccountBalance />, value: TAB_INDEX.PORTFOLIO },
     { text: '분석 설정', icon: <BarChart />, value: TAB_INDEX.ANALYSIS },
-    { text: '백테스트', icon: <Timeline />, value: TAB_INDEX.BACKTEST },
-    { text: '시장 상관관계', icon: <ShowChart />, value: TAB_INDEX.MARKET_CORRELATION },
-    { text: '뉴스 분석', icon: <Newspaper />, value: TAB_INDEX.NEWS },
     { text: '거래 설정', icon: <Settings />, value: TAB_INDEX.SETTINGS },
     { text: '학습 상태', icon: <School />, value: TAB_INDEX.LEARNING },
+    { text: '백테스트', icon: <ShowChart />, value: TAB_INDEX.BACKTEST },
   ];
 
   const handleDrawerToggle = () => {
@@ -212,7 +208,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           flexGrow: 1,
           bgcolor: 'grey.50',
           p: 3,
-          overflow: 'auto'
+          overflow: 'auto',
+          height: '100vh',
+          minHeight: '100vh'
         }}
       >
         {children}

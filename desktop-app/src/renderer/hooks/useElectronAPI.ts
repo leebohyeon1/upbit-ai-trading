@@ -29,9 +29,9 @@ export const useElectronAPI = () => {
   const [learningStates, setLearningStates] = useState<LearningState[]>([]);
 
   // API 키 검증
-  const validateApiKey = useCallback(async (accessKey: string, secretKey: string) => {
+  const validateApiKey = useCallback(async (accessKey: string, secretKey: string, claudeApiKey?: string) => {
     try {
-      const result = await window.electronAPI.validateApiKey(accessKey, secretKey);
+      const result = await window.electronAPI.validateApiKey(accessKey, secretKey, claudeApiKey);
       setApiKeyStatus(result);
       return result;
     } catch (error) {

@@ -704,20 +704,29 @@ class TradingApp {
 
     tradingEngine.on('analysisCompleted', (results: any[]) => {
       if (this.mainWindow) {
-        this.mainWindow.webContents.send('analysis-update', results);
+        console.log('Sending analysis results to frontend:', results.length, 'items');
+        this.mainWindow.webContents.send('analysis-completed', results);
       }
     });
 
     tradingEngine.on('singleAnalysisCompleted', (analysis: any) => {
       if (this.mainWindow) {
         console.log('Sending single analysis to frontend:', analysis);
-        this.mainWindow.webContents.send('analysis-update', analysis);
+        this.mainWindow.webContents.send('single-analysis-completed', analysis);
       }
     });
 
     tradingEngine.on('tradeExecuted', (trade: any) => {
       if (this.mainWindow) {
         this.mainWindow.webContents.send('trade-executed', trade);
+        
+        // 학습 상태도 즉시 업데이트하도록 알림
+        if (trade.type === 'SELL' && trade.profit !== undefined) {
+          this.mainWindow.webContents.send('learning-updated', {
+            market: trade.market,
+            profit: trade.profit
+          });
+        }
       }
     });
 
@@ -747,11 +756,29 @@ class TradingApp {
     try {
       const keys = await this.getApiKeys();
       if (keys.upbitAccessKey && keys.upbitSecretKey) {
+        // upbitService에도 설정
+        const upbitService = require('./upbit-service').default;
+        upbitService.setApiKeys(keys.upbitAccessKey, keys.upbitSecretKey);
+        
+        // tradingEngine에 설정
         tradingEngine.setApiKeys(keys.upbitAccessKey, keys.upbitSecretKey, keys.anthropicApiKey);
         tradingEngine.setConfig({
           enableRealTrading: keys.enableRealTrade || false
         });
-        console.log('Saved API keys loaded to trading engine');
+        console.log('Saved API keys loaded to both services');
+        
+        // API 키 유효성 검증 후 렌더러에 상태 전송
+        try {
+          const accounts = await upbitService.getAccounts();
+          const balance = accounts.find((acc: any) => acc.currency === 'KRW')?.balance || '0';
+          this.mainWindow?.webContents.send('api-key-status', {
+            isValid: true,
+            accessKey: keys.upbitAccessKey,
+            balance: balance
+          });
+        } catch (error) {
+          console.error('Failed to validate saved API keys:', error);
+        }
       }
     } catch (error) {
       console.error('Failed to load saved API keys:', error);
@@ -760,11 +787,14 @@ class TradingApp {
 
   private setupIpcHandlers() {
     // API Key validation
-    ipcMain.handle('validate-api-key', async (event, accessKey: string, secretKey: string) => {
+    ipcMain.handle('validate-api-key', async (event, accessKey: string, secretKey: string, claudeApiKey?: string) => {
       try {
         const upbitService = require('./upbit-service').default;
         upbitService.setApiKeys(accessKey, secretKey);
         const accounts = await upbitService.getAccounts();
+        
+        // trading engine에도 즉시 설정
+        tradingEngine.setApiKeys(accessKey, secretKey, claudeApiKey);
         
         return {
           isValid: true,
@@ -816,6 +846,32 @@ class TradingApp {
     // Trading methods
     ipcMain.handle('start-trading', async (event, tradingConfig: any, analysisConfigs: any[]) => {
       try {
+        console.log('Starting trading with configs:', {
+          tradingConfig,
+          analysisConfigsCount: analysisConfigs?.length || 0
+        });
+        
+        // analysisConfigs가 없으면 포트폴리오에서 가져오기
+        if (!analysisConfigs || analysisConfigs.length === 0) {
+          const portfolio = JSON.parse(fs.readFileSync(this.getPortfolioPath(), 'utf-8') || '[]');
+          const enabledCoins = portfolio.filter((coin: any) => coin.enabled);
+          
+          if (enabledCoins.length === 0) {
+            console.error('No enabled coins in portfolio');
+            return false;
+          }
+          
+          // 기본 설정으로 analysisConfigs 생성
+          analysisConfigs = enabledCoins.map((coin: any) => ({
+            ticker: `KRW-${coin.symbol}`,
+            rsiOverbought: 75,
+            rsiOversold: 25,
+            minConfidenceForBuy: 65,
+            minConfidenceForSell: 60,
+            // ... 기타 기본값
+          }));
+        }
+        
         // 설정 업데이트
         tradingEngine.updateConfig(tradingConfig);
         
@@ -826,7 +882,10 @@ class TradingApp {
         tradingEngine.toggleAI(tradingConfig.useAI || false);
         
         // 거래 시작 (analysisConfigs에서 시장 목록 추출)
-        const markets = analysisConfigs.map(config => `KRW-${config.ticker}`);
+        const markets = analysisConfigs.map(config => {
+          // config.ticker가 이미 KRW-를 포함하고 있을 수 있음
+          return config.ticker.startsWith('KRW-') ? config.ticker : `KRW-${config.ticker}`;
+        });
         return await this.startTrading(markets);
       } catch (error) {
         console.error('Failed to start trading:', error);
@@ -878,6 +937,67 @@ class TradingApp {
         return false;
       } catch (error) {
         console.error('Failed to stop learning:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('get-learning-metrics', async (event, ticker: string) => {
+      try {
+        const learningService = tradingEngine.getLearningService();
+        if (!learningService) return null;
+
+        const stats = learningService.getPerformanceStats(ticker, 30);
+        const indicatorPerformance = learningService.getIndicatorPerformance();
+        const performanceHistory = tradingEngine.getTradeHistory(ticker, 30);
+
+        // Kelly Criterion 계산
+        let kellyFraction = 0;
+        if (stats.total_trades >= 10) {
+          kellyFraction = tradingEngine.calculateKellyForMarket(ticker);
+        }
+
+        return {
+          ticker,
+          isRunning: learningService.isLearning(ticker),
+          totalTrades: stats.total_trades,
+          winRate: stats.win_rate * 100,
+          averageProfit: stats.average_profit,
+          bestTrade: stats.best_trade,
+          worstTrade: stats.worst_trade,
+          sharpeRatio: stats.sharpe_ratio,
+          kellyFraction,
+          lastUpdated: new Date(),
+          indicatorWeights: indicatorPerformance.map(ind => ({
+            name: ind.indicator.toUpperCase(),
+            weight: ind.weight,
+            successRate: ind.success_rate,
+            confidence: ind.confidence
+          })),
+          performanceHistory: performanceHistory.map(trade => ({
+            date: new Date(trade.timestamp).toISOString().split('T')[0],
+            winRate: trade.winRate || 0,
+            profit: trade.profitRate || 0
+          }))
+        };
+      } catch (error) {
+        console.error('Failed to get learning metrics:', error);
+        return null;
+      }
+    });
+
+    ipcMain.handle('toggle-learning', async (event, ticker: string, enabled: boolean) => {
+      try {
+        const learningService = tradingEngine.getLearningService();
+        if (!learningService) return false;
+
+        if (enabled) {
+          learningService.startLearning(ticker);
+        } else {
+          learningService.stopLearning(ticker);
+        }
+        return true;
+      } catch (error) {
+        console.error('Failed to toggle learning:', error);
         return false;
       }
     });

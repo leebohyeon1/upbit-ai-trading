@@ -70,6 +70,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     minConfidenceForBuy: DEFAULT_CONFIG.MIN_CONFIDENCE_BUY,
     minConfidenceForSell: DEFAULT_CONFIG.MIN_CONFIDENCE_SELL,
     confidenceWindowSize: 10,
+    buyingCooldown: 30,
+    sellingCooldown: 20,
     decisionThresholds: {
       buyThreshold: 0.15,
       sellThreshold: -0.2
@@ -128,25 +130,45 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   useEffect(() => {
     const loadSavedData = async () => {
       try {
-        // Load saved portfolio
+        // 백엔드에서 저장된 데이터 불러오기
+        const [savedPortfolio, savedTradingConfig, savedAnalysisConfigs] = await Promise.all([
+          (window as any).electronAPI.getPortfolio(),
+          (window as any).electronAPI.getTradingConfig(),
+          (window as any).electronAPI.getAnalysisConfigs()
+        ]);
+
+        if (savedPortfolio && savedPortfolio.length > 0) {
+          // 포트폴리오 데이터 검증
+          const validPortfolio = savedPortfolio.filter((coin: any) => coin && coin.symbol && coin.name);
+          if (validPortfolio.length > 0) {
+            setPortfolio(validPortfolio);
+          }
+        }
+
+        if (savedTradingConfig) {
+          setTradingConfig(savedTradingConfig);
+        }
+
+        if (savedAnalysisConfigs && savedAnalysisConfigs.length > 0) {
+          setAnalysisConfigs(savedAnalysisConfigs);
+        }
+      } catch (error) {
+        console.error('Failed to load saved data:', error);
+        // 백엔드에서 불러오기 실패시 localStorage 사용
         const savedPortfolio = localStorage.getItem('portfolio');
         if (savedPortfolio) {
           setPortfolio(JSON.parse(savedPortfolio));
         }
 
-        // Load saved trading config
         const savedConfig = localStorage.getItem('tradingConfig');
         if (savedConfig) {
           setTradingConfig(JSON.parse(savedConfig));
         }
 
-        // Load saved analysis configs
         const savedAnalysisConfigs = localStorage.getItem('analysisConfigs');
         if (savedAnalysisConfigs) {
           setAnalysisConfigs(JSON.parse(savedAnalysisConfigs));
         }
-      } catch (error) {
-        console.error('Failed to load saved data:', error);
       }
     };
 
@@ -156,14 +178,20 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   // Save configurations when they change
   useEffect(() => {
     localStorage.setItem('portfolio', JSON.stringify(portfolio));
+    // 백엔드에도 저장
+    (window as any).electronAPI.savePortfolio(portfolio);
   }, [portfolio]);
 
   useEffect(() => {
     localStorage.setItem('tradingConfig', JSON.stringify(tradingConfig));
+    // 백엔드에도 저장
+    (window as any).electronAPI.saveTradingConfig(tradingConfig);
   }, [tradingConfig]);
 
   useEffect(() => {
     localStorage.setItem('analysisConfigs', JSON.stringify(analysisConfigs));
+    // 백엔드에도 저장
+    (window as any).electronAPI.saveAnalysisConfigs(analysisConfigs);
   }, [analysisConfigs]);
 
   const value: TradingContextType = {
