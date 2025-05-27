@@ -11,6 +11,7 @@
     "dev:electron": "electron .",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
+    "dist:win-portable": "npm run build && electron-builder --win portable",
     "test:features": "electron test-all-features.js",
     "test:calculations": "electron test-calculations.js",
     "test:scenarios": "electron test-scenarios.js",
@@ -25,6 +26,10 @@
   ],
   "author": "Lee Bohyeon",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leebohyeon1/upbit-ai-trading.git"
+  },
   "type": "commonjs",
   "devDependencies": {
     "@types/node": "^22.15.21",
@@ -51,6 +56,7 @@
     "@types/ws": "^8.18.1",
     "axios": "^1.7.7",
     "date-fns": "^2.30.0",
+    "electron-updater": "^6.6.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.0",

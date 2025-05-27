@@ -22,5 +22,12 @@
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": true
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "leebohyeon1",
+    "repo": "upbit-ai-trading",
+    "releaseType": "release",
+    "private": true
   }
 }

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, safeStorage } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
@@ -41,6 +42,7 @@ class TradingApp {
       this.createWindow();
       this.createTray();
       this.setupIPC();
+      this.checkForUpdates();
       // API 서버는 별도로 실행하도록 변경
       // this.startPythonBackend();
       
@@ -320,6 +322,82 @@ class TradingApp {
     } catch (error) {
       console.error('[Main] Failed to load saved learning states:', error);
     }
+  }
+
+  private checkForUpdates() {
+    // 개발 모드에서는 업데이트 체크 안 함
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Development mode: Skipping auto-updater');
+      return;
+    }
+
+    // 업데이트 서버 설정 (GitHub Releases 사용)
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'leebohyeon1',
+      repo: 'upbit-ai-trading',
+      private: true,
+      token: process.env.GH_TOKEN  // GitHub Personal Access Token
+    });
+
+    // 자동 다운로드 설정
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    // 업데이트 이벤트 핸들러
+    autoUpdater.on('checking-for-update', () => {
+      console.log('업데이트 확인 중...');
+    });
+
+    autoUpdater.on('update-available', (info) => {
+      console.log('업데이트 발견:', info.version);
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('update-available', info);
+      }
+    });
+
+    autoUpdater.on('update-not-available', () => {
+      console.log('최신 버전입니다.');
+    });
+
+    autoUpdater.on('error', (err) => {
+      console.error('업데이트 오류:', err);
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      const log_message = '다운로드 속도: ' + progressObj.bytesPerSecond + 
+                         ' - 다운로드됨 ' + progressObj.percent + '%' +
+                         ' (' + progressObj.transferred + "/" + progressObj.total + ')';
+      console.log(log_message);
+      
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('update-progress', progressObj);
+      }
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      console.log('업데이트 다운로드 완료');
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('update-downloaded', info);
+        
+        // 사용자에게 재시작 알림
+        const { dialog } = require('electron');
+        dialog.showMessageBox(this.mainWindow, {
+          type: 'info',
+          title: '업데이트 준비됨',
+          message: '새 버전이 다운로드되었습니다. 지금 재시작하시겠습니까?',
+          buttons: ['재시작', '나중에'],
+          defaultId: 0
+        }).then((result: Electron.MessageBoxReturnValue) => {
+          if (result.response === 0) {
+            autoUpdater.quitAndInstall();
+          }
+        });
+      }
+    });
+
+    // 업데이트 확인 시작
+    autoUpdater.checkForUpdatesAndNotify();
   }
 
   private updateTrayMenu() {
