@@ -1,6 +1,6 @@
 {
   "name": "upbit-ai-trading-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Upbit AI Trading Desktop Application",
   "main": "dist/main.js",
   "scripts": {
@@ -12,6 +12,9 @@
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
     "dist:win-portable": "npm run build && electron-builder --win portable",
+    "publish:win": "npm run build && electron-builder --win --publish always",
+    "publish:mac": "npm run build && electron-builder --mac --publish always",
+    "publish:linux": "npm run build && electron-builder --linux --publish always",
     "test:features": "electron test-all-features.js",
     "test:calculations": "electron test-calculations.js",
     "test:scenarios": "electron test-scenarios.js",
@@ -56,6 +59,7 @@
     "@types/ws": "^8.18.1",
     "axios": "^1.7.7",
     "date-fns": "^2.30.0",
+    "dotenv": "^16.5.0",
     "electron-updater": "^6.6.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

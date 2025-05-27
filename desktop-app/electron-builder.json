@@ -2,7 +2,7 @@
   "appId": "com.leebohyeon.upbit-ai-trading",
   "productName": "Upbit AI Trading",
   "directories": {
-    "output": "dist-electron"
+    "output": "dist"
   },
   "files": [
     "dist/**/*"

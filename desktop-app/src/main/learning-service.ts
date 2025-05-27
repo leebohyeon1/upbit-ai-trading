@@ -59,7 +59,9 @@ export class LearningService extends EventEmitter {
 
   constructor() {
     super();
-    this.dataPath = path.join(process.cwd(), 'data', 'learning');
+    // Use app.getPath('userData') for proper permissions
+    const { app } = require('electron');
+    this.dataPath = path.join(app.getPath('userData'), 'learning');
     this.ensureDataDirectory();
     this.loadHistoricalData();
     this.initializeWeights();

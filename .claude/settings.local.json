@@ -29,7 +29,9 @@
       "Bash(sed:*)",
       "Bash(npm start 2 >& 1)",
       "Bash(npx webpack:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(touch:*)",
+      "Bash(npm install:*)"
     ],
     "deny": []
   }

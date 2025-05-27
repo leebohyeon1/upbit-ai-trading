@@ -3,7 +3,11 @@ import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
+import * as dotenv from 'dotenv';
 import tradingEngine from './trading-engine';
+
+// Load environment variables
+dotenv.config();
 
 class TradingApp {
   private mainWindow: BrowserWindow | null = null;
@@ -810,7 +814,7 @@ class TradingApp {
         fs.writeFileSync(this.getAnalysisConfigsPath(), JSON.stringify(defaultAnalysisConfigs, null, 2));
         
         // 5. 학습 데이터 초기화
-        const learningDataPath = path.join(process.cwd(), 'data', 'learning');
+        const learningDataPath = path.join(app.getPath('userData'), 'learning');
         if (fs.existsSync(learningDataPath)) {
           const files = fs.readdirSync(learningDataPath);
           files.forEach(file => {
