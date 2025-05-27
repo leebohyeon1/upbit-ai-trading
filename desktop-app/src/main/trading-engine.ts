@@ -381,10 +381,22 @@ class TradingEngine extends EventEmitter {
           this.analysisResults.set(market, coinAnalysis);
 
           // 손절/익절 체크 (보유 포지션이 있는 경우)
-          const accounts = await upbitService.getAccounts();
-          const coinAccount = accounts.find(acc => acc.currency === market.split('-')[1]);
-          if (coinAccount && parseFloat(coinAccount.balance) > 0) {
-            const stopLossCheck = await this.checkStopLossAndTakeProfit(market, coinAnalysis, coinAccount, analysisConfig);
+          let checkCoinAccount;
+          if (this.config.enableRealTrading) {
+            const accounts = await upbitService.getAccounts();
+            checkCoinAccount = accounts.find(acc => acc.currency === market.split('-')[1]);
+          } else {
+            // 시뮬레이션 모드
+            const portfolio = this.virtualPortfolio.get(market);
+            checkCoinAccount = portfolio ? { 
+              currency: market.split('-')[1], 
+              balance: portfolio.balance.toString(),
+              avg_buy_price: portfolio.avgBuyPrice.toString()
+            } : null;
+          }
+          
+          if (checkCoinAccount && parseFloat(checkCoinAccount.balance) > 0) {
+            const stopLossCheck = await this.checkStopLossAndTakeProfit(market, coinAnalysis, checkCoinAccount, analysisConfig);
             if (stopLossCheck.shouldSell) {
               // 손절/익절 신호를 강제로 SELL로 변경
               technicalAnalysis.signal = 'SELL';
