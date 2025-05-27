@@ -35,6 +35,15 @@ declare global {
       // Learning methods
       toggleLearning: (ticker: string, isRunning: boolean) => Promise<void>;
       getLearningMetrics: (ticker: string) => Promise<any>;
+      getLearningStatus: () => Promise<any>;
+      
+      // Cooldown methods
+      getCooldownInfo: (market: string) => Promise<{
+        buyRemaining: number;
+        sellRemaining: number;
+        buyTotal: number;
+        sellTotal: number;
+      }>;
       
       // Settings methods
       saveApiKeys: (keys: { accessKey: string; secretKey: string }) => Promise<void>;

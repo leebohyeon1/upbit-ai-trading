@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Grid,
   Typography,
@@ -6,7 +6,9 @@ import {
   Card,
   CardContent,
   Button,
-  Alert
+  Alert,
+  LinearProgress,
+  Chip
 } from '@mui/material';
 import {
   AttachMoney,
@@ -14,7 +16,9 @@ import {
   Timeline,
   Psychology,
   TrendingUp,
-  ShowChart
+  ShowChart,
+  Timer,
+  TimerOff
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
 import { StatCard } from '../common/StatCard';
@@ -24,6 +28,15 @@ import { formatCurrency } from '../../utils/formatters';
 interface DashboardProps {
   onTabChange: (tab: number) => void;
   onAnalysisClick: (analysis: any) => void;
+}
+
+interface CooldownInfo {
+  [market: string]: {
+    buyRemaining: number;
+    sellRemaining: number;
+    buyTotal: number;
+    sellTotal: number;
+  };
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -36,6 +49,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
     analyses, 
     tradingState 
   } = useTradingContext();
+  
+  const [cooldowns, setCooldowns] = useState<CooldownInfo>({});
+
+  // 쿨타임 정보 업데이트
+  useEffect(() => {
+    const updateCooldowns = async () => {
+      const newCooldowns: CooldownInfo = {};
+      
+      const enabledCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(p => p.enabled) : [];
+      for (const coin of enabledCoins) {
+        const market = `KRW-${coin.symbol}`;
+        try {
+          if (window.electronAPI && window.electronAPI.getCooldownInfo) {
+            const cooldownInfo = await window.electronAPI.getCooldownInfo(market);
+            newCooldowns[market] = cooldownInfo;
+          }
+        } catch (error) {
+          console.error(`Failed to get cooldown info for ${market}:`, error);
+          // 기본값 설정
+          newCooldowns[market] = {
+            buyRemaining: 0,
+            sellRemaining: 0,
+            buyTotal: 30,
+            sellTotal: 20
+          };
+        }
+      }
+      
+      setCooldowns(newCooldowns);
+    };
+
+    // 초기 로드
+    updateCooldowns();
+    
+    // 5초마다 업데이트
+    const interval = setInterval(updateCooldowns, 1000);
+    
+    return () => clearInterval(interval);
+  }, [portfolio]);
 
   // 계산된 통계
   const krwBalance = accounts.find(acc => acc.currency === 'KRW')?.balance || '0';
@@ -47,11 +99,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return sum;
   }, 0);
   
-  const activeCoins = portfolio.filter(c => c.enabled).length;
+  const activeCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(c => c.enabled).length : 0;
   const recentAnalyses = analyses.slice(0, 6);
+  
 
   return (
-    <Box>
+    <Box sx={{ bgcolor: 'transparent' }}>
       {/* Header */}
       <Typography variant="h4" fontWeight="bold" gutterBottom>
         대시보드
@@ -98,7 +151,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Grid>
 
       {/* Recent Analyses */}
-      <Box mb={4}>
+      <Box mb={4} sx={{ bgcolor: 'transparent' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6" fontWeight="bold">
             최근 분석 결과
@@ -132,10 +185,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Box>
 
       {/* Portfolio Summary */}
-      <Box>
+      <Box sx={{ bgcolor: 'transparent' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6" fontWeight="bold">
-            포트폴리오 요약
+            포트폴리오 요약 (활성 코인: {activeCoins}개)
           </Typography>
           <Button 
             size="small" 
@@ -146,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </Button>
         </Box>
 
-        {portfolio.filter(p => p.enabled).length === 0 ? (
+        {activeCoins === 0 ? (
           <Card>
             <CardContent sx={{ textAlign: 'center', py: 6 }}>
               <AccountBalance sx={{ fontSize: 60, color: 'grey.300', mb: 2 }} />
@@ -163,17 +216,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </Card>
         ) : (
           <Grid container spacing={2}>
-            {portfolio
+            {portfolio && Array.isArray(portfolio) && portfolio
               .filter(p => p.enabled)
               .map((coin) => {
                 const account = accounts.find(acc => acc.currency === coin.symbol);
                 const hasHoldings = account && parseFloat(account.balance) > 0;
+                const market = `KRW-${coin.symbol}`;
+                const cooldownInfo = cooldowns[market];
                 
                 return (
                   <Grid item xs={12} sm={6} md={4} key={coin.symbol}>
                     <Card>
                       <CardContent>
-                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                           <Box>
                             <Typography variant="h6" fontWeight="bold">
                               {coin.symbol}
@@ -186,6 +241,73 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <TrendingUp color="success" />
                           )}
                         </Box>
+                        
+                        {/* 쿨타임 정보 */}
+                        {cooldownInfo && (
+                          <Box sx={{ mt: 2 }}>
+                            {/* 매수 쿨타임 */}
+                            <Box sx={{ mb: 1 }}>
+                              <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
+                                <Box display="flex" alignItems="center" gap={0.5}>
+                                  <Timer sx={{ fontSize: 16 }} />
+                                  <Typography variant="caption">매수 쿨타임</Typography>
+                                </Box>
+                                {cooldownInfo.buyRemaining > 0 ? (
+                                  <Chip 
+                                    size="small" 
+                                    label={`${cooldownInfo.buyRemaining}분`} 
+                                    color="warning"
+                                  />
+                                ) : (
+                                  <Chip 
+                                    size="small" 
+                                    label="대기 중" 
+                                    color="success"
+                                    icon={<TimerOff sx={{ fontSize: 14 }} />}
+                                  />
+                                )}
+                              </Box>
+                              {cooldownInfo.buyRemaining > 0 && (
+                                <LinearProgress 
+                                  variant="determinate" 
+                                  value={((cooldownInfo.buyTotal - cooldownInfo.buyRemaining) / cooldownInfo.buyTotal) * 100}
+                                  sx={{ height: 4, borderRadius: 2 }}
+                                />
+                              )}
+                            </Box>
+                            
+                            {/* 매도 쿨타임 */}
+                            <Box>
+                              <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
+                                <Box display="flex" alignItems="center" gap={0.5}>
+                                  <Timer sx={{ fontSize: 16 }} />
+                                  <Typography variant="caption">매도 쿨타임</Typography>
+                                </Box>
+                                {cooldownInfo.sellRemaining > 0 ? (
+                                  <Chip 
+                                    size="small" 
+                                    label={`${cooldownInfo.sellRemaining}분`} 
+                                    color="warning"
+                                  />
+                                ) : (
+                                  <Chip 
+                                    size="small" 
+                                    label="대기 중" 
+                                    color="success"
+                                    icon={<TimerOff sx={{ fontSize: 14 }} />}
+                                  />
+                                )}
+                              </Box>
+                              {cooldownInfo.sellRemaining > 0 && (
+                                <LinearProgress 
+                                  variant="determinate" 
+                                  value={((cooldownInfo.sellTotal - cooldownInfo.sellRemaining) / cooldownInfo.sellTotal) * 100}
+                                  sx={{ height: 4, borderRadius: 2 }}
+                                />
+                              )}
+                            </Box>
+                          </Box>
+                        )}
                       </CardContent>
                     </Card>
                   </Grid>

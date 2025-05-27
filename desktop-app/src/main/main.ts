@@ -591,6 +591,16 @@ class TradingApp {
       }
     });
 
+    // 쿨타임 정보 조회
+    ipcMain.handle('get-cooldown-info', async (event, market: string) => {
+      try {
+        return tradingEngine.getCooldownInfo(market);
+      } catch (error) {
+        console.error('Failed to get cooldown info:', error);
+        return { buyRemaining: 0, sellRemaining: 0, buyTotal: 30, sellTotal: 20 };
+      }
+    });
+
     // 설정 초기화
     ipcMain.handle('reset-all-settings', async () => {
       try {

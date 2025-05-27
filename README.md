@@ -1,148 +1,79 @@
-# Upbit AI Trading Bot
+# Upbit AI Trading Desktop App
 
-## 초기 설정
-
-1. `.env` 파일 생성:
-   - `.env.example` 파일을 복사하여 `.env` 파일 생성
-   - Upbit API 키 입력 (https://upbit.com/mypage/open_api_management 에서 발급)
-   - AI 기능 사용시 Anthropic API 키 입력
-
-2. Python 가상환경 설정 (권장):
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-## 실행 방법
-
-### 방법 1: 전체 시스템 한번에 실행 (권장)
-```bash
-run-all.bat
-```
-
-### 방법 2: 개별 실행
-1. API 서버 실행:
-```bash
-start-api-server.bat
-```
-
-2. 데스크탑 앱 실행:
-```bash
-cd desktop-app
-run.bat
-```
-
-### 개발 모드
-```bash
-# API 서버 (터미널 1)
-python api_server.py
-
-# 데스크탑 앱 (터미널 2)
-cd desktop-app
-npm run dev
-```
-
-업비트 거래소에서 비트코인 자동매매를 수행하는 AI 트레이딩 봇입니다.
+업비트 암호화폐 자동매매를 위한 데스크탑 애플리케이션입니다.
 
 ## 주요 기능
 
-- **기술적 분석**: 다양한 기술적 지표를 활용한 시장 분석
-  - 이동평균선 (MA)
-  - RSI (Relative Strength Index)
-  - MACD (Moving Average Convergence Divergence)
-  - 볼린저 밴드
-  - 스토캐스틱
-  
-- **AI 분석**: Claude AI를 활용한 시장 분석 및 매매 결정
-- **자동 매매**: 24/7 자동 매매 실행
-- **데스크탑 앱**: 사용자 친화적인 GUI 제공
-- **백그라운드 실행**: 시스템 트레이에서 지속적으로 실행
+- 📊 **실시간 시장 분석**: RSI, MACD, 볼린저 밴드 등 다양한 기술적 지표 분석
+- 🤖 **AI 기반 의사결정**: Claude API를 활용한 지능형 매매 신호 생성
+- 📈 **포트폴리오 관리**: 다중 코인 동시 거래 및 관리
+- 🎯 **개별 코인 설정**: 코인별 맞춤형 거래 전략 설정
+- 📉 **백테스트**: 과거 데이터를 활용한 전략 검증
+- 🧠 **학습 시스템**: 거래 결과를 기반으로 전략 자동 개선
+- 💰 **Kelly Criterion**: 최적 포지션 크기 자동 계산
+- 📰 **뉴스 분석**: 실시간 뉴스 감성 분석
+- 🌡️ **변동성 자동 조정**: 시장 상황에 따른 동적 파라미터 조정
 
-## 프로젝트 구조
+## 기술 스택
 
-```
-Upbit_AI_Trading/
-├── src/                    # Python 소스 코드
-│   ├── main.py            # 기본 자동매매 프로그램
-│   ├── main_dual.py       # AI 통합 자동매매 프로그램
-│   ├── api/               # API 인터페이스
-│   ├── indicators/        # 기술적 지표
-│   ├── strategy/          # 매매 전략
-│   └── utils/             # 유틸리티
-├── desktop-app/           # Electron 데스크탑 애플리케이션
-├── config/                # 설정 파일
-├── requirements.txt       # Python 의존성
-└── api_server.py         # FastAPI 서버
-```
+- **Frontend**: React, TypeScript, Material-UI
+- **Backend**: Electron, Node.js
+- **State Management**: React Context API
+- **Build Tool**: Webpack, Electron Builder
 
 ## 설치 방법
 
-### 1. 저장소 클론
-```bash
-git clone https://github.com/yourusername/Upbit_AI_Trading.git
-cd Upbit_AI_Trading
-```
+### 사전 요구사항
+- Node.js 16.0 이상
+- npm 또는 yarn
 
-### 2. Python 환경 설정
-```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+### 설치 및 실행
 
-### 3. 환경 변수 설정
-`.env` 파일을 생성하고 다음 내용을 추가:
-```
-UPBIT_ACCESS_KEY=your_access_key
-UPBIT_SECRET_KEY=your_secret_key
-CLAUDE_API_KEY=your_claude_api_key
-```
-
-### 4. 데스크탑 앱 설치 (선택사항)
 ```bash
-cd desktop-app
+# 저장소 클론
+git clone https://github.com/your-username/upbit-ai-trading.git
+cd upbit-ai-trading/desktop-app
+
+# 의존성 설치
 npm install
+
+# 개발 모드 실행
+npm run dev
+
+# 프로덕션 빌드
+npm run build
+
+# 패키지 생성 (Windows)
+npm run package:win
 ```
+
+## API 키 설정
+
+1. [Upbit](https://upbit.com) 계정에서 API 키 발급
+2. [Claude](https://anthropic.com) API 키 발급 (선택사항)
+3. 앱 실행 후 설정 탭에서 API 키 입력
 
 ## 사용 방법
 
-### Python 직접 실행
-```bash
-# 기본 자동매매
-python src/main.py
-
-# AI 통합 자동매매
-python src/main_dual.py
-```
-
-### 데스크탑 앱 실행
-```bash
-# API 서버 시작
-python api_server.py
-
-# 별도 터미널에서 데스크탑 앱 실행
-cd desktop-app
-npm start
-```
-
-## 데스크탑 앱 기능
-
-- **자동매매 시작/중지**: 간편한 버튼으로 제어
-- **AI 기능 토글**: AI 분석 기능 ON/OFF
-- **백그라운드 실행**: 창을 닫아도 시스템 트레이에서 계속 실행
-- **실시간 상태 표시**: 현재 자동매매 상태 확인
+1. **포트폴리오 설정**: 거래할 코인 선택 및 활성화
+2. **분석 설정**: 각 코인별 거래 전략 파라미터 설정
+3. **거래 설정**: 전역 거래 옵션 설정
+4. **자동매매 시작**: 메인 화면에서 자동매매 토글 활성화
 
 ## 주의사항
 
-- 실제 자금으로 운영하기 전에 충분한 테스트를 진행하세요
-- API 키는 절대 공개하지 마세요
-- 시장 상황에 따라 손실이 발생할 수 있습니다
+- 실제 자금으로 거래 시 손실 위험이 있습니다
+- 충분한 백테스트 후 실거래를 시작하세요
+- API 키는 안전하게 관리하세요
 
 ## 라이선스
 
-MIT License
+MIT License - [LICENSE](LICENSE) 파일 참조
 
-## 기여
+## 기여하기
 
-버그 리포트, 기능 제안, 풀 리퀘스트를 환영합니다!
+버그 리포트, 기능 제안, PR은 언제나 환영합니다!
+
+## 문의
+
+Issues 탭을 통해 문의해주세요.

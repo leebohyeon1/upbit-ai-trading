@@ -116,9 +116,14 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({
             </Typography>
           )}
 
-          <Typography variant="caption" color="text.secondary">
-            {formatTimeAgo(analysis.timestamp)}
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="caption" color="text.secondary">
+              {formatTimeAgo(analysis.timestamp)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              신뢰도: {(analysis.confidence * 100).toFixed(0)}%
+            </Typography>
+          </Box>
         </CardContent>
       </CardActionArea>
     </Card>

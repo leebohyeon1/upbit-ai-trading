@@ -1230,6 +1230,51 @@ class TradingEngine extends EventEmitter {
     return this.calculateKellyFraction(winRate, avgWin, avgLoss, market);
   }
 
+  // 쿨타임 정보 가져오기
+  public getCooldownInfo(market: string): { 
+    buyRemaining: number; 
+    sellRemaining: number;
+    buyTotal: number;
+    sellTotal: number;
+  } {
+    const lastTrade = this.lastTradeTime.get(market);
+    const now = Date.now();
+    
+    // 코인별 설정 가져오기
+    const ticker = market.split('-')[1];
+    const analysisConfig = this.analysisConfigs.find(config => {
+      const configTicker = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+      return configTicker === ticker;
+    });
+    
+    const buyingCooldown = analysisConfig?.buyingCooldown || this.config.buyingCooldown || 30;
+    const sellingCooldown = analysisConfig?.sellingCooldown || this.config.sellingCooldown || 20;
+    
+    let buyRemaining = 0;
+    let sellRemaining = 0;
+    
+    if (lastTrade) {
+      if (lastTrade.buy) {
+        const buyElapsed = now - lastTrade.buy;
+        const buyCooldownMs = buyingCooldown * 60 * 1000;
+        buyRemaining = Math.max(0, Math.ceil((buyCooldownMs - buyElapsed) / (60 * 1000)));
+      }
+      
+      if (lastTrade.sell) {
+        const sellElapsed = now - lastTrade.sell;
+        const sellCooldownMs = sellingCooldown * 60 * 1000;
+        sellRemaining = Math.max(0, Math.ceil((sellCooldownMs - sellElapsed) / (60 * 1000)));
+      }
+    }
+    
+    return { 
+      buyRemaining, 
+      sellRemaining,
+      buyTotal: buyingCooldown,
+      sellTotal: sellingCooldown
+    };
+  }
+
   // 종료 시 학습 데이터 저장
   public destroy(): void {
     if (this.learningService) {

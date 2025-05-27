@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return await ipcRenderer.invoke('toggle-learning', ticker, isRunning);
   },
   getLearningMetrics: (ticker) => ipcRenderer.invoke('get-learning-metrics', ticker),
+  getLearningStatus: () => ipcRenderer.invoke('get-learning-status'),
+  
+  // Cooldown methods
+  getCooldownInfo: (market) => ipcRenderer.invoke('get-cooldown-info', market),
   
   // Settings methods
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),

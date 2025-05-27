@@ -23,18 +23,30 @@ export const StatCard: React.FC<StatCardProps> = ({
   color = 'primary'
 }) => {
   return (
-    <Card>
+    <Card sx={{ height: '100%' }}>
       <CardContent>
-        <Box display="flex" alignItems="center" gap={2}>
-          <Avatar sx={{ bgcolor: `${color}.main` }}>
+        <Box display="flex" alignItems="flex-start" gap={2}>
+          <Avatar sx={{ bgcolor: `${color}.main`, flexShrink: 0 }}>
             {icon}
           </Avatar>
-          <Box>
-            <Typography variant="h6" fontWeight="bold">
-              {value}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
+          <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+            <Typography 
+              variant="body2" 
+              color="text.secondary"
+              gutterBottom
+            >
               {title}
+            </Typography>
+            <Typography 
+              variant="h6" 
+              fontWeight="bold"
+              sx={{ 
+                fontSize: '1.25rem',
+                lineHeight: 1.2,
+                wordBreak: 'break-word'
+              }}
+            >
+              {value}
             </Typography>
             {subtitle && (
               <Typography variant="caption" color="text.secondary">
