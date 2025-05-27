@@ -209,8 +209,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           bgcolor: 'grey.50',
           p: 3,
           overflow: 'auto',
-          height: '100vh',
-          minHeight: '100vh'
+          height: '100vh'
         }}
       >
         {children}

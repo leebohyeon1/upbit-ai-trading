@@ -193,7 +193,12 @@ class TradingEngine extends EventEmitter {
     if (this.config.maxInvestmentPerCoin === 0) {
       this.config.maxInvestmentPerCoin = 100000; // 10만원 기본값
     }
-    console.log('Trading config updated:', this.config);
+    console.log('Trading config updated:', {
+      enableRealTrading: this.config.enableRealTrading,
+      buyRatio: this.config.buyRatio,
+      sellRatio: this.config.sellRatio,
+      maxInvestmentPerCoin: this.config.maxInvestmentPerCoin
+    });
   }
 
   isRunning(): boolean {
@@ -381,8 +386,8 @@ class TradingEngine extends EventEmitter {
       
       // UI에서 설정한 값들 사용 (전체 설정에서 기본값 가져오기)
       console.log(`[${market}] Analysis config:`, {
-        buyingCooldown: analysisConfig.buyingCooldown,
-        sellingCooldown: analysisConfig.sellingCooldown,
+        buyCooldown: analysisConfig.buyCooldown,
+        sellCooldown: analysisConfig.sellCooldown,
         globalBuyingCooldown: this.config.buyingCooldown,
         globalSellingCooldown: this.config.sellingCooldown
       });
@@ -390,8 +395,8 @@ class TradingEngine extends EventEmitter {
       let coinConfig: CoinSpecificConfig = {
         minConfidenceForBuy: analysisConfig.buyConfidenceThreshold || 50,
         minConfidenceForSell: analysisConfig.sellConfidenceThreshold || 50,
-        buyingCooldown: analysisConfig.buyingCooldown || this.config.buyingCooldown,
-        sellingCooldown: analysisConfig.sellingCooldown || this.config.sellingCooldown,
+        buyingCooldown: analysisConfig.buyCooldown || this.config.buyingCooldown,
+        sellingCooldown: analysisConfig.sellCooldown || this.config.sellingCooldown,
         defaultBuyRatio: analysisConfig.buying?.defaultBuyRatio || 0.1,
         defaultSellRatio: analysisConfig.selling?.defaultSellRatio || 0.5,
         stopLossPercent: analysisConfig.stopLossMode === 'signal' ? 100 : (analysisConfig.stopLoss || 5),
@@ -442,6 +447,7 @@ class TradingEngine extends EventEmitter {
         const skipCooldown = analysisConfig?.skipCooldownOnHighConfidence && 
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
+        console.log(`[${market}] 쿨타임 체크 - buyingCooldown: ${coinConfig.buyingCooldown}분, skipCooldown: ${skipCooldown}`);
         if (!skipCooldown && this.isInCooldownWithConfig(market, 'buy', coinConfig.buyingCooldown)) {
           console.log(`[${market}] 매수 쿨타임 중 (설정: ${coinConfig.buyingCooldown}분)`);
           return;
@@ -509,8 +515,12 @@ class TradingEngine extends EventEmitter {
           console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy amount: ₩${buyAmount.toLocaleString()}`);
           
           // 실제 거래 실행 (테스트 모드에서는 로그만)
+          console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
+            console.log(`Executing REAL BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
             await upbitService.buyOrder(market, buyAmountStr);
+          } else {
+            console.log(`TEST MODE - Simulating BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
           }
           
           // 거래 시간 기록
@@ -549,6 +559,7 @@ class TradingEngine extends EventEmitter {
         const skipCooldown = analysisConfig?.skipCooldownOnHighConfidence && 
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
+        console.log(`[${market}] 매도 쿨타임 체크 - sellingCooldown: ${coinConfig.sellingCooldown}분, skipCooldown: ${skipCooldown}`);
         if (!skipCooldown && this.isInCooldownWithConfig(market, 'sell', coinConfig.sellingCooldown)) {
           console.log(`[${market}] 매도 쿨타임 중 (설정: ${coinConfig.sellingCooldown}분)`);
           return;
@@ -584,8 +595,12 @@ class TradingEngine extends EventEmitter {
           console.log(`Total balance: ${totalBalance}, Sell amount: ${sellAmount}`);
           
           // 실제 거래 실행 (테스트 모드에서는 로그만)
+          console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
+            console.log(`Executing REAL SELL order for ${market}: ${sellAmount} ${market.split('-')[1]}`);
             await upbitService.sellOrder(market, sellAmountStr);
+          } else {
+            console.log(`TEST MODE - Simulating SELL order for ${market}: ${sellAmount} ${market.split('-')[1]}`);
           }
           
           // 거래 시간 기록
@@ -1017,19 +1032,32 @@ class TradingEngine extends EventEmitter {
   // 코인별 쿨다운 체크
   private isInCooldownWithConfig(market: string, action: 'buy' | 'sell', cooldownMinutes: number): boolean {
     const lastTrade = this.lastTradeTime.get(market);
-    if (!lastTrade) return false;
+    console.log(`[${market}] 쿨타임 체크 상세 - action: ${action}, cooldownMinutes: ${cooldownMinutes}, lastTrade:`, lastTrade);
+    
+    if (!lastTrade) {
+      console.log(`[${market}] 이전 거래 기록 없음 - 쿨타임 없음`);
+      return false;
+    }
 
     const lastTime = action === 'buy' ? lastTrade.buy : lastTrade.sell;
-    if (!lastTime) return false;
+    if (!lastTime) {
+      console.log(`[${market}] ${action} 거래 기록 없음 - 쿨타임 없음`);
+      return false;
+    }
 
     const cooldownMs = cooldownMinutes * 60 * 1000;
     const now = Date.now();
+    const timeSinceLast = now - lastTime;
 
-    const isInCooldown = (now - lastTime) < cooldownMs;
+    const isInCooldown = timeSinceLast < cooldownMs;
+    
+    const lastTradeDate = new Date(lastTime).toLocaleString('ko-KR');
+    const remainingMinutes = Math.ceil((cooldownMs - timeSinceLast) / (60 * 1000));
     
     if (isInCooldown) {
-      const remainingMinutes = Math.ceil((cooldownMs - (now - lastTime)) / (60 * 1000));
-      console.log(`${market} ${action} cooldown: ${remainingMinutes} minutes remaining (config: ${cooldownMinutes}min)`);
+      console.log(`[${market}] ${action} 쿨타임 활성 - 마지막 거래: ${lastTradeDate}, 남은 시간: ${remainingMinutes}분 (설정: ${cooldownMinutes}분)`);
+    } else {
+      console.log(`[${market}] ${action} 쿨타임 완료 - 마지막 거래: ${lastTradeDate}, 경과 시간: ${Math.floor(timeSinceLast / 60000)}분`);
     }
 
     return isInCooldown;

@@ -40,7 +40,7 @@ export const formatAIReason = (reason: string, decision: string): string => {
   const decisionKorean = {
     'buy': '매수',
     'sell': '매도',
-    'hold': '보유'
+    'hold': '홀드'
   }[decision] || decision;
 
   let formattedReason = reason
@@ -78,7 +78,7 @@ export const getDecisionText = (decision: string): string => {
   switch (decision?.toLowerCase()) {
     case 'buy': return '매수';
     case 'sell': return '매도';
-    case 'hold': return '보유';
+    case 'hold': return '홀드';
     default: return '대기';
   }
 };

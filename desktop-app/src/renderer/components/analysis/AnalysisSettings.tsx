@@ -57,8 +57,8 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
     maxPositionSize: 100000,
     defaultBuyRatio: 0.1,
     defaultSellRatio: 0.5,
-    buyingCooldown: 60,
-    sellingCooldown: 30,
+    buyCooldown: 60,
+    sellCooldown: 30,
     stopLossPercent: 5,
     takeProfitPercent: 10,
     useKellyOptimization: false,
@@ -78,8 +78,8 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
       maxPositionSize: settings.maxPositionSize || 100000,
       defaultBuyRatio: settings.defaultBuyRatio || 0.1,
       defaultSellRatio: settings.defaultSellRatio || 0.5,
-      buyingCooldown: settings.buyingCooldown || 60,
-      sellingCooldown: settings.sellingCooldown || 30,
+      buyCooldown: settings.buyCooldown || 60,
+      sellCooldown: settings.sellCooldown || 30,
       stopLossPercent: settings.stopLossPercent || 5,
       takeProfitPercent: settings.takeProfitPercent || 10,
       useKellyOptimization: settings.useKellyOptimization || false,
@@ -248,8 +248,8 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                       fullWidth
                       label="매수 쿨다운"
                       type="number"
-                      value={localSettings.buyingCooldown || 60}
-                      onChange={(e) => handleChange('buyingCooldown', parseInt(e.target.value) || 0)}
+                      value={localSettings.buyCooldown || 60}
+                      onChange={(e) => handleChange('buyCooldown', parseInt(e.target.value) || 0)}
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -257,8 +257,8 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                       fullWidth
                       label="매도 쿨다운"
                       type="number"
-                      value={localSettings.sellingCooldown || 30}
-                      onChange={(e) => handleChange('sellingCooldown', parseInt(e.target.value) || 0)}
+                      value={localSettings.sellCooldown || 30}
+                      onChange={(e) => handleChange('sellCooldown', parseInt(e.target.value) || 0)}
                     />
                   </Grid>
                 </Grid>
@@ -329,8 +329,8 @@ export const AnalysisSettings: React.FC = () => {
         defaultSellRatio: 0.3,
         stopLossPercent: 3,
         takeProfitPercent: 5,
-        buyingCooldown: 60,
-        sellingCooldown: 40,
+        buyCooldown: 60,
+        sellCooldown: 40,
         maxPositionSize: 100000,
         minVolume: 200000000,
         volatilityAdjustment: true,
@@ -349,8 +349,8 @@ export const AnalysisSettings: React.FC = () => {
         defaultSellRatio: 0.5,
         stopLossPercent: 5,
         takeProfitPercent: 10,
-        buyingCooldown: 35,
-        sellingCooldown: 25,
+        buyCooldown: 35,
+        sellCooldown: 25,
         maxPositionSize: 150000,
         minVolume: 100000000,
         volatilityAdjustment: true,
@@ -369,8 +369,8 @@ export const AnalysisSettings: React.FC = () => {
         defaultSellRatio: 0.7,
         stopLossPercent: 7,
         takeProfitPercent: 15,
-        buyingCooldown: 20,
-        sellingCooldown: 15,
+        buyCooldown: 20,
+        sellCooldown: 15,
         maxPositionSize: 200000,
         minVolume: 50000000,
         volatilityAdjustment: false,
@@ -417,8 +417,8 @@ export const AnalysisSettings: React.FC = () => {
                   maxPositionSize: 150000,
                   defaultBuyRatio: 0.25,
                   defaultSellRatio: 0.5,
-                  buyingCooldown: 35,
-                  sellingCooldown: 25,
+                  buyCooldown: 35,
+                  sellCooldown: 25,
                   stopLossPercent: 7,
                   takeProfitPercent: 12,
                   volatilityAdjustment: true,
@@ -538,8 +538,8 @@ export const AnalysisSettings: React.FC = () => {
         maxPositionSize: 150000,
         defaultBuyRatio: 0.25,
         defaultSellRatio: 0.5,
-        buyingCooldown: 35,
-        sellingCooldown: 25,
+        buyCooldown: 35,
+        sellCooldown: 25,
         stopLossPercent: 7,
         takeProfitPercent: 12,
         volatilityAdjustment: true,

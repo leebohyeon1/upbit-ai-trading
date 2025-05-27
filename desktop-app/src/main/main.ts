@@ -592,14 +592,23 @@ class TradingApp {
     });
 
     // 쿨타임 정보 조회
+    console.log('Registering get-cooldown-info handler...');
     ipcMain.handle('get-cooldown-info', async (event, market: string) => {
       try {
-        return tradingEngine.getCooldownInfo(market);
+        console.log('Getting cooldown info for:', market);
+        if (!tradingEngine) {
+          console.error('TradingEngine is not initialized');
+          return { buyRemaining: 0, sellRemaining: 0, buyTotal: 30, sellTotal: 20 };
+        }
+        const result = tradingEngine.getCooldownInfo(market);
+        console.log('Cooldown info result:', result);
+        return result;
       } catch (error) {
         console.error('Failed to get cooldown info:', error);
         return { buyRemaining: 0, sellRemaining: 0, buyTotal: 30, sellTotal: 20 };
       }
     });
+    console.log('get-cooldown-info handler registered');
 
     // 설정 초기화
     ipcMain.handle('reset-all-settings', async () => {
@@ -796,6 +805,7 @@ class TradingApp {
   }
 
   private setupIpcHandlers() {
+    console.log('Setting up IPC handlers...');
     // API Key validation
     ipcMain.handle('validate-api-key', async (event, accessKey: string, secretKey: string, claudeApiKey?: string) => {
       try {
@@ -1091,6 +1101,8 @@ class TradingApp {
     });
 
     // reset-all-settings 핸들러는 이미 존재함
+    
+    console.log('All IPC handlers registered successfully');
   }
 }
 

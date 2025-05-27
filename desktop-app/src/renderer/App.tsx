@@ -69,6 +69,18 @@ const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState(TAB_INDEX.OVERVIEW);
   const [analysisDetailOpen, setAnalysisDetailOpen] = useState(false);
   const [selectedAnalysisDetail, setSelectedAnalysisDetail] = useState<Analysis | null>(null);
+  
+  // 탭 변경 시 스크롤 초기화
+  const handleTabChange = (newTab: number) => {
+    setActiveTab(newTab);
+    // 탭 변경 후 스크롤 초기화
+    setTimeout(() => {
+      const mainElement = document.querySelector('main');
+      if (mainElement) {
+        mainElement.scrollTop = 0;
+      }
+    }, 0);
+  };
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -114,7 +126,7 @@ const AppContent: React.FC = () => {
       <>
         <Box sx={{ display: activeTab === TAB_INDEX.OVERVIEW ? 'block' : 'none' }}>
           <Dashboard 
-            onTabChange={setActiveTab}
+            onTabChange={handleTabChange}
             onAnalysisClick={handleAnalysisClick}
           />
         </Box>
@@ -164,7 +176,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <MainLayout activeTab={activeTab} onTabChange={setActiveTab}>
+    <MainLayout activeTab={activeTab} onTabChange={handleTabChange}>
       {renderContent()}
 
       {/* 분석 상세 정보 모달 */}
@@ -248,7 +260,7 @@ const AppContent: React.FC = () => {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => {
-                setActiveTab(TAB_INDEX.ANALYSIS);
+                handleTabChange(TAB_INDEX.ANALYSIS);
                 setAnalysisDetailOpen(false);
               }}>
                 분석 설정으로 이동

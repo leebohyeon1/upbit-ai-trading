@@ -68,7 +68,7 @@ export const COLORS = {
 export const DECISION_TEXT = {
   buy: '매수',
   sell: '매도',
-  hold: '보류'
+  hold: '홀드'
 };
 
 // 신뢰도 임계값

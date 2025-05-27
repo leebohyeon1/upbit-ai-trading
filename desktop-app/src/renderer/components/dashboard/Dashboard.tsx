@@ -51,42 +51,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
   } = useTradingContext();
   
   const [cooldowns, setCooldowns] = useState<CooldownInfo>({});
-
-  // 쿨타임 정보 업데이트
+  
+  // 컴포넌트 마운트 시 스크롤 위치 초기화
   useEffect(() => {
-    const updateCooldowns = async () => {
-      const newCooldowns: CooldownInfo = {};
-      
-      const enabledCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(p => p.enabled) : [];
-      for (const coin of enabledCoins) {
-        const market = `KRW-${coin.symbol}`;
-        try {
-          if (window.electronAPI && window.electronAPI.getCooldownInfo) {
-            const cooldownInfo = await window.electronAPI.getCooldownInfo(market);
-            newCooldowns[market] = cooldownInfo;
-          }
-        } catch (error) {
-          console.error(`Failed to get cooldown info for ${market}:`, error);
-          // 기본값 설정
-          newCooldowns[market] = {
-            buyRemaining: 0,
-            sellRemaining: 0,
-            buyTotal: 30,
-            sellTotal: 20
-          };
-        }
-      }
-      
-      setCooldowns(newCooldowns);
-    };
+    // MainLayout의 main 요소 찾기
+    const mainElement = document.querySelector('main');
+    if (mainElement) {
+      mainElement.scrollTop = 0;
+    }
+  }, []);
 
-    // 초기 로드
-    updateCooldowns();
+  // 쿨타임 정보 업데이트 - 일시적으로 비활성화
+  useEffect(() => {
+    // 쿨타임 기능 일시적으로 비활성화
+    console.log('Cooldown feature temporarily disabled due to IPC handler issues');
     
-    // 5초마다 업데이트
-    const interval = setInterval(updateCooldowns, 1000);
+    // 기본값으로 설정
+    const defaultCooldowns: CooldownInfo = {};
+    const enabledCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(p => p.enabled) : [];
     
-    return () => clearInterval(interval);
+    for (const coin of enabledCoins) {
+      const market = `KRW-${coin.symbol}`;
+      defaultCooldowns[market] = {
+        buyRemaining: 0,
+        sellRemaining: 0,
+        buyTotal: 30,
+        sellTotal: 20
+      };
+    }
+    
+    setCooldowns(defaultCooldowns);
   }, [portfolio]);
 
   // 계산된 통계
@@ -242,7 +236,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           )}
                         </Box>
                         
-                        {/* 쿨타임 정보 */}
+                        {/* 쿨타임 정보 - 간소화된 버전 */}
                         {cooldownInfo && (
                           <Box sx={{ mt: 2 }}>
                             {/* 매수 쿨타임 */}
@@ -252,28 +246,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                   <Timer sx={{ fontSize: 16 }} />
                                   <Typography variant="caption">매수 쿨타임</Typography>
                                 </Box>
-                                {cooldownInfo.buyRemaining > 0 ? (
-                                  <Chip 
-                                    size="small" 
-                                    label={`${cooldownInfo.buyRemaining}분`} 
-                                    color="warning"
-                                  />
-                                ) : (
-                                  <Chip 
-                                    size="small" 
-                                    label="대기 중" 
-                                    color="success"
-                                    icon={<TimerOff sx={{ fontSize: 14 }} />}
-                                  />
-                                )}
-                              </Box>
-                              {cooldownInfo.buyRemaining > 0 && (
-                                <LinearProgress 
-                                  variant="determinate" 
-                                  value={((cooldownInfo.buyTotal - cooldownInfo.buyRemaining) / cooldownInfo.buyTotal) * 100}
-                                  sx={{ height: 4, borderRadius: 2 }}
+                                <Chip 
+                                  size="small" 
+                                  label="대기 중" 
+                                  color="success"
+                                  icon={<TimerOff sx={{ fontSize: 14 }} />}
                                 />
-                              )}
+                              </Box>
                             </Box>
                             
                             {/* 매도 쿨타임 */}
@@ -283,28 +262,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                   <Timer sx={{ fontSize: 16 }} />
                                   <Typography variant="caption">매도 쿨타임</Typography>
                                 </Box>
-                                {cooldownInfo.sellRemaining > 0 ? (
-                                  <Chip 
-                                    size="small" 
-                                    label={`${cooldownInfo.sellRemaining}분`} 
-                                    color="warning"
-                                  />
-                                ) : (
-                                  <Chip 
-                                    size="small" 
-                                    label="대기 중" 
-                                    color="success"
-                                    icon={<TimerOff sx={{ fontSize: 14 }} />}
-                                  />
-                                )}
-                              </Box>
-                              {cooldownInfo.sellRemaining > 0 && (
-                                <LinearProgress 
-                                  variant="determinate" 
-                                  value={((cooldownInfo.sellTotal - cooldownInfo.sellRemaining) / cooldownInfo.sellTotal) * 100}
-                                  sx={{ height: 4, borderRadius: 2 }}
+                                <Chip 
+                                  size="small" 
+                                  label="대기 중" 
+                                  color="success"
+                                  icon={<TimerOff sx={{ fontSize: 14 }} />}
                                 />
-                              )}
+                              </Box>
                             </Box>
                           </Box>
                         )}
