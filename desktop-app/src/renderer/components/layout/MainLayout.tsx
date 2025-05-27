@@ -62,7 +62,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
+    <Box sx={{ display: 'flex', height: '100vh', width: '100%' }}>
       {/* Sidebar */}
       <Drawer
         variant="permanent"
