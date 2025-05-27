@@ -107,7 +107,19 @@ export const useElectronAPI = () => {
   // 학습 시작/중지
   const toggleLearning = useCallback(async (ticker: string, isRunning: boolean) => {
     try {
+      console.log('[useElectronAPI] toggleLearning called:', ticker, isRunning);
       await window.electronAPI.toggleLearning(ticker, isRunning);
+      
+      // 학습 상태가 업데이트될 때까지 잠시 대기 후 상태 다시 가져오기
+      setTimeout(async () => {
+        try {
+          const updatedStates = await window.electronAPI.getLearningStates();
+          console.log('[useElectronAPI] Updated learning states:', updatedStates);
+          setLearningStates(updatedStates);
+        } catch (error) {
+          console.error('[useElectronAPI] Failed to get updated learning states:', error);
+        }
+      }, 100);
     } catch (error) {
       console.error('Failed to toggle learning:', error);
     }
@@ -128,11 +140,13 @@ export const useElectronAPI = () => {
     });
 
     const removeLearningListener = window.electronAPI.onLearningProgress((states) => {
+      console.log('[useElectronAPI] Learning progress event received:', states);
       setLearningStates(states);
     });
     
     // 초기 학습 상태 로드
     window.electronAPI.getLearningStates().then((states) => {
+      console.log('[useElectronAPI] Initial learning states loaded:', states);
       setLearningStates(states);
     }).catch(console.error);
 

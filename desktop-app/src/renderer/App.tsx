@@ -12,7 +12,8 @@ import {
   Paper,
   Chip,
   LinearProgress,
-  Grid
+  Grid,
+  CircularProgress
 } from '@mui/material';
 import { TradingProvider, useTradingContext } from './contexts/TradingContext';
 import { MainLayout } from './components/layout/MainLayout';
@@ -87,34 +88,38 @@ const AppContent: React.FC = () => {
     const loadInitialData = async () => {
       await context.fetchMarkets();
       await context.fetchAccounts();
-      
-      // 포트폴리오의 활성 코인들의 티커 정보 가져오기
-      const enabledSymbols = context.portfolio
-        .filter(coin => coin && coin.enabled && coin.symbol)
-        .map(coin => `KRW-${coin.symbol}`);
-      
-      if (enabledSymbols.length > 0) {
-        await context.fetchTickers(enabledSymbols);
-      }
     };
 
     loadInitialData();
   }, []);
-
-  // 주기적으로 티커 정보 업데이트
+  
+  // 포트폴리오가 변경될 때마다 티커 정보 업데이트
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const enabledSymbols = context.portfolio
-        .filter(coin => coin && coin.enabled && coin.symbol)
+    const updateTickers = async () => {
+      // 모든 코인의 티커 정보 가져오기 (보유 여부와 관계없이)
+      const allSymbols = context.portfolio
+        .filter(coin => coin && coin.symbol)
         .map(coin => `KRW-${coin.symbol}`);
       
-      if (enabledSymbols.length > 0) {
-        await context.fetchTickers(enabledSymbols);
+      // 보유 중인 코인도 포함
+      const heldSymbols = context.accounts
+        .filter(acc => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0)
+        .map(acc => `KRW-${acc.currency}`);
+      
+      // 중복 제거
+      const uniqueSymbols = Array.from(new Set([...allSymbols, ...heldSymbols]));
+      
+      if (uniqueSymbols.length > 0) {
+        await context.fetchTickers(uniqueSymbols);
       }
-    }, 5000);
+    };
+
+    const interval = setInterval(updateTickers, 5000); // 5초마다 업데이트
+    updateTickers(); // 즉시 실행
 
     return () => clearInterval(interval);
-  }, [context.portfolio]);
+  }, [context.portfolio, context.accounts]);
+
 
   const handleAnalysisClick = (analysis: Analysis) => {
     setSelectedAnalysisDetail(analysis);
@@ -281,7 +286,9 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <TradingProvider>
-        <AppContent />
+        <React.Suspense fallback={<Box display="flex" justifyContent="center" alignItems="center" height="100vh"><CircularProgress /></Box>}>
+          <AppContent />
+        </React.Suspense>
       </TradingProvider>
     </ThemeProvider>
   );

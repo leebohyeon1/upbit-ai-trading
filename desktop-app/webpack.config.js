@@ -24,6 +24,16 @@ module.exports = [
       path: path.resolve(__dirname, 'dist'),
       filename: 'main.js',
     },
+    plugins: [
+      new CopyWebpackPlugin({
+        patterns: [
+          {
+            from: 'src/main/icon.png',
+            to: 'main/icon.png'
+          }
+        ]
+      })
+    ]
   },
   // Renderer process
   {

@@ -45,7 +45,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onTabChange
 }) => {
   const theme = useTheme();
-  const { tradingState, toggleTrading } = useTradingContext();
+  const { tradingState, tradingConfig, toggleTrading } = useTradingContext();
   const [drawerOpen, setDrawerOpen] = useState(true);
 
   const menuItems = [
@@ -149,22 +149,22 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 gap: 2,
                 p: 1.5,
                 borderRadius: 2,
-                bgcolor: tradingState.aiEnabled ? alpha(theme.palette.primary.main, 0.1) : 'grey.100'
+                bgcolor: tradingConfig.useAI ? alpha(theme.palette.primary.main, 0.1) : 'grey.100'
               }}
             >
-              <Psychology color={tradingState.aiEnabled ? "primary" : "disabled"} />
+              <Psychology color={tradingConfig.useAI ? "primary" : "disabled"} />
               <Box flex={1}>
                 <Typography variant="body2" fontWeight="medium">
                   AI 분석
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {tradingState.aiEnabled ? '활성' : '비활성'}
+                  {tradingConfig.useAI ? '활성' : '비활성'}
                 </Typography>
               </Box>
               <Chip
-                label={tradingState.aiEnabled ? 'ON' : 'OFF'}
+                label={tradingConfig.useAI ? 'ON' : 'OFF'}
                 size="small"
-                color={tradingState.aiEnabled ? 'primary' : 'default'}
+                color={tradingConfig.useAI ? 'primary' : 'default'}
               />
             </Box>
           )}

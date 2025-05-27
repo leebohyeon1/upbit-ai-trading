@@ -77,6 +77,8 @@ class TradingApp {
   }
 
   private createWindow() {
+    const iconPath = path.join(__dirname, 'main', 'icon.png');
+    
     this.mainWindow = new BrowserWindow({
       width: 1000,
       height: 700,
@@ -85,7 +87,7 @@ class TradingApp {
         contextIsolation: true,
         preload: path.join(__dirname, 'preload', 'preload.js')
       },
-      icon: this.getIconPath(),
+      icon: iconPath,
       title: 'Upbit AI Trading'
     });
 
@@ -104,8 +106,14 @@ class TradingApp {
   }
 
   private createTray() {
-    const icon = nativeImage.createFromPath(this.getIconPath());
-    this.tray = new Tray(icon);
+    const iconPath = path.join(__dirname, 'main', 'icon.png');
+    const icon = nativeImage.createFromPath(iconPath);
+    // 트레이 아이콘 크기 조정 (16x16 or 22x22 for better visibility)
+    const trayIcon = icon.resize({ width: 16, height: 16 });
+    this.tray = new Tray(trayIcon);
+    
+    // 트레이 툴팁 설정
+    this.tray.setToolTip('Upbit AI Trading');
     
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -150,8 +158,7 @@ class TradingApp {
   }
 
   private getIconPath(): string {
-    // 아이콘 파일이 없으므로 임시로 빈 경로 반환
-    return path.join(__dirname, 'icon.png');
+    return path.join(__dirname, 'main', 'icon.png');
   }
 
 
@@ -761,16 +768,29 @@ class TradingApp {
         console.log('Saved API keys loaded to both services');
         
         // API 키 유효성 검증 후 렌더러에 상태 전송
+        console.log('Validating saved API keys...');
         try {
           const accounts = await upbitService.getAccounts();
           const balance = accounts.find((acc: any) => acc.currency === 'KRW')?.balance || '0';
-          this.mainWindow?.webContents.send('api-key-status', {
-            isValid: true,
-            accessKey: keys.upbitAccessKey,
-            balance: balance
-          });
+          console.log('API keys validated successfully');
+          
+          // 앱이 완전히 로드될 때까지 잠시 대기
+          setTimeout(() => {
+            this.mainWindow?.webContents.send('api-key-status', {
+              isValid: true,
+              accessKey: keys.upbitAccessKey,
+              balance: balance
+            });
+          }, 1000);
         } catch (error) {
           console.error('Failed to validate saved API keys:', error);
+          // 검증 실패 시에도 상태 전송
+          setTimeout(() => {
+            this.mainWindow?.webContents.send('api-key-status', {
+              isValid: false,
+              accessKey: keys.upbitAccessKey
+            });
+          }, 1000);
         }
       }
     } catch (error) {
@@ -910,10 +930,6 @@ class TradingApp {
       }
     });
 
-    ipcMain.handle('stop-trading', async () => {
-      return await this.stopTrading();
-    });
-
     ipcMain.handle('get-trading-state', async () => {
       return this.tradingState;
     });
@@ -1024,83 +1040,7 @@ class TradingApp {
       }
     });
 
-    // Settings methods
-    ipcMain.handle('save-api-keys', async (event, keys: any) => {
-      return await this.saveApiKeys(keys);
-    });
-
-    ipcMain.handle('get-api-keys', async () => {
-      return await this.getApiKeys();
-    });
-
-    ipcMain.handle('save-portfolio', async (event, portfolio: any[]) => {
-      try {
-        fs.writeFileSync(this.getPortfolioPath(), JSON.stringify(portfolio, null, 2));
-        return true;
-      } catch (error) {
-        console.error('Failed to save portfolio:', error);
-        return false;
-      }
-    });
-
-    ipcMain.handle('get-portfolio', async () => {
-      try {
-        const portfolioPath = this.getPortfolioPath();
-        if (fs.existsSync(portfolioPath)) {
-          return JSON.parse(fs.readFileSync(portfolioPath, 'utf-8'));
-        }
-        return [];
-      } catch (error) {
-        console.error('Failed to get portfolio:', error);
-        return [];
-      }
-    });
-
-    ipcMain.handle('save-analysis-configs', async (event, configs: any[]) => {
-      try {
-        fs.writeFileSync(this.getAnalysisConfigsPath(), JSON.stringify(configs, null, 2));
-        return true;
-      } catch (error) {
-        console.error('Failed to save analysis configs:', error);
-        return false;
-      }
-    });
-
-    ipcMain.handle('get-analysis-configs', async () => {
-      try {
-        const configsPath = this.getAnalysisConfigsPath();
-        if (fs.existsSync(configsPath)) {
-          return JSON.parse(fs.readFileSync(configsPath, 'utf-8'));
-        }
-        return [];
-      } catch (error) {
-        console.error('Failed to get analysis configs:', error);
-        return [];
-      }
-    });
-
-    ipcMain.handle('save-trading-config', async (event, config: any) => {
-      try {
-        fs.writeFileSync(this.getTradingConfigPath(), JSON.stringify(config, null, 2));
-        return true;
-      } catch (error) {
-        console.error('Failed to save trading config:', error);
-        return false;
-      }
-    });
-
-    ipcMain.handle('get-trading-config', async () => {
-      try {
-        const configPath = this.getTradingConfigPath();
-        if (fs.existsSync(configPath)) {
-          return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        }
-        return null;
-      } catch (error) {
-        console.error('Failed to get trading config:', error);
-        return null;
-      }
-    });
+    // Settings methods - already registered above
 
     // reset-all-settings 핸들러는 이미 존재함
     

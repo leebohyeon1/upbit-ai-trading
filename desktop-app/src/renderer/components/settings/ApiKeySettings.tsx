@@ -39,7 +39,7 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   
-  // 컴포넌트 마운트 시 저장된 API 키 불러오기
+  // 컴포넌트 마운트 시 저장된 API 키 불러오기 및 자동 검증
   React.useEffect(() => {
     const loadSavedKeys = async () => {
       try {
@@ -48,6 +48,27 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
           if (savedKeys.upbitAccessKey) setAccessKey(savedKeys.upbitAccessKey);
           if (savedKeys.upbitSecretKey) setSecretKey(savedKeys.upbitSecretKey);
           if (savedKeys.anthropicApiKey) setClaudeApiKey(savedKeys.anthropicApiKey);
+          
+          // 저장된 키가 있고 아직 검증되지 않았다면 자동 검증
+          if (savedKeys.upbitAccessKey && savedKeys.upbitSecretKey && !apiKeyStatus.isValid) {
+            console.log('Auto-validating saved API keys...');
+            setIsValidating(true);
+            try {
+              const result = await onValidate(
+                savedKeys.upbitAccessKey, 
+                savedKeys.upbitSecretKey, 
+                savedKeys.anthropicApiKey
+              );
+              if (!result.isValid) {
+                setValidationError('저장된 API 키가 유효하지 않습니다.');
+              }
+            } catch (error) {
+              console.error('Auto-validation failed:', error);
+              setValidationError('API 키 자동 검증 실패');
+            } finally {
+              setIsValidating(false);
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to load saved API keys:', error);
@@ -123,7 +144,7 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             value={accessKey}
             onChange={(e) => setAccessKey(e.target.value)}
             placeholder="Upbit API Access Key를 입력하세요"
-            disabled={apiKeyStatus.isValid}
+            disabled={false}
           />
           
           <TextField
@@ -133,7 +154,7 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             value={secretKey}
             onChange={(e) => setSecretKey(e.target.value)}
             placeholder="Upbit API Secret Key를 입력하세요"
-            disabled={apiKeyStatus.isValid}
+            disabled={false}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -155,7 +176,7 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             value={claudeApiKey}
             onChange={(e) => setClaudeApiKey(e.target.value)}
             placeholder="Claude API Key를 입력하세요 (AI 분석 사용시 필요)"
-            disabled={apiKeyStatus.isValid}
+            disabled={false}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -181,14 +202,31 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             </Alert>
           )}
 
-          <Button
-            variant="contained"
-            onClick={handleValidate}
-            disabled={isValidating || apiKeyStatus.isValid || !accessKey || !secretKey}
-            startIcon={isValidating ? <CircularProgress size={20} /> : <KeyIcon />}
-          >
-            {isValidating ? '검증 중...' : '키 검증'}
-          </Button>
+          <Box display="flex" gap={2}>
+            <Button
+              variant="contained"
+              onClick={handleValidate}
+              disabled={isValidating || !accessKey || !secretKey}
+              startIcon={isValidating ? <CircularProgress size={20} /> : <KeyIcon />}
+            >
+              {isValidating ? '검증 중...' : apiKeyStatus.isValid ? '키 재검증' : '키 검증'}
+            </Button>
+            
+            {apiKeyStatus.isValid && (
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setAccessKey('');
+                  setSecretKey('');
+                  setClaudeApiKey('');
+                  setValidationError(null);
+                }}
+                color="secondary"
+              >
+                키 변경
+              </Button>
+            )}
+          </Box>
 
           <Typography variant="caption" color="text.secondary">
             * Upbit 거래소에서 발급받은 API 키를 입력하세요.

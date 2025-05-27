@@ -35,21 +35,37 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
   config,
   onChange
 }) => {
+  // 컴포넌트 마운트 시 현재 설정 확인
+  React.useEffect(() => {
+    console.log('[TradingSettings] Current config on mount:', config);
+    console.log('[TradingSettings] localStorage tradingConfig:', localStorage.getItem('tradingConfig'));
+  }, []);
+  
+  // config 변경 시 로그
+  React.useEffect(() => {
+    console.log('[TradingSettings] Config updated:', config);
+  }, [config]);
   const handleChange = (field: keyof TradingConfig | string, value: any) => {
+    console.log(`[TradingSettings] Changing ${field} to:`, value);
+    
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
-      onChange({
+      const updatedConfig = {
         ...config,
         [parent]: {
           ...(config as any)[parent],
           [child]: value
         }
-      });
+      };
+      console.log('[TradingSettings] Updated config:', updatedConfig);
+      onChange(updatedConfig);
     } else {
-      onChange({
+      const updatedConfig = {
         ...config,
         [field]: value
-      });
+      };
+      console.log('[TradingSettings] Updated config:', updatedConfig);
+      onChange(updatedConfig);
     }
   };
 

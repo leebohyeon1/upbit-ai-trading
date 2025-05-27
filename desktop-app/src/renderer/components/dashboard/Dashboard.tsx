@@ -47,7 +47,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     accounts, 
     portfolio, 
     analyses, 
-    tradingState 
+    tradingState,
+    tradingConfig 
   } = useTradingContext();
   
   const [cooldowns, setCooldowns] = useState<CooldownInfo>({});
@@ -153,8 +154,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <StatCard
             icon={<Psychology />}
             title="AI 상태"
-            value={tradingState.aiEnabled ? '활성' : '비활성'}
-            color={tradingState.aiEnabled ? 'primary' : 'grey'}
+            value={tradingConfig.useAI ? '활성' : '비활성'}
+            color={tradingConfig.useAI ? 'primary' : 'grey'}
           />
         </Grid>
       </Grid>
@@ -185,7 +186,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <AnalysisCard
                   analysis={analysis}
                   onClick={() => onAnalysisClick(analysis)}
-                  showAI={tradingState.aiEnabled}
+                  showAI={tradingConfig.useAI}
                 />
               </Grid>
             ))}

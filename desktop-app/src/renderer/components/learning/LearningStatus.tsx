@@ -114,10 +114,9 @@ export const LearningStatus: React.FC = () => {
             metrics[coin.symbol] = learningData;
           } else {
             // 데이터가 없는 경우 기본값
-            const isRunning = learningStates.find(ls => ls.ticker === coin.symbol)?.isRunning || false;
             metrics[coin.symbol] = {
               ticker: coin.symbol,
-              isRunning,
+              isRunning: false, // metrics에는 isRunning을 저장하지 않음
               totalTrades: 0,
               winRate: 0,
               averageProfit: 0,
@@ -213,9 +212,12 @@ export const LearningStatus: React.FC = () => {
               <Grid container spacing={2}>
                 {portfolio.filter(p => p.enabled).map(coin => {
                   const metrics = learningMetrics[coin.symbol];
-                  const isRunning = metrics?.isRunning || false;
+                  // learningStates에서 직접 가져오도록 수정
+                  const learningStateForCoin = learningStates.find(ls => ls.ticker === coin.symbol);
+                  const isRunning = learningStateForCoin?.isRunning || false;
                   
-                  console.log(`[LearningStatus] Coin ${coin.symbol} - isRunning:`, isRunning, 'metrics:', metrics);
+                  console.log(`[LearningStatus] Coin ${coin.symbol} - isRunning:`, isRunning, 
+                    'learningState:', learningStateForCoin, 'metrics:', metrics);
                   
                   return (
                     <Grid item xs={12} sm={6} md={3} key={coin.symbol}>
@@ -468,11 +470,9 @@ export const LearningStatus: React.FC = () => {
                           <TableRow key={indicator.name}>
                             <TableCell>{indicator.name}</TableCell>
                             <TableCell align="right">
-                              <LinearProgress
-                                variant="determinate"
-                                value={indicator.weight * 100}
-                                sx={{ width: 80, ml: 'auto' }}
-                              />
+                              <Typography variant="body2">
+                                {(indicator.weight * 100).toFixed(1)}%
+                              </Typography>
                             </TableCell>
                             <TableCell align="right">
                               {formatPercent(indicator.successRate * 100)}
