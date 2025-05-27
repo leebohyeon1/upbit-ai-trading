@@ -14,9 +14,14 @@ import {
   TrendingDown,
   Remove as HoldIcon,
   Info as InfoIcon,
-  Psychology
+  Psychology,
+  Warning,
+  CheckCircle,
+  Timer,
+  AccountBalanceWallet,
+  TrendingFlat
 } from '@mui/icons-material';
-import { Analysis } from '../../types';
+import { Analysis, TradeFailureReasonMessages, TradeFailureReason } from '../../types';
 import { formatTimeAgo, getDecisionColor, getDecisionText } from '../../utils/formatters';
 
 interface AnalysisCardProps {
@@ -24,6 +29,22 @@ interface AnalysisCardProps {
   onClick: () => void;
   showAI?: boolean;
 }
+
+const getFailureIcon = (reason?: TradeFailureReason) => {
+  switch (reason) {
+    case TradeFailureReason.COOLDOWN_BUY:
+    case TradeFailureReason.COOLDOWN_SELL:
+      return <Timer sx={{ fontSize: 16, color: 'warning.main' }} />;
+    case TradeFailureReason.INSUFFICIENT_BALANCE:
+    case TradeFailureReason.MIN_ORDER_AMOUNT:
+      return <AccountBalanceWallet sx={{ fontSize: 16, color: 'error.main' }} />;
+    case TradeFailureReason.LOW_CONFIDENCE:
+    case TradeFailureReason.VOLATILITY_TOO_HIGH:
+      return <TrendingFlat sx={{ fontSize: 16, color: 'warning.main' }} />;
+    default:
+      return <Warning sx={{ fontSize: 16, color: 'error.main' }} />;
+  }
+};
 
 export const AnalysisCard: React.FC<AnalysisCardProps> = ({
   analysis,
@@ -117,6 +138,37 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({
             >
               {analysis.reason}
             </Typography>
+          )}
+
+          {/* 거래 시도 결과 표시 */}
+          {analysis.tradeAttempt && (
+            <Box mt={2}>
+              {analysis.tradeAttempt.success ? (
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <CheckCircle sx={{ fontSize: 16, color: 'success.main' }} />
+                  <Typography variant="caption" color="success.main">
+                    거래 주문 성공
+                  </Typography>
+                </Box>
+              ) : analysis.tradeAttempt.attempted && (
+                <Box>
+                  <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                    {getFailureIcon(analysis.tradeAttempt.failureReason as TradeFailureReason)}
+                    <Typography variant="caption" color="error" fontWeight="bold">
+                      {analysis.tradeAttempt.failureReason && 
+                        TradeFailureReasonMessages[analysis.tradeAttempt.failureReason as TradeFailureReason]?.title || 
+                        '거래 실패'
+                      }
+                    </Typography>
+                  </Box>
+                  {analysis.tradeAttempt.details && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 2.5 }}>
+                      {analysis.tradeAttempt.details}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </Box>
           )}
         </CardContent>
       </CardActionArea>

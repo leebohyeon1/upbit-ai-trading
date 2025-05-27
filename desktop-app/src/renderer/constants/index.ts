@@ -1,3 +1,5 @@
+import { IndicatorWeights } from '../types';
+
 // 거래 가능한 코인 목록
 export const AVAILABLE_COINS = [
   { symbol: 'BTC', name: '비트코인' },
@@ -99,4 +101,84 @@ export const STOP_MODES = {
   FIXED: 'fixed',
   ATR: 'atr',
   SIGNAL: 'signal'
+};
+
+// 기본 지표 가중치
+export const DEFAULT_INDICATOR_WEIGHTS: IndicatorWeights = {
+  // 기술적 지표
+  rsi: 1.0,
+  macd: 1.0,
+  bollinger: 1.0,
+  stochastic: 0.8,
+  volume: 1.0,
+  atr: 0.8,
+  obv: 0.7,
+  adx: 0.8,
+  // 시장 지표
+  volatility: 1.0,
+  trendStrength: 1.0,
+  // 외부 요인
+  aiAnalysis: 1.2,
+  newsImpact: 1.0,
+  whaleActivity: 0.8
+};
+
+// 가중치 프리셋
+export const WEIGHT_PRESETS = {
+  balanced: {
+    name: '균형',
+    description: '모든 지표를 균등하게 고려',
+    weights: DEFAULT_INDICATOR_WEIGHTS
+  },
+  technical: {
+    name: '기술적 분석 중심',
+    description: '기술적 지표에 높은 가중치',
+    weights: {
+      ...DEFAULT_INDICATOR_WEIGHTS,
+      rsi: 1.5,
+      macd: 1.5,
+      bollinger: 1.3,
+      aiAnalysis: 0.7,
+      newsImpact: 0.5
+    }
+  },
+  aiDriven: {
+    name: 'AI 분석 중심',
+    description: 'AI와 뉴스 분석에 높은 가중치',
+    weights: {
+      ...DEFAULT_INDICATOR_WEIGHTS,
+      aiAnalysis: 2.0,
+      newsImpact: 1.5,
+      rsi: 0.7,
+      macd: 0.7
+    }
+  },
+  volume: {
+    name: '거래량 중심',
+    description: '거래량과 고래 활동 중심',
+    weights: {
+      ...DEFAULT_INDICATOR_WEIGHTS,
+      volume: 2.0,
+      obv: 1.5,
+      whaleActivity: 1.5,
+      rsi: 0.8
+    }
+  }
+};
+
+// 가중치 학습 모드
+export const WEIGHT_LEARNING_MODES = {
+  INDIVIDUAL: 'individual',
+  CATEGORY: 'category',
+  GLOBAL: 'global'
+};
+
+// 코인 카테고리 (학습 공유용)
+export const COIN_CATEGORIES = {
+  major: ['BTC', 'ETH'],
+  defi: ['UNI', 'AAVE', 'LINK'],
+  layer1: ['SOL', 'AVAX', 'DOT', 'ATOM'],
+  layer2: ['MATIC', 'ARB', 'OP'],
+  meme: ['DOGE', 'SHIB'],
+  stable: ['USDT', 'USDC', 'DAI']
 };

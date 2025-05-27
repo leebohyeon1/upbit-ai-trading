@@ -49,7 +49,81 @@ export interface Analysis {
   confidence: number;
   timestamp: string;
   reason?: string;
+  tradeAttempt?: TradeAttempt;
 }
+
+export interface TradeAttempt {
+  attempted: boolean;
+  success: boolean;
+  failureReason?: TradeFailureReason;
+  details?: string;
+}
+
+export enum TradeFailureReason {
+  NO_CONFIG = 'NO_CONFIG',
+  TRADING_HOURS = 'TRADING_HOURS',
+  LOW_CONFIDENCE = 'LOW_CONFIDENCE',
+  COOLDOWN_BUY = 'COOLDOWN_BUY',
+  COOLDOWN_SELL = 'COOLDOWN_SELL',
+  MIN_ORDER_AMOUNT = 'MIN_ORDER_AMOUNT',
+  INSUFFICIENT_BALANCE = 'INSUFFICIENT_BALANCE',
+  REAL_TRADE_DISABLED = 'REAL_TRADE_DISABLED',
+  KELLY_FRACTION_ZERO = 'KELLY_FRACTION_ZERO',
+  VOLATILITY_TOO_HIGH = 'VOLATILITY_TOO_HIGH',
+  VOLUME_TOO_LOW = 'VOLUME_TOO_LOW',
+  API_ERROR = 'API_ERROR'
+}
+
+export const TradeFailureReasonMessages: Record<TradeFailureReason, { title: string; solution: string }> = {
+  [TradeFailureReason.NO_CONFIG]: {
+    title: '분석 설정 없음',
+    solution: '분석 설정에서 해당 코인의 거래 설정을 추가해주세요.'
+  },
+  [TradeFailureReason.TRADING_HOURS]: {
+    title: '거래 시간 제한',
+    solution: '설정된 거래 시간이 아닙니다. 분석 설정에서 거래 시간을 확인하세요.'
+  },
+  [TradeFailureReason.LOW_CONFIDENCE]: {
+    title: '신뢰도 미달',
+    solution: '신뢰도가 설정된 임계값보다 낮습니다. 거래 설정에서 임계값을 조정하세요.'
+  },
+  [TradeFailureReason.COOLDOWN_BUY]: {
+    title: '매수 쿨타임',
+    solution: '최근 매수 후 쿨타임이 아직 끝나지 않았습니다.'
+  },
+  [TradeFailureReason.COOLDOWN_SELL]: {
+    title: '매도 쿨타임',
+    solution: '최근 매도 후 쿨타임이 아직 끝나지 않았습니다.'
+  },
+  [TradeFailureReason.MIN_ORDER_AMOUNT]: {
+    title: '최소 주문 금액 미달',
+    solution: '주문 금액이 최소 주문 금액(5,000원)보다 적습니다. 투자 비율을 높이세요.'
+  },
+  [TradeFailureReason.INSUFFICIENT_BALANCE]: {
+    title: '잔액 부족',
+    solution: 'KRW 잔액이 부족합니다. 입금하거나 다른 코인을 매도하세요.'
+  },
+  [TradeFailureReason.REAL_TRADE_DISABLED]: {
+    title: '실거래 비활성화',
+    solution: 'API 키 설정에서 실거래를 활성화하세요.'
+  },
+  [TradeFailureReason.KELLY_FRACTION_ZERO]: {
+    title: 'Kelly 비율 0%',
+    solution: '과거 성과가 좋지 않아 Kelly Criterion이 0%를 제안했습니다.'
+  },
+  [TradeFailureReason.VOLATILITY_TOO_HIGH]: {
+    title: '변동성 과다',
+    solution: '시장 변동성이 너무 높아 거래가 제한되었습니다.'
+  },
+  [TradeFailureReason.VOLUME_TOO_LOW]: {
+    title: '거래량 부족',
+    solution: '24시간 거래량이 설정된 최소 거래량보다 적습니다.'
+  },
+  [TradeFailureReason.API_ERROR]: {
+    title: 'API 오류',
+    solution: 'Upbit API 호출 중 오류가 발생했습니다. 잠시 후 다시 시도됩니다.'
+  }
+};
 
 export interface LearningState {
   ticker: string;
@@ -107,6 +181,48 @@ export interface AnalysisConfig {
   positionSizingMode?: 'fixed' | 'kelly' | 'volatility';
   atrMultiplier?: number;
   analysisIntervalSeconds?: number;
+  preferredTradingHours?: number[];
+  newsImpactMultiplier?: number;
+  volatilityAdjustment?: boolean;
+  useKellyOptimization?: boolean;
+  minOrderAmount?: number;
+  // 지표 가중치
+  indicatorWeights?: IndicatorWeights;
+  weightLearning?: WeightLearning;
+}
+
+// 지표 가중치 타입
+export interface IndicatorWeights {
+  // 기술적 지표 (0.0 ~ 2.0)
+  rsi: number;
+  macd: number;
+  bollinger: number;
+  stochastic: number;
+  volume: number;
+  atr: number;
+  obv: number;
+  adx: number;
+  // 시장 지표
+  volatility: number;
+  trendStrength: number;
+  // 외부 요인
+  aiAnalysis: number;
+  newsImpact: number;
+  whaleActivity: number;
+}
+
+// 가중치 학습 설정
+export interface WeightLearning {
+  enabled: boolean;
+  mode: 'individual' | 'category' | 'global'; // 개별/카테고리별/전체
+  minTrades: number; // 학습 시작 최소 거래 수
+  adjustments: Partial<IndicatorWeights>; // 학습된 조정값
+  performance: {
+    trades: number;
+    winRate: number;
+    avgProfit: number;
+    lastUpdated: number;
+  };
 }
 
 export interface TradingConfig {

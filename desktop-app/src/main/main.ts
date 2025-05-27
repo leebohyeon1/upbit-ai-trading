@@ -1227,7 +1227,6 @@ class TradingApp {
     ipcMain.handle('get-cooldown-info', async (event, market: string) => {
       try {
         const cooldownInfo = tradingEngine.getCooldownInfo(market);
-        console.log(`[IPC] Cooldown info for ${market}:`, cooldownInfo);
         return cooldownInfo;
       } catch (error) {
         console.error('Failed to get cooldown info:', error);
@@ -1238,6 +1237,54 @@ class TradingApp {
           canBuy: true,
           canSell: true
         };
+      }
+    });
+
+    // 학습 가중치 정보 조회
+    ipcMain.handle('get-weight-learning-info', async (event, market: string) => {
+      try {
+        const learningService = tradingEngine.getLearningService();
+        const learnedWeights = learningService.getCoinWeights(market);
+        const globalWeights = learningService.getWeights();
+        
+        // 조정값 계산 (학습 가중치 / 기본 가중치)
+        const defaultWeights = {
+          rsi: 1.0, macd: 1.0, bollinger: 1.0, stochastic: 0.8,
+          volume: 1.0, atr: 0.8, obv: 0.7, adx: 0.8,
+          volatility: 1.0, trendStrength: 1.0, aiAnalysis: 1.2,
+          newsImpact: 1.0, whaleActivity: 0.8,
+          // learning-service에서 사용하는 추가 지표들
+          bb_position: 0.8, volume_ratio: 0.9, stochastic_rsi: 0.9,
+          obv_trend: 0.8, news_sentiment: 1.2, whale_activity: 1.1,
+          market_trend: 1.0
+        };
+        
+        const adjustments: any = {};
+        const weights = learnedWeights || globalWeights;
+        
+        if (weights) {
+          Object.keys(defaultWeights).forEach(key => {
+            adjustments[key] = weights[key] / defaultWeights[key as keyof typeof defaultWeights];
+          });
+        }
+        
+        // 성능 통계 가져오기
+        const performance = learningService.getPerformanceStats(market);
+        
+        return {
+          enabled: true,
+          mode: learnedWeights ? 'individual' : 'global',
+          adjustments,
+          performance: {
+            trades: performance.total_trades,
+            winRate: performance.win_rate,
+            avgProfit: performance.average_profit,
+            lastUpdated: Date.now()
+          }
+        };
+      } catch (error) {
+        console.error('Failed to get weight learning info:', error);
+        return null;
       }
     });
     

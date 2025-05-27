@@ -32,7 +32,9 @@ import {
   Settings
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
-import { AVAILABLE_COINS } from '../../constants';
+import { AVAILABLE_COINS, DEFAULT_INDICATOR_WEIGHTS } from '../../constants';
+import { WeightSettings } from './WeightSettings';
+import { IndicatorWeights, WeightLearning } from '../../types';
 
 interface CoinSettingsPanelProps {
   coin: string;
@@ -48,6 +50,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
   onSettingsChange
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const [learningInfo, setLearningInfo] = useState<any>(null);
   const [localSettings, setLocalSettings] = useState({
     rsiOverbought: 70,
     rsiOversold: 30,
@@ -64,8 +67,42 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
     useKellyOptimization: false,
     volatilityAdjustment: false,
     newsImpactMultiplier: 1.0,
+    indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
+    weightLearning: {
+      enabled: false,
+      mode: 'individual' as const,
+      minTrades: 50,
+      adjustments: {},
+      performance: {
+        trades: 0,
+        winRate: 0,
+        avgProfit: 0,
+        lastUpdated: Date.now()
+      }
+    },
     ...settings
   });
+
+  // 학습 정보 가져오기
+  useEffect(() => {
+    const fetchLearningInfo = async () => {
+      try {
+        const info = await (window as any).electronAPI.getWeightLearningInfo(`KRW-${coin}`);
+        if (info) {
+          setLearningInfo(info);
+        }
+      } catch (error) {
+        console.error('Failed to fetch learning info:', error);
+      }
+    };
+
+    if (expanded) {
+      fetchLearningInfo();
+      // 5초마다 업데이트
+      const interval = setInterval(fetchLearningInfo, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [expanded, coin]);
 
   // settings prop이 변경될 때 localSettings 업데이트
   useEffect(() => {
@@ -85,6 +122,19 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
       useKellyOptimization: settings.useKellyOptimization || false,
       volatilityAdjustment: settings.volatilityAdjustment || false,
       newsImpactMultiplier: settings.newsImpactMultiplier || 1.0,
+      indicatorWeights: settings.indicatorWeights || DEFAULT_INDICATOR_WEIGHTS,
+      weightLearning: settings.weightLearning || {
+        enabled: false,
+        mode: 'individual',
+        minTrades: 50,
+        adjustments: {},
+        performance: {
+          trades: 0,
+          winRate: 0,
+          avgProfit: 0,
+          lastUpdated: Date.now()
+        }
+      }
     });
   }, [settings]);
 
@@ -92,6 +142,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
     const newSettings = { ...localSettings, [field]: value };
     setLocalSettings(newSettings);
     onSettingsChange(symbol, newSettings);
+    console.log(`[${symbol}] Settings changed:`, field, value);
   };
 
   return (
@@ -200,6 +251,18 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     marks
                     valueLabelDisplay="auto"
                   />
+                  
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    기본 매도 비율: {((localSettings.defaultSellRatio || 0.5) * 100).toFixed(0)}%
+                  </Typography>
+                  <Slider
+                    value={(localSettings.defaultSellRatio || 0.5) * 100}
+                    onChange={(e, value) => handleChange('defaultSellRatio', value as number / 100)}
+                    min={10}
+                    max={100}
+                    marks
+                    valueLabelDisplay="auto"
+                  />
                 </Box>
               </Grid>
 
@@ -291,6 +354,31 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                 </Box>
               </Grid>
             </Grid>
+
+            {/* 지표 가중치 설정 */}
+            <Box mt={3}>
+              <Divider sx={{ mb: 2 }} />
+              <WeightSettings
+                weights={localSettings.indicatorWeights || DEFAULT_INDICATOR_WEIGHTS}
+                onChange={(weights) => handleChange('indicatorWeights', weights)}
+                learning={learningInfo || localSettings.weightLearning || {
+                  enabled: false,
+                  mode: 'individual',
+                  minTrades: 50,
+                  adjustments: {},
+                  performance: {
+                    trades: 0,
+                    winRate: 0,
+                    avgProfit: 0,
+                    lastUpdated: Date.now()
+                  }
+                }}
+                onLearningChange={(learning) => {
+                  console.log(`[${symbol}] Weight learning changed:`, learning);
+                  handleChange('weightLearning', { ...learning, enabled: learning.enabled });
+                }}
+              />
+            </Box>
           </Box>
         </Collapse>
       </CardContent>
@@ -334,7 +422,15 @@ export const AnalysisSettings: React.FC = () => {
         maxPositionSize: 100000,
         minVolume: 200000000,
         volatilityAdjustment: true,
-        useKellyOptimization: false
+        useKellyOptimization: false,
+        indicatorWeights: {
+          ...DEFAULT_INDICATOR_WEIGHTS,
+          rsi: 1.2,
+          macd: 1.2,
+          bollinger: 1.1,
+          aiAnalysis: 0.8,
+          newsImpact: 0.6
+        }
       }
     },
     balanced: {
@@ -354,7 +450,8 @@ export const AnalysisSettings: React.FC = () => {
         maxPositionSize: 150000,
         minVolume: 100000000,
         volatilityAdjustment: true,
-        useKellyOptimization: false
+        useKellyOptimization: false,
+        indicatorWeights: DEFAULT_INDICATOR_WEIGHTS
       }
     },
     aggressive: {
@@ -374,7 +471,16 @@ export const AnalysisSettings: React.FC = () => {
         maxPositionSize: 200000,
         minVolume: 50000000,
         volatilityAdjustment: false,
-        useKellyOptimization: true
+        useKellyOptimization: true,
+        indicatorWeights: {
+          ...DEFAULT_INDICATOR_WEIGHTS,
+          rsi: 0.8,
+          macd: 0.8,
+          volume: 1.5,
+          aiAnalysis: 1.5,
+          newsImpact: 1.3,
+          whaleActivity: 1.2
+        }
       }
     }
   };
@@ -422,7 +528,15 @@ export const AnalysisSettings: React.FC = () => {
                   stopLossPercent: 7,
                   takeProfitPercent: 12,
                   volatilityAdjustment: true,
-                  useKellyOptimization: false
+                  useKellyOptimization: false,
+                  // buying 객체에 defaultBuyRatio 포함
+                  buying: {
+                    defaultBuyRatio: 0.25
+                  },
+                  // selling 객체에 defaultSellRatio 포함
+                  selling: {
+                    defaultSellRatio: 0.5
+                  }
                 };
               });
               setLocalConfigs(defaultConfigs);
@@ -462,7 +576,11 @@ export const AnalysisSettings: React.FC = () => {
   const handleSettingsChange = (coin: string, settings: any) => {
     const updatedConfigs = {
       ...localConfigs,
-      [coin]: { ...settings, ticker: `KRW-${coin}` }
+      [coin]: { 
+        ...settings, 
+        ticker: `KRW-${coin}`
+        // buying/selling 객체 제거 - 모든 필드를 최상위 레벨에 저장
+      }
     };
     setLocalConfigs(updatedConfigs);
     
@@ -490,7 +608,15 @@ export const AnalysisSettings: React.FC = () => {
       updatedConfigs[coin] = {
         ...updatedConfigs[coin],
         ...preset.settings,
-        ticker: updatedConfigs[coin].ticker // ticker는 유지
+        ticker: updatedConfigs[coin].ticker, // ticker는 유지
+        // buying 객체에 defaultBuyRatio 포함
+        buying: {
+          defaultBuyRatio: preset.settings.defaultBuyRatio || 0.1
+        },
+        // selling 객체에 defaultSellRatio 포함
+        selling: {
+          defaultSellRatio: preset.settings.defaultSellRatio || 0.5
+        }
       };
     });
     
@@ -543,7 +669,15 @@ export const AnalysisSettings: React.FC = () => {
         stopLossPercent: 7,
         takeProfitPercent: 12,
         volatilityAdjustment: true,
-        useKellyOptimization: false
+        useKellyOptimization: false,
+        // buying 객체에 defaultBuyRatio 포함
+        buying: {
+          defaultBuyRatio: 0.25
+        },
+        // selling 객체에 defaultSellRatio 포함
+        selling: {
+          defaultSellRatio: 0.5
+        }
       };
     });
     setLocalConfigs(defaultConfigs);

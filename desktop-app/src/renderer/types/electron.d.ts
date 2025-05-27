@@ -46,6 +46,19 @@ declare global {
         sellTotal: number;
       }>;
       
+      // Weight learning methods
+      getWeightLearningInfo: (market: string) => Promise<{
+        enabled: boolean;
+        mode: 'individual' | 'category' | 'global';
+        adjustments: Record<string, number>;
+        performance: {
+          trades: number;
+          winRate: number;
+          avgProfit: number;
+          lastUpdated: number;
+        };
+      } | null>;
+      
       // Settings methods
       saveApiKeys: (keys: { accessKey: string; secretKey: string }) => Promise<void>;
       getApiKeys: () => Promise<{ accessKey: string; secretKey: string }>;

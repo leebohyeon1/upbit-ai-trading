@@ -211,7 +211,187 @@ export class LearningService extends EventEmitter {
     this.signalWeights.forEach((value, key) => {
       weights[key] = value.weight;
     });
+    
+    // UI에서 사용하는 이름으로 매핑 추가
+    weights['bollinger'] = weights['bb_position'] || 0.8;
+    weights['stochastic'] = weights['stochastic_rsi'] || 0.9;
+    weights['volume'] = weights['volume_ratio'] || 1.0;
+    weights['obv'] = weights['obv_trend'] || 0.8;
+    weights['trendStrength'] = weights['market_trend'] || 1.0;
+    weights['aiAnalysis'] = weights['news_sentiment'] || 1.2;
+    weights['newsImpact'] = weights['news_sentiment'] || 1.2;
+    weights['whaleActivity'] = weights['whale_activity'] || 1.1;
+    
     return weights;
+  }
+
+  // 코인별 가중치 학습 관리
+  private coinWeightLearning: Map<string, {
+    weights: Record<string, number>;
+    trades: number;
+    performance: {
+      winRate: number;
+      avgProfit: number;
+      lastUpdated: number;
+    };
+  }> = new Map();
+
+  // 코인별 가중치 가져오기
+  public getCoinWeights(market: string): Record<string, number> | null {
+    const coinLearning = this.coinWeightLearning.get(market);
+    
+    // 최소 거래 수 확인
+    if (!coinLearning || coinLearning.trades < 50) {
+      // 카테고리별 학습 확인
+      const category = this.getCoinCategory(market);
+      if (category) {
+        const categoryWeights = this.getCategoryWeights(category);
+        if (categoryWeights) return this.mapWeightNames(categoryWeights);
+      }
+      
+      // 전역 가중치 반환
+      return this.getWeights();
+    }
+    
+    return this.mapWeightNames(coinLearning.weights);
+  }
+  
+  // 가중치 이름 매핑
+  private mapWeightNames(weights: Record<string, number>): Record<string, number> {
+    const mappedWeights = { ...weights };
+    
+    // UI에서 사용하는 이름으로 매핑
+    mappedWeights['bollinger'] = weights['bb_position'] || 0.8;
+    mappedWeights['stochastic'] = weights['stochastic_rsi'] || 0.9;
+    mappedWeights['volume'] = weights['volume_ratio'] || 1.0;
+    mappedWeights['obv'] = weights['obv_trend'] || 0.8;
+    mappedWeights['trendStrength'] = weights['market_trend'] || 1.0;
+    mappedWeights['aiAnalysis'] = weights['news_sentiment'] || 1.2;
+    mappedWeights['newsImpact'] = weights['news_sentiment'] || 1.2;
+    mappedWeights['whaleActivity'] = weights['whale_activity'] || 1.1;
+    
+    return mappedWeights;
+  }
+
+  // 코인 카테고리 찾기
+  private getCoinCategory(market: string): string | null {
+    const symbol = market.split('-')[1];
+    const categories: Record<string, string[]> = {
+      major: ['BTC', 'ETH'],
+      defi: ['UNI', 'AAVE', 'LINK'],
+      layer1: ['SOL', 'AVAX', 'DOT', 'ATOM'],
+      layer2: ['MATIC', 'ARB', 'OP'],
+      meme: ['DOGE', 'SHIB']
+    };
+    
+    for (const [category, coins] of Object.entries(categories)) {
+      if (coins.includes(symbol)) return category;
+    }
+    
+    return null;
+  }
+
+  // 카테고리별 평균 가중치
+  private getCategoryWeights(category: string): Record<string, number> | null {
+    const categoryCoins = this.getCategoryCoins(category);
+    const weights: Record<string, Record<string, number>> = {};
+    let count = 0;
+    
+    categoryCoins.forEach(coin => {
+      const coinLearning = this.coinWeightLearning.get(`KRW-${coin}`);
+      if (coinLearning && coinLearning.trades >= 50) {
+        Object.entries(coinLearning.weights).forEach(([key, value]) => {
+          if (!weights[key]) weights[key] = {};
+          weights[key][coin] = value;
+        });
+        count++;
+      }
+    });
+    
+    if (count === 0) return null;
+    
+    // 평균 계산
+    const avgWeights: Record<string, number> = {};
+    Object.entries(weights).forEach(([indicator, coinWeights]) => {
+      avgWeights[indicator] = Object.values(coinWeights).reduce((a, b) => a + b, 0) / count;
+    });
+    
+    return avgWeights;
+  }
+
+  // 카테고리별 코인 목록
+  private getCategoryCoins(category: string): string[] {
+    const categories: Record<string, string[]> = {
+      major: ['BTC', 'ETH'],
+      defi: ['UNI', 'AAVE', 'LINK'],
+      layer1: ['SOL', 'AVAX', 'DOT', 'ATOM'],
+      layer2: ['MATIC', 'ARB', 'OP'],
+      meme: ['DOGE', 'SHIB']
+    };
+    
+    return categories[category] || [];
+  }
+
+  // 코인별 가중치 업데이트
+  public updateCoinWeights(market: string, trade: TradeResult): void {
+    if (!this.isLearningEnabled(market)) return;
+    
+    let coinLearning = this.coinWeightLearning.get(market);
+    if (!coinLearning) {
+      // 초기화 - 전역 가중치 또는 카테고리 가중치로 시작
+      const initialWeights = this.getCoinWeights(market) || this.getWeights();
+      coinLearning = {
+        weights: { ...initialWeights },
+        trades: 0,
+        performance: {
+          winRate: 0,
+          avgProfit: 0,
+          lastUpdated: Date.now()
+        }
+      };
+      this.coinWeightLearning.set(market, coinLearning);
+    }
+    
+    // 거래 기록
+    coinLearning.trades++;
+    
+    // 성과 업데이트
+    const isWin = trade.profitRate > 0;
+    const oldWinRate = coinLearning.performance.winRate;
+    coinLearning.performance.winRate = 
+      (oldWinRate * (coinLearning.trades - 1) + (isWin ? 1 : 0)) / coinLearning.trades;
+    
+    const oldAvgProfit = coinLearning.performance.avgProfit;
+    coinLearning.performance.avgProfit = 
+      (oldAvgProfit * (coinLearning.trades - 1) + trade.profitRate) / coinLearning.trades;
+    
+    coinLearning.performance.lastUpdated = Date.now();
+    
+    // 가중치 조정 (50거래 이후부터)
+    if (coinLearning.trades >= 50) {
+      this.adjustCoinWeights(market, trade, coinLearning);
+    }
+  }
+
+  // 코인별 가중치 조정
+  private adjustCoinWeights(
+    market: string, 
+    trade: TradeResult, 
+    coinLearning: any
+  ): void {
+    const adjustmentRate = 0.01; // 1% 씩 조정
+    const profitMultiplier = trade.profitRate > 0 ? 1 : -1;
+    
+    // 각 지표의 기여도에 따라 가중치 조정
+    Object.entries(trade.indicators).forEach(([indicator, value]) => {
+      if (coinLearning.weights[indicator] !== undefined) {
+        // 수익이 났으면 해당 지표의 가중치 증가, 손실이면 감소
+        const adjustment = adjustmentRate * profitMultiplier;
+        coinLearning.weights[indicator] = Math.max(0.1, Math.min(2.0, 
+          coinLearning.weights[indicator] * (1 + adjustment)
+        ));
+      }
+    });
   }
 
   public getPerformanceStats(market?: string, days: number = 30): {

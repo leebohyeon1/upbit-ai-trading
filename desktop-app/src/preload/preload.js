@@ -30,6 +30,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Cooldown methods
   getCooldownInfo: (market) => ipcRenderer.invoke('get-cooldown-info', market),
   
+  // Weight learning methods
+  getWeightLearningInfo: (market) => ipcRenderer.invoke('get-weight-learning-info', market),
+  
   // Settings methods
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
   getApiKeys: () => ipcRenderer.invoke('get-api-keys'),

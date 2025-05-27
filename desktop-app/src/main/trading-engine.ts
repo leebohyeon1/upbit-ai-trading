@@ -41,6 +41,12 @@ export interface CoinAnalysis {
   analysis: TechnicalAnalysis;
   aiAnalysis: string | null;
   lastUpdated: number;
+  tradeAttempt?: {
+    attempted: boolean;
+    success: boolean;
+    failureReason?: string;
+    details?: string;
+  };
 }
 
 export interface TradeHistory {
@@ -74,12 +80,12 @@ class TradingEngine extends EventEmitter {
   private config: TradingConfig = {
     enableRealTrading: false,
     maxInvestmentPerCoin: 0,
-    stopLossPercent: 0,
-    takeProfitPercent: 0,
+    stopLossPercent: 5,
+    takeProfitPercent: 10,
     rsiOverbought: 70,
     rsiOversold: 30,
-    buyingCooldown: 0,
-    sellingCooldown: 0,
+    buyingCooldown: 30,    // 기본 30분
+    sellingCooldown: 20,   // 기본 20분
     minConfidenceForTrade: 50,
     sellRatio: 0.5,
     buyRatio: 0.1,
@@ -102,6 +108,26 @@ class TradingEngine extends EventEmitter {
   private learningService: LearningService;
   private apiClient: ApiClient;
   private useApiServer: boolean = false;
+  
+  // 시뮬레이션 모드를 위한 가상 포트폴리오
+  private virtualPortfolio: Map<string, {
+    balance: number;
+    avgBuyPrice: number;
+    totalBought: number;
+  }> = new Map();
+  private virtualKRW: number = 10000000; // 시작 자금 1천만원
+  private virtualTradeHistory: Array<{
+    market: string;
+    type: 'BUY' | 'SELL';
+    price: number;
+    amount: number;
+    volume: number;
+    timestamp: number;
+    krwBalance: number;
+    coinBalance: number;
+    profit?: number;
+    profitRate?: number;
+  }> = [];
 
   constructor() {
     super();
@@ -312,8 +338,21 @@ class TradingEngine extends EventEmitter {
             return configTicker === coinSymbol;
           });
           
+          // 학습된 가중치 가져오기 (코인별 -> 카테고리별 -> 전역)
+          const learnedWeights = this.learningService.getCoinWeights(market);
+          
+          // 분석 설정에 학습된 가중치 병합
+          const analysisConfigWithWeights = analysisConfig ? {
+            ...analysisConfig,
+            indicatorWeights: this.mergeWeights(
+              analysisConfig.indicatorWeights,
+              learnedWeights,
+              analysisConfig.weightLearning
+            )
+          } : { indicatorWeights: learnedWeights };
+          
           // 기술적 분석 수행 (추가 데이터 및 설정 포함)
-          const technicalAnalysis = await analysisService.analyzeTechnicals(candles, ticker, orderbook, trades, analysisConfig);
+          const technicalAnalysis = await analysisService.analyzeTechnicals(candles, ticker, orderbook, trades, analysisConfigWithWeights);
           
           // AI 분석 (실제 Claude API 사용)
           let aiAnalysis = null;
@@ -341,21 +380,39 @@ class TradingEngine extends EventEmitter {
 
           this.analysisResults.set(market, coinAnalysis);
 
+          // 손절/익절 체크 (보유 포지션이 있는 경우)
+          const accounts = await upbitService.getAccounts();
+          const coinAccount = accounts.find(acc => acc.currency === market.split('-')[1]);
+          if (coinAccount && parseFloat(coinAccount.balance) > 0) {
+            const stopLossCheck = await this.checkStopLossAndTakeProfit(market, coinAnalysis, coinAccount, analysisConfig);
+            if (stopLossCheck.shouldSell) {
+              // 손절/익절 신호를 강제로 SELL로 변경
+              technicalAnalysis.signal = 'SELL';
+              technicalAnalysis.confidence = 100; // 손절/익절은 100% 신뢰도
+              aiAnalysis = stopLossCheck.reason;
+              coinAnalysis.analysis = technicalAnalysis;
+              coinAnalysis.aiAnalysis = aiAnalysis;
+            }
+          }
+
+          // 거래 신호 처리 및 결과 저장
+          let tradeAttempt = undefined;
+          if (this.config.enableRealTrading || technicalAnalysis.signal !== 'HOLD') {
+            tradeAttempt = await this.processTradeSignal(coinAnalysis);
+            coinAnalysis.tradeAttempt = tradeAttempt;
+          }
+
           // 개별 분석 결과 즉시 전송 (프론트엔드 형식으로 변환)
           const frontendAnalysis = {
             ticker: market,
             decision: technicalAnalysis.signal.toLowerCase(),
             confidence: technicalAnalysis.confidence / 100,
             reason: aiAnalysis || null,  // AI 분석이 없으면 null
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            tradeAttempt: tradeAttempt
           };
           
           this.emit('singleAnalysisCompleted', frontendAnalysis);
-
-          // 거래 신호 처리
-          if (this.config.enableRealTrading) {
-            await this.processTradeSignal(coinAnalysis);
-          }
 
           console.log(`Analysis completed for ${market}: ${technicalAnalysis.signal} (${technicalAnalysis.confidence.toFixed(1)}%)`);
           
@@ -370,7 +427,8 @@ class TradingEngine extends EventEmitter {
         decision: analysis.analysis.signal.toLowerCase(),
         confidence: analysis.analysis.confidence / 100,
         reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
-        timestamp: new Date(analysis.lastUpdated).toISOString()
+        timestamp: new Date(analysis.lastUpdated).toISOString(),
+        tradeAttempt: analysis.tradeAttempt
       }));
       
       this.emit('analysisCompleted', frontendAnalyses);
@@ -380,8 +438,23 @@ class TradingEngine extends EventEmitter {
     }
   }
 
-  private async processTradeSignal(analysis: CoinAnalysis) {
+  private async processTradeSignal(analysis: CoinAnalysis): Promise<{
+    attempted: boolean;
+    success: boolean;
+    failureReason?: string;
+    details?: string;
+  }> {
     const { market, analysis: technical } = analysis;
+    
+    // 실거래가 비활성화되어 있으면 바로 반환
+    if (!this.config.enableRealTrading && technical.signal !== 'HOLD') {
+      return {
+        attempted: true,
+        success: false,
+        failureReason: 'REAL_TRADE_DISABLED',
+        details: '실거래가 비활성화되어 있습니다.'
+      };
+    }
     
     try {
       // 코인별 설정 가져오기
@@ -394,42 +467,95 @@ class TradingEngine extends EventEmitter {
       
       if (!analysisConfig) {
         console.log(`No analysis config found for ${market}, skipping trade signal`);
-        return;
+        return {
+          attempted: true,
+          success: false,
+          failureReason: 'NO_CONFIG',
+          details: `${market}에 대한 분석 설정이 없습니다.`
+        };
       }
       
+      // 실제 analysisConfig 내용 확인
+      console.log(`[${market}] Found analysis config:`, analysisConfig);
+      
       // UI에서 설정한 값들 사용 (전체 설정에서 기본값 가져오기)
-      console.log(`[${market}] Analysis config:`, {
+      console.log(`[${market}] Analysis config details:`, {
         buyCooldown: analysisConfig.buyCooldown,
         sellCooldown: analysisConfig.sellCooldown,
         globalBuyingCooldown: this.config.buyingCooldown,
-        globalSellingCooldown: this.config.sellingCooldown
+        globalSellingCooldown: this.config.sellingCooldown,
+        buyConfidenceThreshold: analysisConfig.buyConfidenceThreshold,
+        sellConfidenceThreshold: analysisConfig.sellConfidenceThreshold,
+        buyRatio: analysisConfig.buying?.defaultBuyRatio,
+        sellRatio: analysisConfig.selling?.defaultSellRatio,
+        globalBuyRatio: this.config.buyRatio,
+        globalSellRatio: this.config.sellRatio,
+        finalBuyCooldown: analysisConfig.buyCooldown ?? this.config.buyingCooldown,
+        finalSellCooldown: analysisConfig.sellCooldown ?? this.config.sellingCooldown
       });
       
       let coinConfig: CoinSpecificConfig = {
-        minConfidenceForBuy: analysisConfig.buyConfidenceThreshold || 50,
-        minConfidenceForSell: analysisConfig.sellConfidenceThreshold || 50,
-        buyingCooldown: analysisConfig.buyCooldown || this.config.buyingCooldown,
-        sellingCooldown: analysisConfig.sellCooldown || this.config.sellingCooldown,
-        defaultBuyRatio: analysisConfig.buying?.defaultBuyRatio || 0.1,
-        defaultSellRatio: analysisConfig.selling?.defaultSellRatio || 0.5,
-        stopLossPercent: analysisConfig.stopLossMode === 'signal' ? 100 : (analysisConfig.stopLoss || 5),
-        takeProfitPercent: analysisConfig.takeProfitMode === 'signal' ? 100 : (analysisConfig.takeProfit || 10),
-        rsiOverbought: analysisConfig.rsiOverbought || 70,
-        rsiOversold: analysisConfig.rsiOversold || 30,
-        minVolume: analysisConfig.minVolume || 0,
-        maxPositionSize: analysisConfig.maxPositionSize || 0,
-        useKellyOptimization: analysisConfig.useKellyOptimization || false,
-        volatilityAdjustment: analysisConfig.volatilityAdjustment || false,
-        newsImpactMultiplier: analysisConfig.newsImpactMultiplier || 1.0,
-        preferredTradingHours: analysisConfig.preferredTradingHours || []
+        minConfidenceForBuy: analysisConfig.minConfidenceForBuy ?? analysisConfig.buyConfidenceThreshold ?? 50,
+        minConfidenceForSell: analysisConfig.minConfidenceForSell ?? analysisConfig.sellConfidenceThreshold ?? 50,
+        buyingCooldown: analysisConfig.buyCooldown ?? analysisConfig.buyingCooldown ?? this.config.buyingCooldown,
+        sellingCooldown: analysisConfig.sellCooldown ?? analysisConfig.sellingCooldown ?? this.config.sellingCooldown,
+        defaultBuyRatio: analysisConfig.defaultBuyRatio ?? this.config.buyRatio,
+        defaultSellRatio: analysisConfig.defaultSellRatio ?? this.config.sellRatio,
+        stopLossPercent: analysisConfig.stopLossPercent ?? (analysisConfig.stopLossMode === 'signal' ? 100 : (analysisConfig.stopLoss ?? 5)),
+        takeProfitPercent: analysisConfig.takeProfitPercent ?? (analysisConfig.takeProfitMode === 'signal' ? 100 : (analysisConfig.takeProfit ?? 10)),
+        rsiOverbought: analysisConfig.rsiOverbought ?? 70,
+        rsiOversold: analysisConfig.rsiOversold ?? 30,
+        minVolume: analysisConfig.minVolume ?? 0,
+        maxPositionSize: analysisConfig.maxPositionSize ?? this.config.maxInvestmentPerCoin,
+        useKellyOptimization: analysisConfig.useKellyOptimization ?? false,
+        volatilityAdjustment: analysisConfig.volatilityAdjustment ?? false,
+        newsImpactMultiplier: analysisConfig.newsImpactMultiplier ?? 1.0,
+        preferredTradingHours: analysisConfig.preferredTradingHours ?? []
       };
+      
+      console.log(`[${market}] CoinConfig applied:`, {
+        minConfidenceForBuy: coinConfig.minConfidenceForBuy,
+        minConfidenceForSell: coinConfig.minConfidenceForSell,
+        buyingCooldown: coinConfig.buyingCooldown,
+        sellingCooldown: coinConfig.sellingCooldown,
+        defaultBuyRatio: coinConfig.defaultBuyRatio,
+        defaultSellRatio: coinConfig.defaultSellRatio,
+        maxPositionSize: coinConfig.maxPositionSize,
+        rsiOverbought: coinConfig.rsiOverbought,
+        rsiOversold: coinConfig.rsiOversold,
+        stopLossPercent: coinConfig.stopLossPercent,
+        takeProfitPercent: coinConfig.takeProfitPercent,
+        minVolume: coinConfig.minVolume,
+        useKellyOptimization: coinConfig.useKellyOptimization,
+        volatilityAdjustment: coinConfig.volatilityAdjustment
+      });
       
       // UI에서 설정한 preferredTradingHours가 있으면 확인
       if (coinConfig.preferredTradingHours && coinConfig.preferredTradingHours.length > 0) {
         const currentHour = new Date().getHours();
         if (!coinConfig.preferredTradingHours.includes(currentHour)) {
           console.log(`${market}: Trading not preferred at hour ${currentHour}`);
-          return;
+          return {
+            attempted: true,
+            success: false,
+            failureReason: 'TRADING_HOURS',
+            details: `현재 시간(${currentHour}시)은 거래 시간이 아닙니다. 설정된 거래 시간: ${coinConfig.preferredTradingHours.join(', ')}시`
+          };
+        }
+      }
+      
+      // 최소 거래량 체크
+      if (coinConfig.minVolume > 0 && technical.signal !== 'HOLD') {
+        const currentVolume = (analysis.analysis.volume?.current || 0) * analysis.currentPrice;
+        console.log(`[${market}] 거래량 체크: 현재 ${currentVolume.toLocaleString()}원, 최소 ${coinConfig.minVolume.toLocaleString()}원`);
+        
+        if (currentVolume < coinConfig.minVolume) {
+          return {
+            attempted: true,
+            success: false,
+            failureReason: 'VOLUME_TOO_LOW',
+            details: `현재 거래량 ₩${currentVolume.toLocaleString()}이 최소 거래량 ₩${coinConfig.minVolume.toLocaleString()}보다 적습니다.`
+          };
         }
       }
       
@@ -445,15 +571,42 @@ class TradingEngine extends EventEmitter {
         Math.max(dynamicParams.adjustedMinConfidence, minConfidenceForTrade) : 
         minConfidenceForTrade;
       
+      console.log(`[${market}] 신뢰도 체크:`, {
+        signal: technical.signal,
+        confidence: technical.confidence,
+        minConfidence,
+        coinMinConfidenceForBuy: coinConfig.minConfidenceForBuy,
+        coinMinConfidenceForSell: coinConfig.minConfidenceForSell,
+        dynamicConfidence: this.config.dynamicConfidence
+      });
+      
       if (technical.confidence < minConfidence) {
         console.log(`${market} confidence ${technical.confidence.toFixed(1)}% below threshold ${minConfidence}%`);
-        return;
+        return {
+          attempted: true,
+          success: false,
+          failureReason: 'LOW_CONFIDENCE',
+          details: `신뢰도 ${technical.confidence.toFixed(1)}%가 임계값 ${minConfidence}%보다 낮습니다.`
+        };
       }
 
-      // 계좌 정보 확인
-      const accounts = await upbitService.getAccounts();
-      const krwAccount = accounts.find(acc => acc.currency === 'KRW');
-      const coinAccount = accounts.find(acc => acc.currency === market.split('-')[1]);
+      // 계좌 정보 확인 (시뮬레이션 모드에서는 가상 계좌 사용)
+      let krwAccount, coinAccount;
+      
+      if (this.config.enableRealTrading) {
+        const accounts = await upbitService.getAccounts();
+        krwAccount = accounts.find(acc => acc.currency === 'KRW');
+        coinAccount = accounts.find(acc => acc.currency === market.split('-')[1]);
+      } else {
+        // 시뮬레이션 모드: 가상 계좌 정보
+        krwAccount = { currency: 'KRW', balance: this.virtualKRW.toString() };
+        const portfolio = this.virtualPortfolio.get(market);
+        coinAccount = portfolio ? { 
+          currency: market.split('-')[1], 
+          balance: portfolio.balance.toString(),
+          avg_buy_price: portfolio.avgBuyPrice.toString()
+        } : null;
+      }
 
       if (technical.signal === 'BUY') {
         // 높은 신뢰도에서 쿨다운 무시 옵션 체크
@@ -463,13 +616,19 @@ class TradingEngine extends EventEmitter {
         console.log(`[${market}] 쿨타임 체크 - buyingCooldown: ${coinConfig.buyingCooldown}분, skipCooldown: ${skipCooldown}`);
         if (!skipCooldown && this.isInCooldownWithConfig(market, 'buy', coinConfig.buyingCooldown)) {
           console.log(`[${market}] 매수 쿨타임 중 (설정: ${coinConfig.buyingCooldown}분)`);
-          return;
+          const cooldownInfo = this.getCooldownInfo(market);
+          return {
+            attempted: true,
+            success: false,
+            failureReason: 'COOLDOWN_BUY',
+            details: `매수 쿨타임 중입니다. 남은 시간: ${cooldownInfo.buyRemaining}분`
+          };
         } else if (skipCooldown) {
           console.log(`[${market}] 높은 신뢰도(${technical.confidence.toFixed(1)}%)로 쿨타임 무시`);
         }
 
         // 매수 로직
-        const maxPositionSize = coinConfig.maxPositionSize || this.config.maxInvestmentPerCoin;
+        const maxPositionSize = coinConfig.maxPositionSize > 0 ? coinConfig.maxPositionSize : this.config.maxInvestmentPerCoin;
         const maxInvestment = Math.min(this.config.maxInvestmentPerCoin, maxPositionSize);
         if (krwAccount && parseFloat(krwAccount.balance) > 0) {
           // Kelly Criterion 계산
@@ -483,25 +642,40 @@ class TradingEngine extends EventEmitter {
               const avgLoss = metrics.losses > 0 ? Math.abs(metrics.totalProfit / metrics.losses) : 1;
               
               const kellyFraction = this.calculateKellyFraction(winRate, avgWin, avgLoss, market);
-              adjustedBuyRatio = kellyFraction > 0 ? kellyFraction : this.config.buyRatio * 0.5;
+              if (kellyFraction <= 0) {
+                console.log(`Kelly Criterion suggests 0% for ${market}`);
+                return {
+                  attempted: true,
+                  success: false,
+                  failureReason: 'KELLY_FRACTION_ZERO',
+                  details: `Kelly Criterion이 0%를 제안했습니다. 승률: ${(winRate * 100).toFixed(1)}%`
+                };
+              }
+              adjustedBuyRatio = kellyFraction;
             }
           } else {
             // 기존 신뢰도 기반 매수 비율 조정 (더 보수적으로)
             if (technical.confidence >= 95) {
-              adjustedBuyRatio = Math.min(0.3, this.config.buyRatio * 1.5); // 최대 30%
+              adjustedBuyRatio = Math.min(0.3, coinConfig.defaultBuyRatio * 1.5); // 최대 30%
             } else if (technical.confidence >= 90) {
-              adjustedBuyRatio = Math.min(0.2, this.config.buyRatio * 1.2); // 최대 20%
+              adjustedBuyRatio = Math.min(0.2, coinConfig.defaultBuyRatio * 1.2); // 최대 20%
             } else if (technical.confidence >= 85) {
-              adjustedBuyRatio = this.config.buyRatio; // 기본값 유지
+              adjustedBuyRatio = coinConfig.defaultBuyRatio; // 기본값 유지
             } else {
-              adjustedBuyRatio = this.config.buyRatio * 0.5; // 50%로 축소
+              adjustedBuyRatio = coinConfig.defaultBuyRatio * 0.5; // 50%로 축소
             }
           }
           
           // 변동성에 따른 추가 조정 (UI 설정에 따라)
           if (coinConfig.volatilityAdjustment) {
             if (dynamicParams.currentVolatility > 0.05) {
-              adjustedBuyRatio *= 0.3; // 극도의 변동성에서는 70% 쵵소
+              console.log(`${market} volatility too high: ${(dynamicParams.currentVolatility * 100).toFixed(2)}%`);
+              return {
+                attempted: true,
+                success: false,
+                failureReason: 'VOLATILITY_TOO_HIGH',
+                details: `변동성이 너무 높습니다: ${(dynamicParams.currentVolatility * 100).toFixed(2)}%`
+              };
             } else if (dynamicParams.currentVolatility > 0.03) {
               adjustedBuyRatio *= 0.5; // 높은 변동성에서는 50% 축소
             } else if (dynamicParams.currentVolatility > 0.02) {
@@ -509,16 +683,20 @@ class TradingEngine extends EventEmitter {
             }
           }
           
-          // 매수할 금액 계산
-          const maxInvestment = this.config.maxInvestmentPerCoin;
+          // 매수할 금액 계산 (코인별 최대 포지션 크기 고려)
           const buyAmount = maxInvestment * adjustedBuyRatio;
           
           // 최소 주문 금액 확인 (기본 5,000원, UI 설정 사용 가능)
-          const minOrderAmount = analysisConfig?.minOrderAmount || 5000;
+          const minOrderAmount = analysisConfig?.minOrderAmount ?? 5000;
           if (buyAmount < minOrderAmount) {
             console.log(`Buy amount ₩${buyAmount.toLocaleString()} is below minimum order amount ₩${minOrderAmount.toLocaleString()}`);
             console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy ratio: ${adjustedBuyRatio}`);
-            return;
+            return {
+              attempted: true,
+              success: false,
+              failureReason: 'MIN_ORDER_AMOUNT',
+              details: `주문 금액 ₩${buyAmount.toLocaleString()}이 최소 금액 ₩${minOrderAmount.toLocaleString()}보다 적습니다. 투자 비율: ${(adjustedBuyRatio * 100).toFixed(1)}%`
+            };
           }
           
           const buyAmountStr = buyAmount.toFixed(0); // 원 단위로 반올림
@@ -527,13 +705,15 @@ class TradingEngine extends EventEmitter {
           console.log(`Base ratio: ${(this.config.buyRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedBuyRatio * 100).toFixed(1)}%`);
           console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy amount: ₩${buyAmount.toLocaleString()}`);
           
-          // 실제 거래 실행 (테스트 모드에서는 로그만)
+          // 실제 거래 실행 (테스트 모드에서는 시뮬레이션)
           console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
             console.log(`Executing REAL BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
             await upbitService.buyOrder(market, buyAmountStr);
           } else {
-            console.log(`TEST MODE - Simulating BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
+            console.log(`[시뮬레이션] BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
+            // 시뮬레이션 매수 처리
+            this.simulateBuyOrder(market, buyAmount, analysis.currentPrice);
           }
           
           // 거래 시간 기록
@@ -566,6 +746,20 @@ class TradingEngine extends EventEmitter {
             adjustedRatio: adjustedBuyRatio,
             dynamicParams
           });
+          
+          return {
+            attempted: true,
+            success: true,
+            details: `매수 주문 성공: ₩${buyAmount.toLocaleString()}`
+          };
+        } else {
+          // KRW 잔액 부족
+          return {
+            attempted: true,
+            success: false,
+            failureReason: 'INSUFFICIENT_BALANCE',
+            details: `KRW 잔액이 부족합니다.`
+          };
         }
       } else if (technical.signal === 'SELL') {
         // 높은 신뢰도에서 쿨다운 무시 옵션 체크
@@ -575,7 +769,13 @@ class TradingEngine extends EventEmitter {
         console.log(`[${market}] 매도 쿨타임 체크 - sellingCooldown: ${coinConfig.sellingCooldown}분, skipCooldown: ${skipCooldown}`);
         if (!skipCooldown && this.isInCooldownWithConfig(market, 'sell', coinConfig.sellingCooldown)) {
           console.log(`[${market}] 매도 쿨타임 중 (설정: ${coinConfig.sellingCooldown}분)`);
-          return;
+          const cooldownInfo = this.getCooldownInfo(market);
+          return {
+            attempted: true,
+            success: false,
+            failureReason: 'COOLDOWN_SELL',
+            details: `매도 쿨타임 중입니다. 남은 시간: ${cooldownInfo.sellRemaining}분`
+          };
         } else if (skipCooldown) {
           console.log(`[${market}] 높은 신뢰도(${technical.confidence.toFixed(1)}%)로 쿨타임 무시`);
         }
@@ -587,15 +787,15 @@ class TradingEngine extends EventEmitter {
           
           // 신뢰도가 90% 이상이면 더 많이 매도 (최대 100%)
           if (technical.confidence >= 0.9) {
-            adjustedSellRatio = Math.min(1.0, this.config.sellRatio * 1.5);
+            adjustedSellRatio = Math.min(1.0, coinConfig.defaultSellRatio * 1.5);
           }
           // 신뢰도가 80% 이상이면 조금 더 매도
           else if (technical.confidence >= 0.8) {
-            adjustedSellRatio = Math.min(1.0, this.config.sellRatio * 1.2);
+            adjustedSellRatio = Math.min(1.0, coinConfig.defaultSellRatio * 1.2);
           }
           // 신뢰도가 낮으면 (60-70%) 더 적게 매도
           else if (technical.confidence < 0.7) {
-            adjustedSellRatio = this.config.sellRatio * 0.7;
+            adjustedSellRatio = coinConfig.defaultSellRatio * 0.7;
           }
           
           // 매도할 수량 계산
@@ -607,26 +807,33 @@ class TradingEngine extends EventEmitter {
           const sellValue = analysis.currentPrice * sellAmount;
           
           // 최소 주문 금액 확인 (기본 5,000원, UI 설정 사용 가능)
-          const minOrderAmount = analysisConfig?.minOrderAmount || 5000;
+          const minOrderAmount = analysisConfig?.minOrderAmount ?? 5000;
           if (sellValue < minOrderAmount) {
             console.log(`[${market}] 매도 금액 ₩${sellValue.toLocaleString()}이 최소 주문 금액 ₩${minOrderAmount.toLocaleString()} 미만`);
             console.log(`  - 코인 수량: ${sellAmount} ${market.split('-')[1]}`);
             console.log(`  - 현재 가격: ₩${analysis.currentPrice.toLocaleString()}`);
             console.log(`  - 매도 비율: ${(adjustedSellRatio * 100).toFixed(1)}%`);
-            return;
+            return {
+              attempted: true,
+              success: false,
+              failureReason: 'MIN_ORDER_AMOUNT',
+              details: `매도 금액 ₩${sellValue.toLocaleString()}이 최소 금액 ₩${minOrderAmount.toLocaleString()}보다 적습니다.`
+            };
           }
           
           console.log(`Sell signal for ${market} - confidence: ${technical.confidence.toFixed(1)}%`);
           console.log(`Base ratio: ${(this.config.sellRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedSellRatio * 100).toFixed(1)}%`);
           console.log(`Total balance: ${totalBalance}, Sell amount: ${sellAmount}, Value: ₩${sellValue.toLocaleString()}`);
           
-          // 실제 거래 실행 (테스트 모드에서는 로그만)
+          // 실제 거래 실행 (테스트 모드에서는 시뮬레이션)
           console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
             console.log(`Executing REAL SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
             await upbitService.sellOrder(market, sellAmountStr);
           } else {
-            console.log(`TEST MODE - Simulating SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
+            console.log(`[시뮬레이션] SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
+            // 시뮬레이션 매도 처리
+            this.simulateSellOrder(market, sellAmount, analysis.currentPrice);
           }
           
           // 거래 시간 기록
@@ -663,10 +870,36 @@ class TradingEngine extends EventEmitter {
             adjustedRatio: adjustedSellRatio,
             dynamicParams
           });
+          
+          return {
+            attempted: true,
+            success: true,
+            details: `매도 주문 성공: ${sellAmount.toFixed(4)} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`
+          };
+        } else {
+          // 보유 코인 없음
+          return {
+            attempted: false,
+            success: false,
+            details: `${market.split('-')[1]} 보유량이 없습니다.`
+          };
         }
+      } else {
+        // HOLD 신호
+        return {
+          attempted: false,
+          success: false,
+          details: 'HOLD 신호 - 거래 시도하지 않음'
+        };
       }
     } catch (error) {
       console.error(`Failed to process trade signal for ${market}:`, error);
+      return {
+        attempted: true,
+        success: false,
+        failureReason: 'API_ERROR',
+        details: error instanceof Error ? error.message : '알 수 없는 오류'
+      };
     }
   }
 
@@ -748,11 +981,11 @@ class TradingEngine extends EventEmitter {
     const currentVolatility = analysis.atr ? (analysis.atr / analysis.bollinger.middle) : 0.02;
     
     // RSI 임계값 동적 조정
-    let adjustedRSIOverbought = coinConfig?.rsiOverbought || baseConfig.rsiOverbought;
-    let adjustedRSIOversold = coinConfig?.rsiOversold || baseConfig.rsiOversold;
+    let adjustedRSIOverbought = coinConfig?.rsiOverbought ?? baseConfig.rsiOverbought;
+    let adjustedRSIOversold = coinConfig?.rsiOversold ?? baseConfig.rsiOversold;
     
     // 코인별 volatilityAdjustment 설정 확인
-    const useVolatilityAdjustment = coinConfig?.volatilityAdjustment || false;
+    const useVolatilityAdjustment = coinConfig?.volatilityAdjustment ?? false;
     
     if (useVolatilityAdjustment || baseConfig.dynamicRSI) {
       // 고변동성 시장: RSI 임계값을 더 극단적으로 (더 조심스럽게)
@@ -1308,8 +1541,8 @@ class TradingEngine extends EventEmitter {
       return configTicker === ticker;
     });
     
-    const buyingCooldown = analysisConfig?.buyingCooldown || this.config.buyingCooldown || 30;
-    const sellingCooldown = analysisConfig?.sellingCooldown || this.config.sellingCooldown || 20;
+    const buyingCooldown = analysisConfig?.buyCooldown ?? this.config.buyingCooldown ?? 30;
+    const sellingCooldown = analysisConfig?.sellCooldown ?? this.config.sellingCooldown ?? 20;
     
     let buyRemaining = 0;
     let sellRemaining = 0;
@@ -1340,6 +1573,247 @@ class TradingEngine extends EventEmitter {
   public destroy(): void {
     if (this.learningService) {
       this.learningService.destroy();
+    }
+  }
+
+  // 가중치 병합: 사용자 설정 × 학습 조정값
+  private mergeWeights(
+    userWeights: any,
+    learnedWeights: any,
+    learningConfig?: any
+  ): any {
+    // 학습이 비활성화되면 사용자 가중치만 사용
+    if (!learningConfig?.enabled || !learnedWeights) {
+      return userWeights || {};
+    }
+
+    // 기본 가중치
+    const defaultWeights: Record<string, number> = {
+      rsi: 1.0,
+      macd: 1.0,
+      bollinger: 1.0,
+      stochastic: 0.8,
+      volume: 1.0,
+      atr: 0.8,
+      obv: 0.7,
+      adx: 0.8,
+      volatility: 1.0,
+      trendStrength: 1.0,
+      aiAnalysis: 1.2,
+      newsImpact: 1.0,
+      whaleActivity: 0.8
+    };
+
+    // 사용자 가중치가 없으면 학습된 가중치 사용
+    if (!userWeights) {
+      return learnedWeights;
+    }
+
+    // 사용자 가중치 × 학습 조정값
+    const mergedWeights: Record<string, number> = {};
+    Object.keys(defaultWeights).forEach(key => {
+      const userWeight = userWeights[key] || defaultWeights[key];
+      const learnedAdjustment = learnedWeights[key] ? learnedWeights[key] / defaultWeights[key] : 1.0;
+      mergedWeights[key] = userWeight * learnedAdjustment;
+    });
+
+    return mergedWeights;
+  }
+
+  // 시뮬레이션 모드 메서드들
+  private simulateBuyOrder(market: string, amount: number, price: number): void {
+    const coin = market.split('-')[1];
+    const volume = amount / price;
+    
+    // 가상 KRW 차감
+    this.virtualKRW -= amount;
+    
+    // 가상 포트폴리오 업데이트
+    const existing = this.virtualPortfolio.get(market) || { balance: 0, avgBuyPrice: 0, totalBought: 0 };
+    const newBalance = existing.balance + volume;
+    const newTotalBought = existing.totalBought + amount;
+    const newAvgBuyPrice = newTotalBought / newBalance;
+    
+    this.virtualPortfolio.set(market, {
+      balance: newBalance,
+      avgBuyPrice: newAvgBuyPrice,
+      totalBought: newTotalBought
+    });
+    
+    // 거래 기록
+    this.virtualTradeHistory.push({
+      market,
+      type: 'BUY',
+      price,
+      amount,
+      volume,
+      timestamp: Date.now(),
+      krwBalance: this.virtualKRW,
+      coinBalance: newBalance
+    });
+    
+    console.log(`[시뮬레이션] ${coin} 매수 완료:`);
+    console.log(`  - 매수 금액: ₩${amount.toLocaleString()}`);
+    console.log(`  - 매수 가격: ₩${price.toLocaleString()}`);
+    console.log(`  - 매수 수량: ${volume.toFixed(8)} ${coin}`);
+    console.log(`  - 평균 매수가: ₩${newAvgBuyPrice.toLocaleString()}`);
+    console.log(`  - 보유 수량: ${newBalance.toFixed(8)} ${coin}`);
+    console.log(`  - 남은 KRW: ₩${this.virtualKRW.toLocaleString()}`);
+  }
+  
+  private simulateSellOrder(market: string, volume: number, price: number): void {
+    const coin = market.split('-')[1];
+    const portfolio = this.virtualPortfolio.get(market);
+    
+    if (!portfolio || portfolio.balance < volume) {
+      console.log(`[시뮬레이션] ${coin} 잔고 부족으로 매도 실패`);
+      return;
+    }
+    
+    const sellAmount = volume * price;
+    const profitAmount = (price - portfolio.avgBuyPrice) * volume;
+    const profitRate = ((price - portfolio.avgBuyPrice) / portfolio.avgBuyPrice) * 100;
+    
+    // 가상 KRW 증가
+    this.virtualKRW += sellAmount;
+    
+    // 포트폴리오 업데이트
+    portfolio.balance -= volume;
+    portfolio.totalBought = portfolio.balance * portfolio.avgBuyPrice;
+    
+    if (portfolio.balance <= 0) {
+      this.virtualPortfolio.delete(market);
+    }
+    
+    // 거래 기록
+    this.virtualTradeHistory.push({
+      market,
+      type: 'SELL',
+      price,
+      amount: sellAmount,
+      volume,
+      timestamp: Date.now(),
+      krwBalance: this.virtualKRW,
+      coinBalance: portfolio.balance,
+      profit: profitAmount,
+      profitRate
+    });
+    
+    console.log(`[시뮬레이션] ${coin} 매도 완료:`);
+    console.log(`  - 매도 수량: ${volume.toFixed(8)} ${coin}`);
+    console.log(`  - 매도 가격: ₩${price.toLocaleString()}`);
+    console.log(`  - 매도 금액: ₩${sellAmount.toLocaleString()}`);
+    console.log(`  - 수익금: ₩${profitAmount.toLocaleString()} (${profitRate.toFixed(2)}%)`);
+    console.log(`  - 남은 수량: ${portfolio.balance.toFixed(8)} ${coin}`);
+    console.log(`  - 현재 KRW: ₩${this.virtualKRW.toLocaleString()}`);
+    
+    // 전체 수익률 계산
+    const totalValue = this.calculateTotalPortfolioValue();
+    const totalProfitRate = ((totalValue - 10000000) / 10000000) * 100;
+    console.log(`  - 총 자산: ₩${totalValue.toLocaleString()} (${totalProfitRate >= 0 ? '+' : ''}${totalProfitRate.toFixed(2)}%)`);
+  }
+  
+  private calculateTotalPortfolioValue(): number {
+    let totalValue = this.virtualKRW;
+    
+    this.virtualPortfolio.forEach((portfolio, market) => {
+      const analysis = this.analysisResults.get(market);
+      if (analysis) {
+        totalValue += portfolio.balance * analysis.currentPrice;
+      }
+    });
+    
+    return totalValue;
+  }
+  
+  // 시뮬레이션 상태 조회
+  public getSimulationStatus(): {
+    krwBalance: number;
+    totalValue: number;
+    profitRate: number;
+    portfolio: Array<{
+      market: string;
+      balance: number;
+      avgBuyPrice: number;
+      currentPrice: number;
+      profitRate: number;
+      value: number;
+    }>;
+    recentTrades: any[];
+  } {
+    const totalValue = this.calculateTotalPortfolioValue();
+    const profitRate = ((totalValue - 10000000) / 10000000) * 100;
+    
+    const portfolio: any[] = [];
+    this.virtualPortfolio.forEach((data, market) => {
+      const analysis = this.analysisResults.get(market);
+      const currentPrice = analysis?.currentPrice || data.avgBuyPrice;
+      const marketProfitRate = ((currentPrice - data.avgBuyPrice) / data.avgBuyPrice) * 100;
+      
+      portfolio.push({
+        market,
+        balance: data.balance,
+        avgBuyPrice: data.avgBuyPrice,
+        currentPrice,
+        profitRate: marketProfitRate,
+        value: data.balance * currentPrice
+      });
+    });
+    
+    return {
+      krwBalance: this.virtualKRW,
+      totalValue,
+      profitRate,
+      portfolio,
+      recentTrades: this.virtualTradeHistory.slice(-10)
+    };
+  }
+
+  private async checkStopLossAndTakeProfit(
+    market: string,
+    coinAnalysis: CoinAnalysis,
+    coinAccount: any,
+    analysisConfig: any
+  ): Promise<{ shouldSell: boolean; reason: string }> {
+    try {
+      // 현재 가격 가져오기
+      const currentPrice = coinAnalysis.currentPrice;
+      const avgBuyPrice = parseFloat(coinAccount.avg_buy_price);
+      const balance = parseFloat(coinAccount.balance);
+
+      if (avgBuyPrice <= 0 || balance <= 0) {
+        return { shouldSell: false, reason: '' };
+      }
+
+      // 수익률 계산
+      const profitRate = ((currentPrice - avgBuyPrice) / avgBuyPrice) * 100;
+
+      // 코인별 설정 우선, 없으면 전역 설정 사용
+      const stopLossPercent = analysisConfig?.stopLoss ?? this.config.stopLossPercent ?? 5;
+      const takeProfitPercent = analysisConfig?.takeProfit ?? this.config.takeProfitPercent ?? 10;
+
+      // 손절 체크
+      if (profitRate <= -stopLossPercent) {
+        console.log(`[${market}] 손절 조건 충족: 수익률 ${profitRate.toFixed(2)}% <= -${stopLossPercent}%`);
+        return {
+          shouldSell: true,
+          reason: `손절: 수익률 ${profitRate.toFixed(2)}% (손절선: -${stopLossPercent}%)`
+        };
+      }
+
+      // 익절 체크
+      if (profitRate >= takeProfitPercent) {
+        console.log(`[${market}] 익절 조건 충족: 수익률 ${profitRate.toFixed(2)}% >= ${takeProfitPercent}%`);
+        return {
+          shouldSell: true,
+          reason: `익절: 수익률 ${profitRate.toFixed(2)}% (익절선: ${takeProfitPercent}%)`
+        };
+      }
+
+      return { shouldSell: false, reason: '' };
+    } catch (error) {
+      console.error(`[${market}] 손절/익절 체크 중 오류:`, error);
+      return { shouldSell: false, reason: '' };
     }
   }
 }

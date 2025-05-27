@@ -622,14 +622,54 @@ class AnalysisService {
       { condition: newsAnalysis && newsAnalysis.majorEvents.length > 0 && newsAnalysis.sentimentScore < -20, weight: 2.5 } // 부정적 주요 이벤트
     ];
 
+    // 가중치 설정 가져오기
+    const indicatorWeights = config?.indicatorWeights || {
+      rsi: 1.0,
+      macd: 1.0,
+      bollinger: 1.0,
+      stochastic: 0.8,
+      volume: 1.0,
+      atr: 0.8,
+      obv: 0.7,
+      adx: 0.8,
+      volatility: 1.0,
+      trendStrength: 1.0,
+      aiAnalysis: 1.2,
+      newsImpact: 1.0,
+      whaleActivity: 0.8
+    };
+
+    // 지표별 가중치 적용 함수
+    const applyIndicatorWeight = (score: number, indicatorType: string): number => {
+      return score * (indicatorWeights[indicatorType] || 1.0);
+    };
+
     // 가중치를 적용한 점수 계산
-    const buyScore = buySignalsWithWeight
-      .filter(signal => signal.condition)
-      .reduce((sum, signal) => sum + signal.weight, 0);
+    let buyScore = 0;
+    let sellScore = 0;
+
+    // RSI 관련 신호들
+    buyScore += buySignalsWithWeight.slice(0, 5).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.rsi;
+    sellScore += sellSignalsWithWeight.slice(0, 5).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.rsi;
+
+    // MACD 관련 신호들 (인덱스 조정 필요)
+    buyScore += buySignalsWithWeight.slice(10, 12).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.macd;
+    sellScore += sellSignalsWithWeight.slice(9, 11).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.macd;
+
+    // 볼린저 밴드 관련
+    buyScore += buySignalsWithWeight.slice(5, 7).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.bollinger;
+    sellScore += sellSignalsWithWeight.slice(5, 7).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.bollinger;
+
+    // 거래량 관련
+    buyScore += buySignalsWithWeight.slice(12, 15).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.volume;
+    sellScore += sellSignalsWithWeight.slice(11, 14).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.volume;
+
+    // 나머지 신호들 (기본 가중치)
+    const remainingBuySignals = buySignalsWithWeight.slice(15);
+    const remainingSellSignals = sellSignalsWithWeight.slice(14);
     
-    const sellScore = sellSignalsWithWeight
-      .filter(signal => signal.condition)
-      .reduce((sum, signal) => sum + signal.weight, 0);
+    buyScore += remainingBuySignals.filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0);
+    sellScore += remainingSellSignals.filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0);
 
     // 최대 가능 점수 (모든 조건이 true일 때)
     const maxBuyScore = buySignalsWithWeight.reduce((sum, signal) => sum + signal.weight, 0);
