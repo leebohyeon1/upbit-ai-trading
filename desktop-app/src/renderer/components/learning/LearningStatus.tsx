@@ -22,7 +22,8 @@ import {
   Tooltip,
   CircularProgress,
   Badge,
-  Divider
+  Divider,
+  keyframes
 } from '@mui/material';
 import {
   School,
@@ -63,6 +64,31 @@ interface LearningMetrics {
     profit: number;
   }[];
 }
+
+// 애니메이션 정의
+const pulse = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+`;
+
+const rotate = keyframes`
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+`;
 
 export const LearningStatus: React.FC = () => {
   const { portfolio, learningStates, toggleLearning } = useTradingContext();
@@ -216,8 +242,18 @@ export const LearningStatus: React.FC = () => {
                               color={isRunning ? 'success' : 'default'}
                               variant="dot"
                               invisible={!isRunning}
+                              sx={{
+                                '& .MuiBadge-dot': isRunning ? {
+                                  animation: `${pulse} 2s ease-in-out infinite`
+                                } : {}
+                              }}
                             >
-                              <School />
+                              <School 
+                                sx={{
+                                  color: isRunning ? 'success.main' : 'action.disabled',
+                                  animation: isRunning ? `${rotate} 4s linear infinite` : 'none'
+                                }}
+                              />
                             </Badge>
                           </Box>
                           
@@ -263,9 +299,25 @@ export const LearningStatus: React.FC = () => {
                                   checked={isRunning}
                                   onChange={() => handleToggleLearning(coin.symbol)}
                                   size="small"
+                                  sx={{
+                                    '& .MuiSwitch-thumb': isRunning ? {
+                                      animation: `${pulse} 1.5s ease-in-out infinite`
+                                    } : {}
+                                  }}
                                 />
                               }
-                              label={isRunning ? '학습 중' : '학습 정지'}
+                              label={
+                                <Box display="flex" alignItems="center" gap={0.5}>
+                                  {isRunning ? (
+                                    <>
+                                      <CircularProgress size={12} thickness={5} color="success" />
+                                      <Typography variant="body2">학습 중</Typography>
+                                    </>
+                                  ) : (
+                                    <Typography variant="body2">학습 정지</Typography>
+                                  )}
+                                </Box>
+                              }
                               sx={{ m: 0 }}
                             />
                           </Box>
