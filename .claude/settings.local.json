@@ -32,7 +32,8 @@
       "Bash(npm start)",
       "Bash(touch:*)",
       "Bash(npm install:*)",
-      "WebFetch(domain:api.upbit.com)"
+      "WebFetch(domain:api.upbit.com)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": []
   }

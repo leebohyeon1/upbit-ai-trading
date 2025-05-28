@@ -26,7 +26,8 @@ import {
   Psychology,
   ChevronLeft,
   Menu as MenuIcon,
-  ShowChart
+  ShowChart,
+  MenuBook
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
 import { TAB_INDEX } from '../../constants';
@@ -58,6 +59,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     ...(tradingState.isRunning && !tradingConfig.enableRealTrading ? 
       [{ text: '시뮬레이션 성과', icon: <Psychology />, value: TAB_INDEX.SIMULATION }] : []
     ),
+    { text: '사용 설명서', icon: <MenuBook />, value: TAB_INDEX.DOCUMENTATION },
   ];
 
   const handleDrawerToggle = () => {

@@ -32,12 +32,17 @@ class TradingApp {
   }
 
   private setupApp() {
-    // Single instance lock
-    const gotTheLock = app.requestSingleInstanceLock();
+    // 개발 모드에서는 Single instance lock 비활성화
+    const isDev = process.env.ELECTRON_DEV_MODE === 'true';
     
-    if (!gotTheLock) {
-      app.quit();
-      return;
+    if (!isDev) {
+      // Single instance lock
+      const gotTheLock = app.requestSingleInstanceLock();
+      
+      if (!gotTheLock) {
+        app.quit();
+        return;
+      }
     }
 
     app.on('second-instance', () => {
@@ -100,7 +105,7 @@ class TradingApp {
         preload: path.join(__dirname, 'preload', 'preload.js')
       },
       icon: iconPath,
-      title: 'Upbit AI Trading'
+      title: process.env.ELECTRON_DEV_MODE === 'true' ? 'Upbit AI Trading (개발)' : 'Upbit AI Trading'
     });
 
     this.mainWindow.loadFile(path.join(__dirname, 'index.html'));

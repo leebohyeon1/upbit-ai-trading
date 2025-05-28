@@ -56,6 +56,12 @@ module.exports = [
     },
     resolve: {
       extensions: ['.tsx', '.ts', '.js', '.jsx'],
+      fallback: {
+        "path": false,
+        "fs": false,
+        "url": false,
+        "process": false
+      }
     },
     output: {
       path: path.resolve(__dirname, 'dist'),

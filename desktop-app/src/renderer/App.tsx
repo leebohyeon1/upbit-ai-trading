@@ -26,6 +26,7 @@ import { AnalysisSettings } from './components/analysis/AnalysisSettings';
 import { LearningStatus } from './components/learning/LearningStatus';
 import { BacktestPanel } from './components/backtest/BacktestPanel';
 import { SimulationStatus } from './components/trading/SimulationStatus';
+import Documentation from './components/documentation/Documentation';
 import { Analysis } from './types';
 import { TAB_INDEX } from './constants';
 import { formatAIReason, getDecisionText, getDecisionColor } from './utils/formatters';
@@ -193,6 +194,12 @@ const AppContent: React.FC = () => {
                 시뮬레이션 성과
               </Typography>
               <SimulationStatus />
+            </Box>
+          );
+        case TAB_INDEX.DOCUMENTATION:
+          return (
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, width: '100%', height: '100%' }}>
+              <Documentation />
             </Box>
           );
         default:

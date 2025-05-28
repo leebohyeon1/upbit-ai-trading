@@ -68,7 +68,8 @@ export const TAB_INDEX = {
   SETTINGS: 3,
   LEARNING: 4,
   BACKTEST: 5,
-  SIMULATION: 6
+  SIMULATION: 6,
+  DOCUMENTATION: 7
 };
 
 // 색상 정의
