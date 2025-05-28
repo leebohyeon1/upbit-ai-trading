@@ -137,18 +137,7 @@ class TradingEngine extends EventEmitter {
     totalBought: number;
   }> = new Map();
   private virtualKRW: number = 10000000; // 시작 자금 1천만원
-  private virtualTradeHistory: Array<{
-    market: string;
-    type: 'BUY' | 'SELL';
-    price: number;
-    amount: number;
-    volume: number;
-    timestamp: number;
-    krwBalance: number;
-    coinBalance: number;
-    profit?: number;
-    profitRate?: number;
-  }> = [];
+  private virtualTradeHistory: TradeHistory[] = [];
 
   constructor() {
     super();
@@ -760,7 +749,7 @@ class TradingEngine extends EventEmitter {
           } else {
             console.log(`[시뮬레이션] BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
             // 시뮬레이션 매수 처리
-            this.simulateBuyOrder(market, buyAmount, analysis.currentPrice);
+            this.simulateBuyOrder(market, buyAmount, analysis.currentPrice, technical.confidence);
           }
           
           // 거래 시간 기록
@@ -880,7 +869,7 @@ class TradingEngine extends EventEmitter {
           } else {
             console.log(`[시뮬레이션] SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
             // 시뮬레이션 매도 처리
-            this.simulateSellOrder(market, sellAmount, analysis.currentPrice);
+            this.simulateSellOrder(market, sellAmount, analysis.currentPrice, technical.confidence);
           }
           
           // 거래 시간 기록
@@ -1668,7 +1657,7 @@ class TradingEngine extends EventEmitter {
   }
 
   // 시뮬레이션 모드 메서드들
-  private simulateBuyOrder(market: string, amount: number, price: number): void {
+  private simulateBuyOrder(market: string, amount: number, price: number, confidence: number = 0): void {
     const coin = market.split('-')[1];
     const volume = amount / price;
     
@@ -1693,10 +1682,9 @@ class TradingEngine extends EventEmitter {
       type: 'BUY',
       price,
       amount,
-      volume,
+      confidence,
       timestamp: Date.now(),
-      krwBalance: this.virtualKRW,
-      coinBalance: newBalance
+      profit: 0
     });
     
     console.log(`[시뮬레이션] ${coin} 매수 완료:`);
@@ -1708,7 +1696,7 @@ class TradingEngine extends EventEmitter {
     console.log(`  - 남은 KRW: ₩${this.virtualKRW.toLocaleString()}`);
   }
   
-  private simulateSellOrder(market: string, volume: number, price: number): void {
+  private simulateSellOrder(market: string, volume: number, price: number, confidence: number = 0): void {
     const coin = market.split('-')[1];
     const portfolio = this.virtualPortfolio.get(market);
     
@@ -1738,12 +1726,9 @@ class TradingEngine extends EventEmitter {
       type: 'SELL',
       price,
       amount: sellAmount,
-      volume,
+      confidence,
       timestamp: Date.now(),
-      krwBalance: this.virtualKRW,
-      coinBalance: portfolio.balance,
-      profit: profitAmount,
-      profitRate
+      profit: profitAmount
     });
     
     console.log(`[시뮬레이션] ${coin} 매도 완료:`);
@@ -1867,6 +1852,62 @@ class TradingEngine extends EventEmitter {
   // UpbitService 인스턴스 반환
   getUpbitService() {
     return upbitService;
+  }
+
+
+
+  getProfitHistory(days: number = 7): Array<{ time: string; profitRate: number; totalValue: number }> {
+    const now = new Date();
+    const result = [];
+    
+    // 시작 자금
+    const initialCapital = 10000000;
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      // 해당 날짜까지의 모든 거래 계산
+      const tradesUntilDay = this.getTradeHistory().filter(t => t.timestamp <= dayEnd.getTime());
+      
+      let totalValue = initialCapital;
+      let totalProfit = 0;
+      
+      // 실제 거래 모드
+      if (this.config.enableRealTrading) {
+        // TODO: 실제 계좌 잔액에서 계산
+        totalValue = initialCapital; // 임시
+      } else {
+        // 시뮬레이션 모드
+        // 현재 KRW 잔액
+        totalValue = this.virtualKRW;
+        
+        // 보유 코인의 현재 가치 추가
+        for (const [market, portfolio] of this.virtualPortfolio) {
+          if (portfolio.balance > 0) {
+            // 현재가 가져오기 (최신 분석 결과에서)
+            const analysis = this.analysisResults.get(market);
+            if (analysis) {
+              totalValue += portfolio.balance * analysis.currentPrice;
+            }
+          }
+        }
+      }
+      
+      const profitRate = ((totalValue - initialCapital) / initialCapital) * 100;
+      
+      result.push({
+        time: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+        profitRate: profitRate,
+        totalValue: totalValue
+      });
+    }
+    
+    return result;
   }
 }
 

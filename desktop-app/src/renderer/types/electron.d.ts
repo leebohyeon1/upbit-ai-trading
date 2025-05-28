@@ -87,6 +87,10 @@ declare global {
         }>;
       } | null>;
       
+      // Trade History methods
+      getTradeHistory: () => Promise<any[]>;
+      getProfitHistory: (days?: number) => Promise<Array<{ time: string; profitRate: number; totalValue: number }>>;
+      
       // Settings methods
       saveApiKeys: (keys: { accessKey: string; secretKey: string }) => Promise<void>;
       getApiKeys: () => Promise<{ accessKey: string; secretKey: string }>;

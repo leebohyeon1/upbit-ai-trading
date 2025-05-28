@@ -15,6 +15,18 @@ import {
 import { DEFAULT_CONFIG } from '../constants';
 import { useElectronAPI } from '../hooks/useElectronAPI';
 
+interface ProfitHistoryItem {
+  time: string;
+  profitRate: number;
+  totalValue: number;
+}
+
+interface PortfolioChartItem {
+  name: string;
+  value: number;
+  percentage: number;
+}
+
 interface TradingContextType {
   // States
   tradingState: TradingState;
@@ -28,6 +40,8 @@ interface TradingContextType {
   apiKeyStatus: ApiKeyStatus;
   learningStates: LearningState[];
   supportedCoins: string[];
+  profitHistory: ProfitHistoryItem[];
+  portfolioChartData: PortfolioChartItem[];
   
   // Actions
   updateTradingConfig: (config: TradingConfig) => void;
@@ -40,6 +54,8 @@ interface TradingContextType {
   fetchTickers: (symbols: string[]) => Promise<TickerData[]>;
   toggleLearning: (ticker: string, isRunning: boolean) => Promise<void>;
   fetchSupportedCoins: () => Promise<string[]>;
+  fetchProfitHistory: () => Promise<void>;
+  calculatePortfolioData: () => void;
 }
 
 const TradingContext = createContext<TradingContextType | null>(null);
@@ -114,6 +130,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const [tradingConfig, setTradingConfig] = useState<TradingConfig | null>(null);
   const [analysisConfigs, setAnalysisConfigs] = useState<AnalysisConfig[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioCoin[]>([]);
+  const [profitHistory, setProfitHistory] = useState<ProfitHistoryItem[]>([]);
+  const [portfolioChartData, setPortfolioChartData] = useState<PortfolioChartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Actions
@@ -308,6 +326,78 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
 
   // 학습 상태는 electronAPI에서 자동으로 저장됨
 
+  // 포트폴리오 차트 데이터 계산
+  const calculatePortfolioData = useCallback(() => {
+    console.log('[TradingContext] Calculating portfolio data...');
+    console.log('[TradingContext] Accounts:', electronAPI.accounts);
+    console.log('[TradingContext] Tickers:', electronAPI.tickers);
+    
+    const coinAccounts = electronAPI.accounts.filter(acc => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0);
+    const krwAccount = electronAPI.accounts.find(acc => acc.currency === 'KRW');
+    
+    const data: PortfolioChartItem[] = coinAccounts.map(acc => {
+      const ticker = electronAPI.tickers.find(t => t.market === `KRW-${acc.currency}`);
+      const value = ticker ? parseFloat(acc.balance) * ticker.trade_price : 0;
+      return {
+        name: acc.currency,
+        value: value,
+        percentage: 0
+      };
+    }).filter(item => item.value > 0);
+    
+    // KRW 추가
+    if (krwAccount && parseFloat(krwAccount.balance) > 0) {
+      data.push({
+        name: 'KRW',
+        value: parseFloat(krwAccount.balance),
+        percentage: 0
+      });
+    }
+    
+    // 비율 계산
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    data.forEach(item => {
+      item.percentage = total > 0 ? (item.value / total) * 100 : 0;
+    });
+    
+    console.log('[TradingContext] Portfolio chart data:', data);
+    setPortfolioChartData(data);
+  }, [electronAPI.accounts, electronAPI.tickers]);
+
+  // 수익률 히스토리 가져오기
+  const fetchProfitHistory = useCallback(async () => {
+    try {
+      console.log('[TradingContext] Fetching profit history...');
+      // 백엔드에서 거래 내역 가져오기
+      const history = await (window as any).electronAPI.getTradingHistory();
+      console.log('[TradingContext] Profit history received:', history);
+      
+      if (history && history.length > 0) {
+        setProfitHistory(history);
+      } else {
+        console.log('[TradingContext] No profit history data, setting empty array');
+        // 데이터가 없으면 빈 배열 설정
+        setProfitHistory([]);
+      }
+    } catch (error) {
+      console.error('[TradingContext] Failed to fetch profit history:', error);
+      // 에러 시 빈 배열 설정
+      setProfitHistory([]);
+    }
+  }, []);
+
+  // 계정과 시세 변경 시 포트폴리오 차트 데이터 업데이트
+  useEffect(() => {
+    calculatePortfolioData();
+  }, [calculatePortfolioData]);
+
+  // 주기적으로 수익률 히스토리 업데이트
+  useEffect(() => {
+    fetchProfitHistory();
+    const interval = setInterval(fetchProfitHistory, 60000); // 1분마다 업데이트
+    return () => clearInterval(interval);
+  }, [fetchProfitHistory]);
+
   // 로딩 중이면 로딩 화면 표시
   if (isLoading || tradingConfig === null) {
     return (
@@ -332,6 +422,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     tradingConfig,
     analysisConfigs,
     portfolio,
+    profitHistory,
+    portfolioChartData,
     
     // Actions
     updateTradingConfig,
@@ -352,7 +444,9 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       return tickers;
     },
     toggleLearning: electronAPI.toggleLearning,
-    fetchSupportedCoins: electronAPI.fetchSupportedCoins
+    fetchSupportedCoins: electronAPI.fetchSupportedCoins,
+    fetchProfitHistory,
+    calculatePortfolioData
   };
 
   return (

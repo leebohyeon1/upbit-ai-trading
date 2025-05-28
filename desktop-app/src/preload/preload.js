@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Simulation methods
   getSimulationStatus: () => ipcRenderer.invoke('get-simulation-status'),
   
+  // Trade History methods
+  getTradeHistory: () => ipcRenderer.invoke('get-trade-history'),
+  getProfitHistory: (days) => ipcRenderer.invoke('get-profit-history', days),
+  getTradingHistory: () => ipcRenderer.invoke('get-trading-history'),
+  
   // Settings methods
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
   getApiKeys: () => ipcRenderer.invoke('get-api-keys'),

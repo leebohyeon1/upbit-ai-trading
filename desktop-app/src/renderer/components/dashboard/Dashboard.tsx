@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Grid,
   Typography,
@@ -24,6 +24,10 @@ import { useTradingContext } from '../../contexts/TradingContext';
 import { StatCard } from '../common/StatCard';
 import { AnalysisCard } from '../trading/AnalysisCard';
 import { formatCurrency } from '../../utils/formatters';
+import { ProfitChart } from '../charts/ProfitChart';
+import { PortfolioPieChart } from '../charts/PortfolioPieChart';
+import { AnimatedCard } from '../common/AnimatedCard';
+import { LoadingAnimation } from '../common/LoadingAnimation';
 
 interface DashboardProps {
   onTabChange: (tab: number) => void;
@@ -49,8 +53,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
     analyses, 
     tradingState,
     tradingConfig,
-    tickers 
+    tickers,
+    profitHistory,
+    portfolioChartData
   } = useTradingContext();
+  
+  // 디버깅용 로그
+  useEffect(() => {
+    console.log('[Dashboard] profitHistory:', profitHistory);
+    console.log('[Dashboard] portfolioChartData:', portfolioChartData);
+  }, [profitHistory, portfolioChartData]);
   
   const [cooldowns, setCooldowns] = useState<CooldownInfo>({});
   
@@ -111,6 +123,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const activeCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(c => c.enabled).length : 0;
   const recentAnalyses = analyses.slice(0, 6);
   
+  // 차트 데이터는 이제 TradingContext에서 관리됨
 
   return (
     <Box sx={{ 
@@ -263,9 +276,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   }
                 }
                 
+                
                 return (
                   <Grid item xs={12} sm={6} md={4} key={coin.symbol}>
-                    <Card>
+                    <AnimatedCard delay={portfolio.filter(p => p.enabled).indexOf(coin) * 0.1}>
                       <CardContent>
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                           <Box>
@@ -324,6 +338,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           </Box>
                         )}
                         
+                        
                         {/* 쿨타임 정보 */}
                         {cooldownInfo && (
                           <Box sx={{ mt: 2 }}>
@@ -361,12 +376,51 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           </Box>
                         )}
                       </CardContent>
-                    </Card>
+                    </AnimatedCard>
                   </Grid>
                 );
               })}
           </Grid>
         )}
+      </Box>
+
+      {/* 차트 섹션 */}
+      <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', mb: 4 }}>
+        <Typography variant="h6" fontWeight="bold" mb={2}>
+          성과 분석
+        </Typography>
+        <Grid container spacing={3}>
+          {/* 수익률 차트 */}
+          <Grid item xs={12} md={8}>
+            {profitHistory.length > 0 ? (
+              <ProfitChart data={profitHistory} />
+            ) : (
+              <Card sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <LoadingAnimation />
+                  <Typography variant="body2" color="text.secondary" mt={2}>
+                    수익률 데이터를 불러오는 중...
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
+          </Grid>
+          
+          {/* 포트폴리오 구성 차트 */}
+          <Grid item xs={12} md={4}>
+            {portfolioChartData.length > 0 ? (
+              <PortfolioPieChart data={portfolioChartData} />
+            ) : (
+              <Card sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    포트폴리오 데이터가 없습니다
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
+          </Grid>
+        </Grid>
       </Box>
     </Box>
   );

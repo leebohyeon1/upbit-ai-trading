@@ -28,6 +28,7 @@ import { SimulationStatus } from './components/trading/SimulationStatus';
 import { Analysis } from './types';
 import { TAB_INDEX } from './constants';
 import { formatAIReason, getDecisionText, getDecisionColor } from './utils/formatters';
+import { PageTransition } from './components/common/PageTransition';
 
 // Material-UI 테마 설정
 const theme = createTheme({
@@ -128,6 +129,73 @@ const AppContent: React.FC = () => {
   };
 
   const renderContent = () => {
+    const renderPage = () => {
+      switch (activeTab) {
+        case TAB_INDEX.OVERVIEW:
+          return (
+            <Dashboard 
+              onTabChange={handleTabChange}
+              onAnalysisClick={handleAnalysisClick}
+            />
+          );
+        case TAB_INDEX.PORTFOLIO:
+          return (
+            <PortfolioManager
+              portfolio={context.portfolio}
+              accounts={context.accounts}
+              tickers={context.tickers}
+              onUpdatePortfolio={context.updatePortfolio}
+            />
+          );
+        case TAB_INDEX.ANALYSIS:
+          return (
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, height: '100%', overflow: 'auto' }}>
+              <Typography variant="h4" fontWeight="bold" gutterBottom>
+                분석 설정
+              </Typography>
+              <AnalysisSettings />
+            </Box>
+          );
+        case TAB_INDEX.SETTINGS:
+          return (
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, height: '100%', overflow: 'auto' }}>
+              <Typography variant="h4" fontWeight="bold" gutterBottom>
+                거래 설정
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <ApiKeySettings
+                    apiKeyStatus={context.apiKeyStatus}
+                    onValidate={context.validateApiKey}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TradingSettings
+                    config={context.tradingConfig}
+                    onChange={context.updateTradingConfig}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+          );
+        case TAB_INDEX.LEARNING:
+          return <LearningStatus />;
+        case TAB_INDEX.BACKTEST:
+          return <BacktestPanel />;
+        case TAB_INDEX.SIMULATION:
+          return (
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, width: '100%' }}>
+              <Typography variant="h4" fontWeight="bold" gutterBottom>
+                시뮬레이션 성과
+              </Typography>
+              <SimulationStatus />
+            </Box>
+          );
+        default:
+          return null;
+      }
+    };
+
     return (
       <Box sx={{ 
         width: '100%', 
@@ -136,107 +204,9 @@ const AppContent: React.FC = () => {
         flexDirection: 'column',
         position: 'relative'
       }}>
-        <Box sx={{ 
-          display: activeTab === TAB_INDEX.OVERVIEW ? 'flex' : 'none',
-          flex: 1,
-          width: '100%',
-          minWidth: 0 // Important for flex items
-        }}>
-          <Dashboard 
-            onTabChange={handleTabChange}
-            onAnalysisClick={handleAnalysisClick}
-          />
-        </Box>
-        
-        <Box sx={{ 
-          display: activeTab === TAB_INDEX.PORTFOLIO ? 'flex' : 'none',
-          flex: 1,
-          width: '100%',
-          minWidth: 0
-        }}>
-          <PortfolioManager
-            portfolio={context.portfolio}
-            accounts={context.accounts}
-            tickers={context.tickers}
-            onUpdatePortfolio={context.updatePortfolio}
-          />
-        </Box>
-        
-        <Box sx={{ 
-          display: activeTab === TAB_INDEX.ANALYSIS ? 'flex' : 'none',
-          flex: 1,
-          width: '100%',
-          minWidth: 0
-        }}>
-          <AnalysisSettings />
-        </Box>
-        
-        <Box sx={{ 
-          display: activeTab === TAB_INDEX.SETTINGS ? 'flex' : 'none',
-          flex: 1,
-          width: '100%',
-          minWidth: 0,
-          flexDirection: 'column'
-        }}>
-          <Box sx={{ 
-            flex: 1,
-            width: '100%',
-            p: { xs: 2, sm: 3, md: 4 },
-            boxSizing: 'border-box'
-          }}>
-            <Typography variant="h4" fontWeight="bold" gutterBottom>
-              거래 설정
-            </Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <ApiKeySettings
-                  apiKeyStatus={context.apiKeyStatus}
-                  onValidate={context.validateApiKey}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TradingSettings
-                  config={context.tradingConfig}
-                  onChange={context.updateTradingConfig}
-                />
-              </Grid>
-            </Grid>
-          </Box>
-        </Box>
-        
-        <Box sx={{ 
-          display: activeTab === TAB_INDEX.LEARNING ? 'flex' : 'none',
-          flex: 1,
-          width: '100%',
-          minWidth: 0
-        }}>
-          <LearningStatus />
-        </Box>
-        
-        <Box sx={{ 
-          display: activeTab === TAB_INDEX.BACKTEST ? 'flex' : 'none',
-          flex: 1,
-          width: '100%',
-          minWidth: 0
-        }}>
-          <BacktestPanel />
-        </Box>
-        
-        <Box sx={{ 
-          display: activeTab === TAB_INDEX.SIMULATION ? 'flex' : 'none',
-          flex: 1,
-          width: '100%',
-          minWidth: 0,
-          p: { xs: 2, sm: 3, md: 4 },
-          boxSizing: 'border-box'
-        }}>
-          <Box sx={{ width: '100%' }}>
-            <Typography variant="h4" fontWeight="bold" gutterBottom>
-              시뮬레이션 성과
-            </Typography>
-            <SimulationStatus />
-          </Box>
-        </Box>
+        <PageTransition pageKey={activeTab}>
+          {renderPage()}
+        </PageTransition>
       </Box>
     );
   };
