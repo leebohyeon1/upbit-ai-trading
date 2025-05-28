@@ -29,7 +29,7 @@ module.exports = [
         patterns: [
           {
             from: 'src/main/icon.png',
-            to: 'main/icon.png'
+            to: 'icon.png'
           }
         ]
       })

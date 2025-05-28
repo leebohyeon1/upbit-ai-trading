@@ -85,11 +85,11 @@ class TradingApp {
   }
 
   private createWindow() {
-    const iconPath = path.join(__dirname, 'main', 'icon.png');
+    const iconPath = path.join(__dirname, 'icon.png');
     
     this.mainWindow = new BrowserWindow({
-      width: 1000,
-      height: 700,
+      width: 1270,
+      height: 720,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -114,7 +114,7 @@ class TradingApp {
   }
 
   private createTray() {
-    const iconPath = path.join(__dirname, 'main', 'icon.png');
+    const iconPath = path.join(__dirname, 'icon.png');
     const icon = nativeImage.createFromPath(iconPath);
     // 트레이 아이콘 크기 조정 (16x16 or 22x22 for better visibility)
     const trayIcon = icon.resize({ width: 16, height: 16 });
@@ -217,22 +217,45 @@ class TradingApp {
 
   private async startTrading(tickers: string[] = ['KRW-BTC']): Promise<boolean> {
     try {
-      // 내장 거래 엔진 사용
-      tradingEngine.setActiveMarkets(tickers);
-      const success = await tradingEngine.start();
+      // 즉시 UI 상태 업데이트 (버튼 애니메이션을 위해)
+      this.tradingState.isRunning = true;
+      this.tradingState.lastUpdate = new Date().toISOString();
       
-      if (success) {
-        this.tradingState.isRunning = true;
-        this.tradingState.lastUpdate = new Date().toISOString();
-        
-        // 트레이 메뉴 업데이트
-        this.updateTrayMenu();
-        
-        // 렌더러에 상태 업데이트 알림
-        this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
-      }
+      // 트레이 메뉴 업데이트
+      this.updateTrayMenu();
       
-      return success;
+      // 렌더러에 상태 업데이트 즉시 알림
+      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      
+      // 약간의 지연 후 실제 거래 엔진 시작 (UI 업데이트가 반영되도록)
+      setTimeout(async () => {
+        try {
+          // 내장 거래 엔진 사용
+          tradingEngine.setActiveMarkets(tickers);
+          const success = await tradingEngine.start();
+          
+          if (!success) {
+            // 실패 시 상태 롤백
+            this.tradingState.isRunning = false;
+            this.tradingState.lastUpdate = new Date().toISOString();
+            
+            // 트레이 메뉴 업데이트
+            this.updateTrayMenu();
+            
+            // 렌더러에 상태 업데이트 알림
+            this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+          }
+        } catch (error) {
+          console.error('Failed to start trading engine:', error);
+          // 에러 시 상태 롤백
+          this.tradingState.isRunning = false;
+          this.tradingState.lastUpdate = new Date().toISOString();
+          this.updateTrayMenu();
+          this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+        }
+      }, 100);
+      
+      return true; // UI 업데이트는 즉시 성공
     } catch (error) {
       console.error('Failed to start trading:', error);
       return false;
@@ -241,21 +264,31 @@ class TradingApp {
 
   private async stopTrading(): Promise<boolean> {
     try {
-      // 내장 거래 엔진 사용
-      const success = await tradingEngine.stop();
+      // 즉시 UI 상태 업데이트 (버튼 애니메이션을 위해)
+      this.tradingState.isRunning = false;
+      this.tradingState.lastUpdate = new Date().toISOString();
       
-      if (success) {
-        this.tradingState.isRunning = false;
-        this.tradingState.lastUpdate = new Date().toISOString();
-        
-        // 트레이 메뉴 업데이트
-        this.updateTrayMenu();
-        
-        // 렌더러에 상태 업데이트 알림
-        this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
-      }
+      // 트레이 메뉴 업데이트
+      this.updateTrayMenu();
       
-      return success;
+      // 렌더러에 상태 업데이트 즉시 알림
+      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      
+      // 약간의 지연 후 실제 거래 엔진 중지
+      setTimeout(async () => {
+        try {
+          // 내장 거래 엔진 사용
+          const success = await tradingEngine.stop();
+          
+          if (!success) {
+            console.error('Failed to stop trading engine properly');
+          }
+        } catch (error) {
+          console.error('Failed to stop trading engine:', error);
+        }
+      }, 100);
+      
+      return true; // UI 업데이트는 즉시 성공
     } catch (error) {
       console.error('Failed to stop trading:', error);
       return false;
