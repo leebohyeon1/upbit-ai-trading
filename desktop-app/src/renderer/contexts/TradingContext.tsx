@@ -313,9 +313,12 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   }, [tradingConfig]);
 
   useEffect(() => {
-    localStorage.setItem('analysisConfigs', JSON.stringify(analysisConfigs));
-    // 백엔드에도 저장
-    (window as any).electronAPI.saveAnalysisConfigs(analysisConfigs);
+    // 빈 배열일 때는 저장하지 않음 (초기 로드 시 기존 설정을 덮어쓰는 것 방지)
+    if (analysisConfigs.length > 0) {
+      localStorage.setItem('analysisConfigs', JSON.stringify(analysisConfigs));
+      // 백엔드에도 저장
+      (window as any).electronAPI.saveAnalysisConfigs(analysisConfigs);
+    }
   }, [analysisConfigs]);
 
   // 학습 상태는 electronAPI에서 자동으로 저장됨
