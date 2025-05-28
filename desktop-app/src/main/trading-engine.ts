@@ -24,6 +24,27 @@ export interface TradingConfig {
   dynamicConfidence: boolean; // 신뢰도 임계값 동적 조정 활성화
   useKellyCriterion: boolean; // Kelly Criterion 사용 여부
   maxKellyFraction: number; // Kelly Criterion 최대 배팅 비율
+  // 백테스트 관련 필드
+  cooldownAfterTrade?: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  weights?: {
+    rsi?: number;
+    macd?: number;
+    bollinger?: number;
+    stochastic?: number;
+    volume?: number;
+    atr?: number;
+    obv?: number;
+    adx?: number;
+    volatility?: number;
+    trendStrength?: number;
+    aiAnalysis?: number;
+    newsImpact?: number;
+    whaleActivity?: number;
+  };
+  minConfidenceForBuy?: number;
+  minConfidenceForSell?: number;
 }
 
 export interface TradingStatus {
@@ -407,18 +428,19 @@ class TradingEngine extends EventEmitter {
             }
           }
 
-          // 거래 신호 처리 및 결과 저장
+          // 거래 신호 처리 및 결과 저장 (시뮬레이션 모드에서도 동일하게 처리)
           let tradeAttempt = undefined;
-          if (this.config.enableRealTrading || technicalAnalysis.signal !== 'HOLD') {
+          if (technicalAnalysis.signal !== 'HOLD') {
             tradeAttempt = await this.processTradeSignal(coinAnalysis);
             coinAnalysis.tradeAttempt = tradeAttempt;
           }
 
           // 개별 분석 결과 즉시 전송 (프론트엔드 형식으로 변환)
+          const confidenceValue = isNaN(technicalAnalysis.confidence) ? 0.4 : technicalAnalysis.confidence / 100;
           const frontendAnalysis = {
             ticker: market,
             decision: technicalAnalysis.signal.toLowerCase(),
-            confidence: technicalAnalysis.confidence / 100,
+            confidence: confidenceValue,
             reason: aiAnalysis || null,  // AI 분석이 없으면 null
             timestamp: new Date().toISOString(),
             tradeAttempt: tradeAttempt
@@ -426,7 +448,7 @@ class TradingEngine extends EventEmitter {
           
           this.emit('singleAnalysisCompleted', frontendAnalysis);
 
-          console.log(`Analysis completed for ${market}: ${technicalAnalysis.signal} (${technicalAnalysis.confidence.toFixed(1)}%)`);
+          console.log(`Analysis completed for ${market}: ${technicalAnalysis.signal} (${technicalAnalysis.confidence?.toFixed(1) || '0'}%)`);
           
         } catch (error) {
           console.log(`Failed to analyze ${market}: ${(error as Error).message}`);
@@ -434,14 +456,17 @@ class TradingEngine extends EventEmitter {
       }
 
       // 분석 완료 이벤트 발송 (프론트엔드 형식으로 변환)
-      const frontendAnalyses = Array.from(this.analysisResults.values()).map(analysis => ({
-        ticker: analysis.market,
-        decision: analysis.analysis.signal.toLowerCase(),
-        confidence: analysis.analysis.confidence / 100,
-        reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
-        timestamp: new Date(analysis.lastUpdated).toISOString(),
-        tradeAttempt: analysis.tradeAttempt
-      }));
+      const frontendAnalyses = Array.from(this.analysisResults.values()).map(analysis => {
+        const confidenceValue = isNaN(analysis.analysis.confidence) ? 0.4 : analysis.analysis.confidence / 100;
+        return {
+          ticker: analysis.market,
+          decision: analysis.analysis.signal.toLowerCase(),
+          confidence: confidenceValue,
+          reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
+          timestamp: new Date(analysis.lastUpdated).toISOString(),
+          tradeAttempt: analysis.tradeAttempt
+        };
+      });
       
       this.emit('analysisCompleted', frontendAnalyses);
       
@@ -458,15 +483,8 @@ class TradingEngine extends EventEmitter {
   }> {
     const { market, analysis: technical } = analysis;
     
-    // 실거래가 비활성화되어 있으면 바로 반환
-    if (!this.config.enableRealTrading && technical.signal !== 'HOLD') {
-      return {
-        attempted: true,
-        success: false,
-        failureReason: 'REAL_TRADE_DISABLED',
-        details: '실거래가 비활성화되어 있습니다.'
-      };
-    }
+    // 실거래 비활성화 시에도 시뮬레이션은 계속 진행
+    // (이 체크를 제거하여 시뮬레이션 모드에서도 동일한 로직 실행)
     
     try {
       // 코인별 설정 가져오기
@@ -1827,6 +1845,11 @@ class TradingEngine extends EventEmitter {
       console.error(`[${market}] 손절/익절 체크 중 오류:`, error);
       return { shouldSell: false, reason: '' };
     }
+  }
+
+  // UpbitService 인스턴스 반환
+  getUpbitService() {
+    return upbitService;
   }
 }
 

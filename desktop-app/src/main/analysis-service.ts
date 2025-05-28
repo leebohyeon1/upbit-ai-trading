@@ -363,7 +363,7 @@ class AnalysisService {
   }
 
   // 종합 기술적 분석
-  async analyzeTechnicals(candles: CandleData[], ticker?: any, orderbook?: any, trades?: any[], config?: any): Promise<TechnicalAnalysis> {
+  async analyzeTechnicals(candles: CandleData[], ticker?: any, orderbook?: any, trades?: any[], config?: any, isBacktest?: boolean): Promise<TechnicalAnalysis> {
     if (candles.length < 20) {
       return {
         market: candles[0]?.market || '',
@@ -486,24 +486,26 @@ class AnalysisService {
     // 김치 프리미엄 계산
     let kimchiPremium = 0;
     try {
-      kimchiPremium = await upbitService.getKimchiPremium(candles[0].market);
+      kimchiPremium = await upbitService.getKimchiPremium(candles[0].market, isBacktest);
     } catch (error) {
       console.log('김프 계산 실패:', error);
     }
 
-    // 뉴스 데이터 가져오기
+    // 뉴스 데이터 가져오기 (백테스트가 아닌 경우에만)
     let newsAnalysis: NewsAnalysis | undefined;
-    try {
-      const symbol = candles[0].market.split('-')[1]; // 예: KRW-BTC -> BTC
-      newsAnalysis = await newsService.getCoinNews(symbol);
-      console.log(`${symbol} 뉴스 분석:`, {
-        총뉴스: newsAnalysis.totalNews,
-        긍정: newsAnalysis.positiveCount,
-        부정: newsAnalysis.negativeCount,
-        감정점수: newsAnalysis.sentimentScore
-      });
-    } catch (error) {
-      console.log('뉴스 분석 실패:', error);
+    if (!isBacktest) {
+      try {
+        const symbol = candles[0].market.split('-')[1]; // 예: KRW-BTC -> BTC
+        newsAnalysis = await newsService.getCoinNews(symbol);
+        console.log(`${symbol} 뉴스 분석:`, {
+          총뉴스: newsAnalysis.totalNews,
+          긍정: newsAnalysis.positiveCount,
+          부정: newsAnalysis.negativeCount,
+          감정점수: newsAnalysis.sentimentScore
+        });
+      } catch (error) {
+        console.log('뉴스 분석 실패:', error);
+      }
     }
 
     // 공포/탐욕 지수 계산
@@ -675,9 +677,9 @@ class AnalysisService {
     const maxBuyScore = buySignalsWithWeight.reduce((sum, signal) => sum + signal.weight, 0);
     const maxSellScore = sellSignalsWithWeight.reduce((sum, signal) => sum + signal.weight, 0);
 
-    // 정규화된 점수 (0-100)
-    const normalizedBuyScore = (buyScore / maxBuyScore) * 100;
-    const normalizedSellScore = (sellScore / maxSellScore) * 100;
+    // 정규화된 점수 (0-100) - NaN 방지
+    const normalizedBuyScore = maxBuyScore > 0 ? (buyScore / maxBuyScore) * 100 : 0;
+    const normalizedSellScore = maxSellScore > 0 ? (sellScore / maxSellScore) * 100 : 0;
 
     // 더 정교한 신호 결정
     if (normalizedBuyScore > 25 && normalizedBuyScore > normalizedSellScore * 1.2) {
@@ -691,6 +693,11 @@ class AnalysisService {
       // HOLD일 때도 어느 쪽에 더 가까운지에 따라 신뢰도 조정
       const scoreDiff = Math.abs(normalizedBuyScore - normalizedSellScore);
       confidence = Math.max(30, 50 - scoreDiff * 0.5); // 30-50% 범위
+    }
+    
+    // NaN 체크 및 기본값 설정
+    if (isNaN(confidence) || !isFinite(confidence)) {
+      confidence = signal === 'HOLD' ? 40 : 60;
     }
 
     // 특수 상황 보너스 (추가 신뢰도)

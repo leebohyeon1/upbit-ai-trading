@@ -23,6 +23,7 @@ declare global {
       // Market methods
       fetchMarkets: () => Promise<MarketData[]>;
       fetchTickers: (symbols: string[]) => Promise<TickerData[]>;
+      getSupportedKrwCoins: () => Promise<string[]>;
       
       // Trading methods
       toggleTrading: (tradingConfig: TradingConfig, analysisConfigs: AnalysisConfig[]) => Promise<void>;
@@ -57,6 +58,33 @@ declare global {
           avgProfit: number;
           lastUpdated: number;
         };
+      } | null>;
+      
+      // Simulation methods
+      getSimulationStatus: () => Promise<{
+        krwBalance: number;
+        totalValue: number;
+        profitRate: number;
+        portfolio: Array<{
+          market: string;
+          balance: number;
+          avgBuyPrice: number;
+          currentPrice: number;
+          profitRate: number;
+          value: number;
+        }>;
+        recentTrades: Array<{
+          market: string;
+          type: 'BUY' | 'SELL';
+          price: number;
+          amount: number;
+          volume: number;
+          timestamp: number;
+          krwBalance: number;
+          coinBalance: number;
+          profit?: number;
+          profitRate?: number;
+        }>;
       } | null>;
       
       // Settings methods

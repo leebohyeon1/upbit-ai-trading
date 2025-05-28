@@ -27,6 +27,7 @@ interface TradingContextType {
   tickers: TickerData[];
   apiKeyStatus: ApiKeyStatus;
   learningStates: LearningState[];
+  supportedCoins: string[];
   
   // Actions
   updateTradingConfig: (config: TradingConfig) => void;
@@ -38,6 +39,7 @@ interface TradingContextType {
   fetchMarkets: () => Promise<MarketData[]>;
   fetchTickers: (symbols: string[]) => Promise<TickerData[]>;
   toggleLearning: (ticker: string, isRunning: boolean) => Promise<void>;
+  fetchSupportedCoins: () => Promise<string[]>;
 }
 
 const TradingContext = createContext<TradingContextType | null>(null);
@@ -317,6 +319,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     tickers: electronAPI.tickers,
     apiKeyStatus: electronAPI.apiKeyStatus,
     learningStates: electronAPI.learningStates,
+    supportedCoins: electronAPI.supportedCoins,
     
     // Local states
     tradingConfig,
@@ -341,7 +344,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       const tickers = await electronAPI.fetchTickers(symbols);
       return tickers;
     },
-    toggleLearning: electronAPI.toggleLearning
+    toggleLearning: electronAPI.toggleLearning,
+    fetchSupportedCoins: electronAPI.fetchSupportedCoins
   };
 
   return (

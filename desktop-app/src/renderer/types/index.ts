@@ -264,6 +264,11 @@ export interface TradingConfig {
       lowConfidenceMultiplier: number;
     };
   };
+  // 백테스트 관련 필드
+  cooldownAfterTrade?: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  weights?: IndicatorWeights;
 }
 
 export interface BacktestTrade {

@@ -28,6 +28,11 @@ class UpbitService {
   private accessKey: string = '';
   private secretKey: string = '';
   private baseURL = 'https://api.upbit.com';
+  private validKrwMarkets: Set<string> = new Set();
+  private lastMarketUpdate: number = 0;
+  private kimchiPremiumCache: Map<string, { value: number; timestamp: number }> = new Map();
+  private exchangeRateCache: { value: number; timestamp: number } | null = null;
+  private readonly CACHE_DURATION = 10 * 60 * 1000; // 10분 캐시
 
   setApiKeys(accessKey: string, secretKey: string) {
     this.accessKey = accessKey;
@@ -65,7 +70,7 @@ class UpbitService {
   async getMarkets(): Promise<any[]> {
     try {
       const response = await axios.get(`${this.baseURL}/v1/market/all`);
-      return response.data.filter((market: any) => market.market.startsWith('KRW-'));
+      return response.data;
     } catch (error) {
       console.error('Failed to get markets:', error);
       return [];
@@ -75,10 +80,16 @@ class UpbitService {
   // 현재가 조회 (공개 API)
   async getTickers(markets: string[]): Promise<UpbitTicker[]> {
     try {
-      const marketString = markets.join(',');
-      const response = await axios.get(`${this.baseURL}/v1/ticker`, {
-        params: { markets: marketString }
-      });
+      // 유효한 마켓만 필터링
+      const validMarkets = await this.getValidMarkets(markets);
+      if (validMarkets.length === 0) {
+        console.warn('No valid markets found');
+        return [];
+      }
+      
+      const marketString = validMarkets.join(',');
+      const url = `${this.baseURL}/v1/ticker?markets=${marketString}`;
+      const response = await axios.get(url);
       
       return response.data.map((ticker: any) => ({
         market: ticker.market,
@@ -87,8 +98,11 @@ class UpbitService {
         acc_trade_volume_24h: ticker.acc_trade_volume_24h,
         timestamp: Date.now()
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to get tickers:', error);
+      if (error.response && error.response.data) {
+        console.error('Error details:', JSON.stringify(error.response.data, null, 2));
+      }
       return [];
     }
   }
@@ -96,9 +110,8 @@ class UpbitService {
   // 단일 마켓 현재가 조회
   async getTicker(market: string): Promise<any> {
     try {
-      const response = await axios.get(`${this.baseURL}/v1/ticker`, {
-        params: { markets: market }
-      });
+      const url = `${this.baseURL}/v1/ticker?markets=${market}`;
+      const response = await axios.get(url);
       return response.data[0];
     } catch (error) {
       console.error('Failed to get ticker:', error);
@@ -109,9 +122,8 @@ class UpbitService {
   // 캔들 데이터 조회 (공개 API) - 기본 5분봉
   async getCandles(market: string, count: number = 200): Promise<CandleData[]> {
     try {
-      const response = await axios.get(`${this.baseURL}/v1/candles/minutes/5`, {
-        params: { market, count }
-      });
+      const url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
+      const response = await axios.get(url);
       
       return response.data.map((candle: any) => ({
         market: candle.market,
@@ -131,9 +143,8 @@ class UpbitService {
   // 15분봉 캔들 데이터 조회
   async getCandles15m(market: string, count: number = 100): Promise<CandleData[]> {
     try {
-      const response = await axios.get(`${this.baseURL}/v1/candles/minutes/15`, {
-        params: { market, count }
-      });
+      const url = `${this.baseURL}/v1/candles/minutes/15?market=${market}&count=${count}`;
+      const response = await axios.get(url);
       
       return response.data.map((candle: any) => ({
         market: candle.market,
@@ -153,9 +164,8 @@ class UpbitService {
   // 1시간봉 캔들 데이터 조회
   async getCandles1h(market: string, count: number = 50): Promise<CandleData[]> {
     try {
-      const response = await axios.get(`${this.baseURL}/v1/candles/minutes/60`, {
-        params: { market, count }
-      });
+      const url = `${this.baseURL}/v1/candles/minutes/60?market=${market}&count=${count}`;
+      const response = await axios.get(url);
       
       return response.data.map((candle: any) => ({
         market: candle.market,
@@ -168,6 +178,31 @@ class UpbitService {
       }));
     } catch (error) {
       console.error('Failed to get 1h candles:', error);
+      return [];
+    }
+  }
+
+  // 특정 시간까지의 캔들 데이터 조회 (백테스트용)
+  async getCandlesWithTime(market: string, count: number = 200, to?: string): Promise<CandleData[]> {
+    try {
+      let url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
+      if (to) {
+        url += `&to=${to}`;
+      }
+      
+      const response = await axios.get(url);
+      
+      return response.data.map((candle: any) => ({
+        market: candle.market,
+        candle_date_time_utc: candle.candle_date_time_utc,
+        opening_price: candle.opening_price,
+        high_price: candle.high_price,
+        low_price: candle.low_price,
+        trade_price: candle.trade_price,
+        candle_acc_trade_volume: candle.candle_acc_trade_volume
+      }));
+    } catch (error) {
+      console.error('Failed to get candles with time:', error);
       return [];
     }
   }
@@ -280,9 +315,8 @@ class UpbitService {
   // 호가 정보 조회 (개선된 버전)
   async getOrderbook(market: string): Promise<any> {
     try {
-      const response = await axios.get(`${this.baseURL}/v1/orderbook`, {
-        params: { markets: market }
-      });
+      const url = `${this.baseURL}/v1/orderbook?markets=${market}`;
+      const response = await axios.get(url);
       const orderbook = response.data[0];
       
       // 호가창 상세 분석 추가
@@ -352,9 +386,8 @@ class UpbitService {
   // 체결 내역 조회 (웨일 감지 포함)
   async getTrades(market: string, count: number = 50): Promise<any[]> {
     try {
-      const response = await axios.get(`${this.baseURL}/v1/trades/ticks`, {
-        params: { market, count }
-      });
+      const url = `${this.baseURL}/v1/trades/ticks?market=${market}&count=${count}`;
+      const response = await axios.get(url);
       const trades = response.data;
       
       // 웨일 감지를 위한 분석
@@ -402,37 +435,117 @@ class UpbitService {
     }
   }
 
-  // 김치 프리미엄 계산
-  async getKimchiPremium(market: string): Promise<number> {
+  // 유효한 마켓 확인
+  private async getValidMarkets(markets: string[]): Promise<string[]> {
+    // 1시간마다 마켓 목록 갱신
+    const now = Date.now();
+    if (now - this.lastMarketUpdate > 3600000 || this.validKrwMarkets.size === 0) {
+      await this.updateValidMarkets();
+    }
+    
+    // 유효한 마켓만 필터링
+    return markets.filter(market => this.validKrwMarkets.has(market));
+  }
+  
+  // 업비트 마켓 목록 업데이트
+  private async updateValidMarkets(): Promise<void> {
     try {
+      const markets = await this.getMarkets();
+      this.validKrwMarkets.clear();
+      markets.forEach(market => {
+        if (market.market && market.market.startsWith('KRW-')) {
+          this.validKrwMarkets.add(market.market);
+        }
+      });
+      this.lastMarketUpdate = Date.now();
+      console.log(`Updated valid KRW markets: ${this.validKrwMarkets.size} markets found`);
+    } catch (error) {
+      console.error('Failed to update valid markets:', error);
+    }
+  }
+
+  // 김치 프리미엄 계산 (캐싱 적용)
+  async getKimchiPremium(market: string, isBacktest: boolean = false): Promise<number> {
+    // 백테스트 모드에서는 김치 프리미엄 계산 건너뛰기
+    if (isBacktest) {
+      return 0;
+    }
+
+    try {
+      // 캐시 확인
+      const cached = this.kimchiPremiumCache.get(market);
+      if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+        return cached.value;
+      }
+
       // 코인 심볼 추출 (KRW-BTC -> BTC)
       const symbol = market.split('-')[1];
       
-      // 환율 정보 가져오기
-      const exchangeRateResponse = await axios.get('https://api.exchangerate-api.com/v4/latest/USD');
-      const usdToKrw = exchangeRateResponse.data.rates.KRW;
+      // 환율 정보 가져오기 (캐싱)
+      let usdToKrw: number;
+      if (this.exchangeRateCache && Date.now() - this.exchangeRateCache.timestamp < this.CACHE_DURATION) {
+        usdToKrw = this.exchangeRateCache.value;
+      } else {
+        try {
+          const exchangeRateResponse = await axios.get('https://api.exchangerate-api.com/v4/latest/USD', {
+            timeout: 5000,
+            headers: {
+              'User-Agent': 'UpbitAITrading/1.0'
+            }
+          });
+          usdToKrw = exchangeRateResponse.data.rates.KRW;
+          this.exchangeRateCache = { value: usdToKrw, timestamp: Date.now() };
+        } catch (error: any) {
+          // Rate limit 에러 처리
+          if (error.response?.status === 429) {
+            console.log('Exchange rate API rate limited, using default value');
+            usdToKrw = 1350; // 기본값 사용
+            this.exchangeRateCache = { value: usdToKrw, timestamp: Date.now() };
+          } else {
+            throw error;
+          }
+        }
+      }
       
       // Binance 가격 가져오기
       const binanceSymbol = symbol === 'BTC' ? 'BTCUSDT' : `${symbol}USDT`;
       const binanceResponse = await axios.get('https://api.binance.com/api/v3/ticker/price', {
-        params: { symbol: binanceSymbol }
+        params: { symbol: binanceSymbol },
+        timeout: 5000
       });
       const usdPrice = parseFloat(binanceResponse.data.price);
       const krwPriceBinance = usdPrice * usdToKrw;
       
       // Upbit 가격 가져오기
-      const upbitResponse = await axios.get(`${this.baseURL}/v1/ticker`, {
-        params: { markets: market }
-      });
+      const upbitUrl = `${this.baseURL}/v1/ticker?markets=${market}`;
+      const upbitResponse = await axios.get(upbitUrl, { timeout: 5000 });
       const krwPriceUpbit = upbitResponse.data[0].trade_price;
       
       // 김프 계산
       const kimchiPremium = ((krwPriceUpbit - krwPriceBinance) / krwPriceBinance) * 100;
       
+      // 캐시 저장
+      this.kimchiPremiumCache.set(market, { value: kimchiPremium, timestamp: Date.now() });
+      
       return kimchiPremium;
     } catch (error) {
       console.error('Failed to calculate kimchi premium:', error);
       return 0; // 에러 시 0 반환
+    }
+  }
+
+  // 지원하는 KRW 마켓 코인 심볼 목록 가져오기
+  async getSupportedKrwCoins(): Promise<string[]> {
+    try {
+      const markets = await this.getMarkets();
+      const krwCoins = markets
+        .filter((market: any) => market.market && market.market.startsWith('KRW-'))
+        .map((market: any) => market.market.replace('KRW-', ''))
+        .sort();
+      return krwCoins;
+    } catch (error) {
+      console.error('Failed to get supported KRW coins:', error);
+      return [];
     }
   }
 

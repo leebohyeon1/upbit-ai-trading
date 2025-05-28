@@ -31,7 +31,8 @@
       "Bash(npx webpack:*)",
       "Bash(npm start)",
       "Bash(touch:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebFetch(domain:api.upbit.com)"
     ],
     "deny": []
   }

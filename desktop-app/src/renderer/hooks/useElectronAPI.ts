@@ -27,6 +27,7 @@ export const useElectronAPI = () => {
     aiEnabled: false
   });
   const [learningStates, setLearningStates] = useState<LearningState[]>([]);
+  const [supportedCoins, setSupportedCoins] = useState<string[]>([]);
 
   // API 키 검증
   const validateApiKey = useCallback(async (accessKey: string, secretKey: string, claudeApiKey?: string) => {
@@ -125,6 +126,18 @@ export const useElectronAPI = () => {
     }
   }, []);
 
+  // 지원되는 KRW 코인 목록 조회
+  const fetchSupportedCoins = useCallback(async () => {
+    try {
+      const coins = await window.electronAPI.getSupportedKrwCoins();
+      setSupportedCoins(coins);
+      return coins;
+    } catch (error) {
+      console.error('Failed to fetch supported coins:', error);
+      return [];
+    }
+  }, []);
+
   // 이벤트 리스너 설정
   useEffect(() => {
     const removeApiKeyListener = window.electronAPI.onApiKeyStatus((status) => {
@@ -150,6 +163,12 @@ export const useElectronAPI = () => {
       setLearningStates(states);
     }).catch(console.error);
 
+    // 초기 지원 코인 목록 로드
+    window.electronAPI.getSupportedKrwCoins().then((coins) => {
+      console.log('[useElectronAPI] Supported coins loaded:', coins);
+      setSupportedCoins(coins);
+    }).catch(console.error);
+
     return () => {
       removeApiKeyListener();
       removeAnalysisListener();
@@ -167,6 +186,7 @@ export const useElectronAPI = () => {
     analyses,
     tradingState,
     learningStates,
+    supportedCoins,
     
     // Actions
     validateApiKey,
@@ -175,6 +195,7 @@ export const useElectronAPI = () => {
     fetchTickers,
     toggleTrading,
     runBacktest,
-    toggleLearning
+    toggleLearning,
+    fetchSupportedCoins
   };
 };

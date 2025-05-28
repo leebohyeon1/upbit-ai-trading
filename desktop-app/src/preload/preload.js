@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Market methods
   fetchMarkets: () => ipcRenderer.invoke('get-markets'),
   fetchTickers: (symbols) => ipcRenderer.invoke('get-tickers', symbols),
+  getSupportedKrwCoins: () => ipcRenderer.invoke('get-supported-krw-coins'),
   
   // Trading methods
   toggleTrading: (tradingConfig, analysisConfigs) => ipcRenderer.invoke('start-trading', tradingConfig, analysisConfigs),
@@ -32,6 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Weight learning methods
   getWeightLearningInfo: (market) => ipcRenderer.invoke('get-weight-learning-info', market),
+  
+  // Simulation methods
+  getSimulationStatus: () => ipcRenderer.invoke('get-simulation-status'),
   
   // Settings methods
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),

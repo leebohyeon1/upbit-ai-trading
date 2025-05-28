@@ -55,6 +55,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     { text: '거래 설정', icon: <Settings />, value: TAB_INDEX.SETTINGS },
     { text: '학습 상태', icon: <School />, value: TAB_INDEX.LEARNING },
     { text: '백테스트', icon: <ShowChart />, value: TAB_INDEX.BACKTEST },
+    ...(tradingState.isRunning && !tradingConfig.enableRealTrading ? 
+      [{ text: '시뮬레이션 성과', icon: <Psychology />, value: TAB_INDEX.SIMULATION }] : []
+    ),
   ];
 
   const handleDrawerToggle = () => {

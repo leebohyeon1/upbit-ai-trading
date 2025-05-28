@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import * as dotenv from 'dotenv';
 import tradingEngine from './trading-engine';
+import UpbitService from './upbit-service';
 
 // Load environment variables
 dotenv.config();
@@ -1284,6 +1285,37 @@ class TradingApp {
         };
       } catch (error) {
         console.error('Failed to get weight learning info:', error);
+        return null;
+      }
+    });
+    
+    // 지원하는 KRW 코인 목록 조회
+    ipcMain.handle('get-supported-krw-coins', async () => {
+      try {
+        const service = tradingEngine.getUpbitService();
+        if (!service) {
+          console.error('UpbitService is not initialized');
+          return [];
+        }
+        const coins = await service.getSupportedKrwCoins();
+        return coins;
+      } catch (error) {
+        console.error('Failed to get supported KRW coins:', error);
+        return [];
+      }
+    });
+    
+    // 시뮬레이션 상태 조회
+    ipcMain.handle('get-simulation-status', async () => {
+      try {
+        const config = await this.getTradingConfig();
+        if (!tradingEngine.isRunning() || config?.enableRealTrading) {
+          return null; // 실거래 모드이거나 거래가 중지된 경우
+        }
+        
+        return tradingEngine.getSimulationStatus();
+      } catch (error) {
+        console.error('Failed to get simulation status:', error);
         return null;
       }
     });

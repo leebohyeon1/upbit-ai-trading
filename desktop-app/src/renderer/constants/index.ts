@@ -1,12 +1,13 @@
 import { IndicatorWeights } from '../types';
 
-// 거래 가능한 코인 목록
+// 거래 가능한 코인 목록 (업비트 KRW 마켓 실제 지원 코인)
 export const AVAILABLE_COINS = [
+  // 주요 코인
   { symbol: 'BTC', name: '비트코인' },
   { symbol: 'ETH', name: '이더리움' },
   { symbol: 'XRP', name: '리플' },
-  { symbol: 'ADA', name: '에이다' },
   { symbol: 'SOL', name: '솔라나' },
+  { symbol: 'ADA', name: '에이다' },
   { symbol: 'DOGE', name: '도지코인' },
   { symbol: 'AVAX', name: '아발란체' },
   { symbol: 'DOT', name: '폴카닷' },
@@ -17,11 +18,22 @@ export const AVAILABLE_COINS = [
   { symbol: 'ETC', name: '이더리움클래식' },
   { symbol: 'XLM', name: '스텔라루멘' },
   { symbol: 'BCH', name: '비트코인캐시' },
-  { symbol: 'NEAR', name: '니어프로토콜' },
-  { symbol: 'ARB', name: '아비트럼' },
-  { symbol: 'OP', name: '옵티미즘' },
   { symbol: 'TRX', name: '트론' },
-  { symbol: 'SUI', name: '수이' }
+  { symbol: 'SAND', name: '샌드박스' },
+  { symbol: 'AXS', name: '엑시인피니티' },
+  { symbol: 'MANA', name: '디센트럴랜드' },
+  { symbol: 'FLOW', name: '플로우' },
+  // 추가 인기 코인
+  { symbol: 'HBAR', name: '헤데라' },
+  { symbol: 'VET', name: '비체인' },
+  { symbol: 'THETA', name: '쎄타토큰' },
+  { symbol: 'CHZ', name: '칠리즈' },
+  { symbol: 'ENJ', name: '엔진코인' },
+  { symbol: 'ALGO', name: '알고랜드' },
+  { symbol: 'XTZ', name: '테조스' },
+  { symbol: 'KAVA', name: '카바' },
+  { symbol: 'CRO', name: '크로노스' },
+  { symbol: 'STX', name: '스택스' }
 ];
 
 // 기본 설정값
@@ -55,7 +67,8 @@ export const TAB_INDEX = {
   ANALYSIS: 2,
   SETTINGS: 3,
   LEARNING: 4,
-  BACKTEST: 5
+  BACKTEST: 5,
+  SIMULATION: 6
 };
 
 // 색상 정의

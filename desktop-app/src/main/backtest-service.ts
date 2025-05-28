@@ -1,6 +1,7 @@
 import upbitService, { CandleData } from './upbit-service';
 import analysisService, { TechnicalAnalysis } from './analysis-service';
 import { TradingConfig } from './trading-engine';
+import TradingConfigManager from './trading-config';
 
 export interface BacktestResult {
   market: string;
@@ -103,6 +104,19 @@ class BacktestService {
     let maxCapital = capital;
     let minCapital = capital;
     
+    // 코인별 설정 가져오기
+    const coinConfig = await TradingConfigManager.getCoinConfig(market);
+    
+    // 쿨다운 추적 (매수/매도 개별 추적)
+    let lastBuyTime: Date | null = null;
+    let lastSellTime: Date | null = null;
+    
+    // Kelly Criterion을 위한 성과 추적
+    let wins = 0;
+    let losses = 0;
+    let totalProfit = 0;
+    let totalLoss = 0;
+    
     // 슬라이딩 윈도우로 캔들 데이터 분석 (최소 50개 캔들 필요)
     const windowSize = Math.min(200, filteredCandles.length - 1);
     console.log('Using window size: ' + windowSize);
@@ -115,15 +129,39 @@ class BacktestService {
       const window = filteredCandles.slice(Math.max(0, i - windowSize), i + 1);
       const currentCandle = window[window.length - 1];
       
-      // 기술적 분석 수행
-      const analysis = await analysisService.analyzeTechnicals(window);
-      
       // 동적 파라미터 조정 시뮬레이션
       const adjustedConfig = this.adjustParametersForBacktest(config, trades);
       
-      // 거래 신호 확인
-      const minConfidenceForBuy = adjustedConfig.minConfidenceForTrade || 50;
-      const minConfidenceForSell = adjustedConfig.minConfidenceForTrade || 50;
+      // 기술적 분석 수행 (코인별 설정 적용)
+      const analysisConfig = {
+        rsiOverbought: coinConfig.rsiOverbought || adjustedConfig.rsiOverbought,
+        rsiOversold: coinConfig.rsiOversold || adjustedConfig.rsiOversold,
+        rsiPeriod: 14,
+        bbPeriod: 20,
+        bbStdDev: 2,
+        volumeThreshold: 2.0,
+        indicatorWeights: {
+          rsi: 1.0,
+          macd: 1.0,
+          bollinger: 1.0,
+          stochastic: 0.8,
+          volume: 1.0,
+          atr: 0.8,
+          obv: 0.7,
+          adx: 0.8,
+          volatility: 1.0,
+          trendStrength: 1.0,
+          aiAnalysis: 1.2,
+          newsImpact: 1.0,
+          whaleActivity: 0.8
+        }
+      };
+      
+      const analysis = await analysisService.analyzeTechnicals(window, undefined, undefined, undefined, analysisConfig, true);
+      
+      // 거래 신호 확인 (코인별 설정 우선)
+      const minConfidenceForBuy = coinConfig.minConfidenceForBuy || adjustedConfig.minConfidenceForBuy || 50;
+      const minConfidenceForSell = coinConfig.minConfidenceForSell || adjustedConfig.minConfidenceForSell || 50;
       
       // 신호 카운트
       if (analysis.signal === 'BUY') buySignals++;
@@ -135,9 +173,56 @@ class BacktestService {
         console.log('[Backtest ' + i + '/' + filteredCandles.length + '] Signal: ' + analysis.signal + ', Confidence: ' + analysis.confidence + ', MinBuy: ' + minConfidenceForBuy + ', MinSell: ' + minConfidenceForSell);
       }
       
-      if (analysis.signal === 'BUY' && !position && analysis.confidence >= minConfidenceForBuy) {
-          // 매수
-          const buyAmount = capital * adjustedConfig.buyRatio;
+      // 쿨다운 체크
+      const currentTime = new Date(currentCandle.candle_date_time_utc);
+      const buyInCooldown = lastBuyTime && (currentTime.getTime() - lastBuyTime.getTime()) < (coinConfig.buyingCooldown * 60 * 1000);
+      const sellInCooldown = lastSellTime && (currentTime.getTime() - lastSellTime.getTime()) < (coinConfig.sellingCooldown * 60 * 1000);
+      
+      if (analysis.signal === 'BUY' && !position && analysis.confidence >= minConfidenceForBuy && !buyInCooldown) {
+          // 최소 거래량 체크
+          const volume24h = currentCandle.candle_acc_trade_volume || 0;
+          if (coinConfig.minVolume && volume24h < coinConfig.minVolume) {
+            continue; // 거래량이 부족하면 건너뛰기
+          }
+          
+          // 매수 비율 계산
+          let buyRatio = coinConfig.defaultBuyRatio || adjustedConfig.buyRatio;
+          
+          // Kelly Criterion 적용 (5회 이상 거래 후)
+          if (coinConfig.useKellyOptimization && (wins + losses) >= 5) {
+            const winRate = (wins + losses) > 0 ? wins / (wins + losses) : 0;
+            const avgWin = wins > 0 ? totalProfit / wins : 0;
+            const avgLoss = losses > 0 ? totalLoss / losses : 1;
+            
+            if (avgLoss > 0) {
+              const b = avgWin / avgLoss;
+              const p = winRate;
+              const q = 1 - p;
+              const kellyFraction = (p * b - q) / b;
+              
+              if (kellyFraction > 0) {
+                // Kelly 비율을 최대 25%로 제한
+                buyRatio = Math.min(kellyFraction, 0.25);
+              } else {
+                // Kelly가 음수면 거래하지 않음
+                continue;
+              }
+            }
+          }
+          
+          // 변동성 기반 조정 (ATR 사용)
+          if (coinConfig.volatilityAdjustment && analysis.atr) {
+            const volatilityAdjustment = 1 / (1 + analysis.atr * 0.01); // ATR이 높을수록 투자 비율 감소
+            buyRatio = buyRatio * volatilityAdjustment;
+          }
+          
+          const buyAmount = capital * buyRatio;
+          
+          // 최소 주문 금액 체크 (5,000원)
+          if (buyAmount < 5000) {
+            continue; // 최소 주문 금액 미달
+          }
+          
           const shares = buyAmount / currentCandle.trade_price;
           
           position = {
@@ -156,35 +241,62 @@ class BacktestService {
           });
           
           capital -= buyAmount;
-        } else if (analysis.signal === 'SELL' && position && analysis.confidence >= minConfidenceForSell) {
-          // 매도
-          const sellAmount = position.amount * adjustedConfig.sellRatio;
-          const sellValue = sellAmount * currentCandle.trade_price;
-          const profit = (currentCandle.trade_price - position.price) * sellAmount;
-          const profitPercent = ((currentCandle.trade_price - position.price) / position.price) * 100;
+          lastBuyTime = position.date;
+        } else if (position) {
+          // 손절/익절 체크
+          const currentPrice = currentCandle.trade_price;
+          const priceChangePercent = ((currentPrice - position.price) / position.price) * 100;
           
-          trades.push({
-            type: 'SELL',
-            date: new Date(currentCandle.candle_date_time_utc),
-            price: currentCandle.trade_price,
-            amount: sellAmount,
-            confidence: analysis.confidence,
-            profit,
-            profitPercent,
-            signal: analysis.scores?.activeSignals?.join(', ') || 'Technical Sell'
-          });
+          const shouldStopLoss = coinConfig.stopLossPercent && priceChangePercent <= -coinConfig.stopLossPercent;
+          const shouldTakeProfit = coinConfig.takeProfitPercent && priceChangePercent >= coinConfig.takeProfitPercent;
+          const shouldSellSignal = analysis.signal === 'SELL' && analysis.confidence >= minConfidenceForSell && !sellInCooldown;
           
-          capital += sellValue;
-          
-          // 포지션 업데이트
-          position.amount -= sellAmount;
-          if (position.amount <= 0.0001) {
-            position = null;
+          if (shouldStopLoss || shouldTakeProfit || shouldSellSignal) {
+            // 매도
+            const sellRatio = (shouldStopLoss || shouldTakeProfit) ? 1.0 : (coinConfig.defaultSellRatio || adjustedConfig.sellRatio);
+            const sellAmount = position.amount * sellRatio;
+            const sellValue = sellAmount * currentCandle.trade_price;
+            const profit = (currentCandle.trade_price - position.price) * sellAmount;
+            const profitPercent = ((currentCandle.trade_price - position.price) / position.price) * 100;
+            
+            let signal = 'Technical Sell';
+            if (shouldStopLoss) signal = 'Stop Loss';
+            else if (shouldTakeProfit) signal = 'Take Profit';
+            else if (analysis.scores?.activeSignals) signal = analysis.scores.activeSignals.join(', ');
+            
+            trades.push({
+              type: 'SELL',
+              date: new Date(currentCandle.candle_date_time_utc),
+              price: currentCandle.trade_price,
+              amount: sellAmount,
+              confidence: shouldStopLoss || shouldTakeProfit ? 100 : analysis.confidence,
+              profit,
+              profitPercent,
+              signal
+            });
+            
+            capital += sellValue;
+            lastSellTime = new Date(currentCandle.candle_date_time_utc);
+            
+            // 성과 추적 (Kelly Criterion용)
+            if (profit > 0) {
+              wins++;
+              totalProfit += profit;
+            } else {
+              losses++;
+              totalLoss += Math.abs(profit);
+            }
+            
+            // 포지션 업데이트
+            position.amount -= sellAmount;
+            if (position.amount <= 0.0001) {
+              position = null;
+            }
+            
+            // 최대/최소 자본 추적
+            maxCapital = Math.max(maxCapital, capital);
+            minCapital = Math.min(minCapital, capital);
           }
-          
-          // 최대/최소 자본 추적
-          maxCapital = Math.max(maxCapital, capital);
-          minCapital = Math.min(minCapital, capital);
         }
     }
     
@@ -292,7 +404,7 @@ class BacktestService {
     };
   }
   
-  // 과거 데이터 가져오기
+  // 과거 데이터 가져오기 (개선된 버전)
   private async fetchHistoricalData(market: string, startDate: Date, endDate: Date): Promise<CandleData[]> {
     const allCandles: CandleData[] = [];
     const candlesPerDay = 288; // 5분봉 기준 하루 288개
@@ -300,37 +412,61 @@ class BacktestService {
     const totalCandles = candlesPerDay * days;
     const requestsNeeded = Math.ceil(totalCandles / 200); // API 한 번에 200개까지
     
-    let lastDateTime: string | null = null;
+    let currentDate = new Date(endDate);
+    let fetchedCount = 0;
     
-    for (let i = 0; i < requestsNeeded; i++) {
+    console.log(`Fetching historical data from ${startDate.toISOString()} to ${endDate.toISOString()}, estimated ${totalCandles} candles...`);
+    
+    // endDate부터 시작해서 startDate까지 역순으로 가져오기
+    while (currentDate > startDate && fetchedCount < totalCandles * 1.5) { // 1.5배로 여유있게 가져오기
       try {
-        const candles = await upbitService.getCandles(market, 200);
+        // to 파라미터를 사용하여 특정 시점까지의 데이터 가져오기
+        const candles = await upbitService.getCandlesWithTime(market, 200, currentDate.toISOString());
         
-        if (candles.length === 0) break;
+        if (candles.length === 0) {
+          console.log('No more data available');
+          break;
+        }
         
-        // 중복 제거
-        const newCandles: CandleData[] = lastDateTime
-          ? candles.filter(c => c.candle_date_time_utc < lastDateTime!)
-          : candles;
+        // 날짜 범위 내의 캔들만 필터링
+        const filteredCandles = candles.filter(candle => {
+          const candleDate = new Date(candle.candle_date_time_utc);
+          return candleDate >= startDate && candleDate <= endDate;
+        });
         
-        allCandles.push(...newCandles);
+        allCandles.push(...filteredCandles);
+        fetchedCount += candles.length;
         
-        if (newCandles.length < 200) break; // 더 이상 데이터 없음
+        // 가장 오래된 캔들의 시간을 다음 요청의 시작점으로 설정
+        const oldestCandle = candles[candles.length - 1];
+        currentDate = new Date(oldestCandle.candle_date_time_utc);
+        currentDate.setMinutes(currentDate.getMinutes() - 1); // 1분 전으로 설정하여 중복 방지
         
-        lastDateTime = newCandles[newCandles.length - 1].candle_date_time_utc;
+        // 진행상황 로그
+        if (fetchedCount % 1000 === 0) {
+          console.log(`Fetched ${fetchedCount} candles, current date: ${currentDate.toISOString()}`);
+        }
         
-        // API 요청 제한 방지
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // API 요청 제한 방지 (분당 600회 제한 고려)
+        await new Promise(resolve => setTimeout(resolve, 110));
       } catch (error) {
         console.error('Failed to fetch historical data:', error);
-        break;
+        // 에러 발생 시 잠시 대기 후 재시도
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
     
-    // 시간순 정렬 (오래된 것부터)
-    return allCandles.sort((a, b) => 
+    // 중복 제거 및 시간순 정렬 (오래된 것부터)
+    const uniqueCandles = Array.from(
+      new Map(allCandles.map(c => [c.candle_date_time_utc, c])).values()
+    );
+    
+    const sortedCandles = uniqueCandles.sort((a, b) => 
       new Date(a.candle_date_time_utc).getTime() - new Date(b.candle_date_time_utc).getTime()
     );
+    
+    console.log(`Total unique candles fetched: ${sortedCandles.length}`);
+    return sortedCandles;
   }
   
   // 백테스트용 동적 파라미터 조정

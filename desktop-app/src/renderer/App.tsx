@@ -24,6 +24,7 @@ import { TradingSettings } from './components/settings/TradingSettings';
 import { AnalysisSettings } from './components/analysis/AnalysisSettings';
 import { LearningStatus } from './components/learning/LearningStatus';
 import { BacktestPanel } from './components/backtest/BacktestPanel';
+import { SimulationStatus } from './components/trading/SimulationStatus';
 import { Analysis } from './types';
 import { TAB_INDEX } from './constants';
 import { formatAIReason, getDecisionText, getDecisionColor } from './utils/formatters';
@@ -219,6 +220,22 @@ const AppContent: React.FC = () => {
           minWidth: 0
         }}>
           <BacktestPanel />
+        </Box>
+        
+        <Box sx={{ 
+          display: activeTab === TAB_INDEX.SIMULATION ? 'flex' : 'none',
+          flex: 1,
+          width: '100%',
+          minWidth: 0,
+          p: { xs: 2, sm: 3, md: 4 },
+          boxSizing: 'border-box'
+        }}>
+          <Box sx={{ width: '100%' }}>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              시뮬레이션 성과
+            </Typography>
+            <SimulationStatus />
+          </Box>
         </Box>
       </Box>
     );
