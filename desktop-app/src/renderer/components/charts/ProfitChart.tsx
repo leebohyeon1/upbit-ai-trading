@@ -23,7 +23,7 @@ interface ProfitChartProps {
   title?: string;
 }
 
-export const ProfitChart: React.FC<ProfitChartProps> = ({ data, title = '수익률 추이' }) => {
+const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data, title = '수익률 추이' }) => {
   const theme = useTheme();
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -94,3 +94,5 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({ data, title = '수익�
     </Card>
   );
 };
+
+export const ProfitChart = React.memo(ProfitChartComponent);

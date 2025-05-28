@@ -21,6 +21,7 @@ import { Dashboard } from './components/dashboard/Dashboard';
 import { PortfolioManager } from './components/portfolio/PortfolioManager';
 import { ApiKeySettings } from './components/settings/ApiKeySettings';
 import { TradingSettings } from './components/settings/TradingSettings';
+import { NotificationSettings } from './components/settings/NotificationSettings';
 import { AnalysisSettings } from './components/analysis/AnalysisSettings';
 import { LearningStatus } from './components/learning/LearningStatus';
 import { BacktestPanel } from './components/backtest/BacktestPanel';
@@ -174,6 +175,9 @@ const AppContent: React.FC = () => {
                     config={context.tradingConfig}
                     onChange={context.updateTradingConfig}
                   />
+                </Grid>
+                <Grid item xs={12}>
+                  <NotificationSettings />
                 </Grid>
               </Grid>
             </Box>

@@ -490,8 +490,24 @@ export const AnalysisSettings: React.FC = () => {
     if (!isInitialized && portfolio.length > 0) {
       const loadDefaultConfigs = async () => {
         try {
-          // Context의 analysisConfigs가 있으면 사용
-          if (analysisConfigs && analysisConfigs.length > 0) {
+          // 저장된 설정 먼저 로드 시도
+          console.log('[AnalysisSettings] Loading saved configs...');
+          const savedConfigs = await (window as any).electronAPI.getAnalysisConfigs();
+          console.log('[AnalysisSettings] Saved configs:', savedConfigs);
+          
+          if (savedConfigs && savedConfigs.length > 0) {
+            const configMap: any = {};
+            savedConfigs.forEach((config: any) => {
+              const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+              configMap[symbol] = config;
+            });
+            console.log('[AnalysisSettings] Config map:', configMap);
+            setLocalConfigs(configMap);
+            
+            // Context에도 업데이트
+            updateAnalysisConfigs(savedConfigs);
+          } else if (analysisConfigs && analysisConfigs.length > 0) {
+            // Context의 analysisConfigs가 있으면 사용
             const configMap: any = {};
             analysisConfigs.forEach((config: any) => {
               const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
@@ -499,48 +515,42 @@ export const AnalysisSettings: React.FC = () => {
             });
             setLocalConfigs(configMap);
           } else {
-            // 저장된 설정 로드
-            const savedConfigs = await (window as any).electronAPI.getAnalysisConfigs();
-            
-            if (savedConfigs && savedConfigs.length > 0) {
-              const configMap: any = {};
-              savedConfigs.forEach((config: any) => {
-                const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
-                configMap[symbol] = config;
-              });
-              setLocalConfigs(configMap);
-            } else {
-              // 기본값 설정
-              const defaultConfigs: any = {};
-              portfolio.filter(p => p.enabled).forEach(coin => {
-                defaultConfigs[coin.symbol] = {
-                  ticker: `KRW-${coin.symbol}`,
-                  rsiOverbought: 75,
-                  rsiOversold: 25,
-                  minVolume: 100000000,
-                  minConfidenceForBuy: 65,
-                  minConfidenceForSell: 60,
-                  maxPositionSize: 150000,
-                  defaultBuyRatio: 0.25,
-                  defaultSellRatio: 0.5,
-                  buyCooldown: 35,
-                  sellCooldown: 25,
-                  stopLossPercent: 7,
-                  takeProfitPercent: 12,
-                  volatilityAdjustment: true,
-                  useKellyOptimization: false,
-                  // buying 객체에 defaultBuyRatio 포함
-                  buying: {
-                    defaultBuyRatio: 0.25
-                  },
-                  // selling 객체에 defaultSellRatio 포함
-                  selling: {
-                    defaultSellRatio: 0.5
+            // 기본값 설정
+            const defaultConfigs: any = {};
+            portfolio.filter(p => p.enabled).forEach(coin => {
+              defaultConfigs[coin.symbol] = {
+                ticker: `KRW-${coin.symbol}`,
+                rsiOverbought: 75,
+                rsiOversold: 25,
+                minVolume: 100000000,
+                minConfidenceForBuy: 65,
+                minConfidenceForSell: 60,
+                maxPositionSize: 150000,
+                defaultBuyRatio: 0.25,
+                defaultSellRatio: 0.5,
+                buyCooldown: 35,
+                sellCooldown: 25,
+                stopLossPercent: 7,
+                takeProfitPercent: 12,
+                volatilityAdjustment: true,
+                useKellyOptimization: false,
+                newsImpactMultiplier: 1.0,
+                indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
+                weightLearning: {
+                  enabled: false,
+                  mode: 'individual' as const,
+                  minTrades: 50,
+                  adjustments: {},
+                  performance: {
+                    trades: 0,
+                    winRate: 0,
+                    avgProfit: 0,
+                    lastUpdated: Date.now()
                   }
-                };
-              });
-              setLocalConfigs(defaultConfigs);
-            }
+                }
+              };
+            });
+            setLocalConfigs(defaultConfigs);
           }
           setIsInitialized(true);
         } catch (error) {
@@ -550,7 +560,7 @@ export const AnalysisSettings: React.FC = () => {
 
       loadDefaultConfigs();
     }
-  }, [isInitialized, portfolio.length, analysisConfigs]);
+  }, [isInitialized, portfolio.length]);
 
   // analysisConfigs가 변경될 때 localConfigs 업데이트 (외부에서 변경된 경우)
   useEffect(() => {
@@ -579,7 +589,6 @@ export const AnalysisSettings: React.FC = () => {
       [coin]: { 
         ...settings, 
         ticker: `KRW-${coin}`
-        // buying/selling 객체 제거 - 모든 필드를 최상위 레벨에 저장
       }
     };
     setLocalConfigs(updatedConfigs);
@@ -591,9 +600,15 @@ export const AnalysisSettings: React.FC = () => {
     
     autoSaveTimer.current = setTimeout(async () => {
       try {
-        const configArray = Object.values(updatedConfigs) as any[];
+        const configArray = Object.values(updatedConfigs).map((config: any) => {
+          // buying/selling 객체 제거하고 평탄화
+          const { buying, selling, ...cleanConfig } = config;
+          return cleanConfig;
+        });
+        console.log('[AnalysisSettings] Auto-saving configs:', configArray);
         await updateAnalysisConfigs(configArray);
-        await (window as any).electronAPI.saveAnalysisConfigs(configArray);
+        const saveResult = await (window as any).electronAPI.saveAnalysisConfigs(configArray);
+        console.log('[AnalysisSettings] Save result:', saveResult);
       } catch (error) {
         console.error('Auto-save failed:', error);
       }
@@ -608,15 +623,7 @@ export const AnalysisSettings: React.FC = () => {
       updatedConfigs[coin] = {
         ...updatedConfigs[coin],
         ...preset.settings,
-        ticker: updatedConfigs[coin].ticker, // ticker는 유지
-        // buying 객체에 defaultBuyRatio 포함
-        buying: {
-          defaultBuyRatio: preset.settings.defaultBuyRatio || 0.1
-        },
-        // selling 객체에 defaultSellRatio 포함
-        selling: {
-          defaultSellRatio: preset.settings.defaultSellRatio || 0.5
-        }
+        ticker: updatedConfigs[coin].ticker // ticker는 유지
       };
     });
     
@@ -624,7 +631,11 @@ export const AnalysisSettings: React.FC = () => {
     
     // 즉시 저장
     try {
-      const configArray = Object.values(updatedConfigs) as any[];
+      const configArray = Object.values(updatedConfigs).map((config: any) => {
+        // buying/selling 객체 제거하고 평탄화
+        const { buying, selling, ...cleanConfig } = config;
+        return cleanConfig;
+      });
       await updateAnalysisConfigs(configArray);
       await (window as any).electronAPI.saveAnalysisConfigs(configArray);
       
@@ -638,7 +649,11 @@ export const AnalysisSettings: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      const configArray = Object.values(localConfigs) as any[];
+      const configArray = Object.values(localConfigs).map((config: any) => {
+        // buying/selling 객체 제거하고 평탄화
+        const { buying, selling, ...cleanConfig } = config;
+        return cleanConfig;
+      });
       await updateAnalysisConfigs(configArray);
       await (window as any).electronAPI.saveAnalysisConfigs(configArray);
       
@@ -670,13 +685,19 @@ export const AnalysisSettings: React.FC = () => {
         takeProfitPercent: 12,
         volatilityAdjustment: true,
         useKellyOptimization: false,
-        // buying 객체에 defaultBuyRatio 포함
-        buying: {
-          defaultBuyRatio: 0.25
-        },
-        // selling 객체에 defaultSellRatio 포함
-        selling: {
-          defaultSellRatio: 0.5
+        newsImpactMultiplier: 1.0,
+        indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
+        weightLearning: {
+          enabled: false,
+          mode: 'individual' as const,
+          minTrades: 50,
+          adjustments: {},
+          performance: {
+            trades: 0,
+            winRate: 0,
+            avgProfit: 0,
+            lastUpdated: Date.now()
+          }
         }
       };
     });
@@ -684,7 +705,11 @@ export const AnalysisSettings: React.FC = () => {
     
     // 즉시 저장
     try {
-      const configArray = Object.values(defaultConfigs) as any[];
+      const configArray = Object.values(defaultConfigs).map((config: any) => {
+        // buying/selling 객체 제거하고 평탄화
+        const { buying, selling, ...cleanConfig } = config;
+        return cleanConfig;
+      });
       await updateAnalysisConfigs(configArray);
       await (window as any).electronAPI.saveAnalysisConfigs(configArray);
       

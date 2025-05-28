@@ -27,6 +27,10 @@ class TradingApp {
     this.setupIpcHandlers();
   }
 
+  public getMainWindow(): BrowserWindow | null {
+    return this.mainWindow;
+  }
+
   private setupApp() {
     // Single instance lock
     const gotTheLock = app.requestSingleInstanceLock();
@@ -44,6 +48,9 @@ class TradingApp {
     });
 
     app.whenReady().then(async () => {
+      // API 키를 먼저 로드
+      await this.loadSavedApiKeys();
+      
       this.createWindow();
       this.createTray();
       this.setupIPC();
@@ -51,14 +58,11 @@ class TradingApp {
       // API 서버는 별도로 실행하도록 변경
       // this.startPythonBackend();
       
-      // 3초 후 초기화 작업 수행
-      setTimeout(async () => {
-        this.loadInitialState();
-        await this.loadSavedApiKeys();
-        await this.loadSavedLearningStates();
-        
-        // 독립적인 거래 엔진 이벤트 연결은 이미 setupTradingEngine()에서 설정됨
-      }, 3000);
+      // 초기 상태 로드
+      this.loadInitialState();
+      await this.loadSavedLearningStates();
+      
+      // 독립적인 거래 엔진 이벤트 연결은 이미 setupTradingEngine()에서 설정됨
     });
 
     app.on('window-all-closed', () => {
@@ -88,8 +92,8 @@ class TradingApp {
     const iconPath = path.join(__dirname, 'icon.png');
     
     this.mainWindow = new BrowserWindow({
-      width: 1270,
-      height: 720,
+      width: 1300,
+      height: 800,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -491,7 +495,9 @@ class TradingApp {
   }
 
   private getAnalysisConfigsPath(): string {
-    return path.join(app.getPath('userData'), 'analysis-configs.json');
+    const configPath = path.join(app.getPath('userData'), 'analysis-configs.json');
+    console.log('[Main] Analysis configs path:', configPath);
+    return configPath;
   }
 
   private getTradingConfigPath(): string {
@@ -603,10 +609,16 @@ class TradingApp {
 
   private async saveAnalysisConfigs(configs: any[]): Promise<boolean> {
     try {
+      const configsPath = this.getAnalysisConfigsPath();
+      console.log('[Main] Saving analysis configs to:', configsPath);
+      console.log('[Main] Configs to save:', JSON.stringify(configs, null, 2));
+      
       fs.writeFileSync(
-        this.getAnalysisConfigsPath(),
+        configsPath,
         JSON.stringify(configs, null, 2)
       );
+      
+      console.log('[Main] Analysis configs saved successfully');
       return true;
     } catch (error) {
       console.error('Failed to save analysis configs:', error);
@@ -617,12 +629,16 @@ class TradingApp {
   private async getAnalysisConfigs(): Promise<any[]> {
     try {
       const configsPath = this.getAnalysisConfigsPath();
+      console.log('[Main] Loading analysis configs from:', configsPath);
       
       if (!fs.existsSync(configsPath)) {
+        console.log('[Main] Analysis configs file does not exist');
         return [];
       }
 
-      return JSON.parse(fs.readFileSync(configsPath, 'utf-8'));
+      const configs = JSON.parse(fs.readFileSync(configsPath, 'utf-8'));
+      console.log('[Main] Loaded analysis configs:', configs);
+      return configs;
     } catch (error) {
       console.error('Failed to load analysis configs:', error);
       return [];
@@ -964,6 +980,7 @@ class TradingApp {
 
   private async loadSavedApiKeys() {
     try {
+      console.log('[Main] Loading saved API keys...');
       const keys = await this.getApiKeys();
       if (keys.upbitAccessKey && keys.upbitSecretKey) {
         // upbitService에도 설정
@@ -975,37 +992,48 @@ class TradingApp {
         tradingEngine.setConfig({
           enableRealTrading: keys.enableRealTrade || false
         });
-        console.log('Saved API keys loaded to both services');
+        console.log('[Main] Saved API keys loaded to both services');
         
-        // API 키 유효성 검증 후 렌더러에 상태 전송
-        console.log('Validating saved API keys...');
-        try {
-          const accounts = await upbitService.getAccounts();
-          const balance = accounts.find((acc: any) => acc.currency === 'KRW')?.balance || '0';
-          console.log('API keys validated successfully');
-          
-          // 앱이 완전히 로드될 때까지 잠시 대기
-          setTimeout(() => {
-            this.mainWindow?.webContents.send('api-key-status', {
-              isValid: true,
-              accessKey: keys.upbitAccessKey,
-              balance: balance
-            });
-          }, 1000);
-        } catch (error) {
-          console.error('Failed to validate saved API keys:', error);
-          // 검증 실패 시에도 상태 전송
-          setTimeout(() => {
-            this.mainWindow?.webContents.send('api-key-status', {
-              isValid: false,
-              accessKey: keys.upbitAccessKey
-            });
-          }, 1000);
-        }
+        // API 키 유효성 검증은 나중에 윈도우가 생성된 후에 수행
+        this.validateAndSendApiKeyStatus(keys);
+      } else {
+        console.log('[Main] No saved API keys found');
       }
     } catch (error) {
-      console.error('Failed to load saved API keys:', error);
+      console.error('[Main] Failed to load saved API keys:', error);
     }
+  }
+  
+  private async validateAndSendApiKeyStatus(keys: any) {
+    // 윈도우가 생성될 때까지 대기
+    const checkWindow = async () => {
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        console.log('[Main] Validating saved API keys...');
+        try {
+          const upbitService = require('./upbit-service').default;
+          const accounts = await upbitService.getAccounts();
+          const balance = accounts.find((acc: any) => acc.currency === 'KRW')?.balance || '0';
+          console.log('[Main] API keys validated successfully');
+          
+          this.mainWindow.webContents.send('api-key-status', {
+            isValid: true,
+            accessKey: keys.upbitAccessKey,
+            balance: balance
+          });
+        } catch (error) {
+          console.error('[Main] Failed to validate saved API keys:', error);
+          this.mainWindow.webContents.send('api-key-status', {
+            isValid: false,
+            accessKey: keys.upbitAccessKey
+          });
+        }
+      } else {
+        // 윈도우가 아직 생성되지 않았으면 잠시 후 다시 시도
+        setTimeout(checkWindow, 500);
+      }
+    };
+    
+    checkWindow();
   }
 
   private setupIpcHandlers() {
@@ -1455,8 +1483,55 @@ class TradingApp {
       }
     });
     
+    // 알림 설정 관련 핸들러
+    ipcMain.handle('get-notification-settings', async () => {
+      try {
+        const notificationService = require('./notification-service').default;
+        return notificationService.getSettings();
+      } catch (error) {
+        console.error('Failed to get notification settings:', error);
+        return null;
+      }
+    });
+    
+    ipcMain.handle('save-notification-settings', async (event, settings) => {
+      try {
+        const notificationService = require('./notification-service').default;
+        notificationService.saveSettings(settings);
+        return true;
+      } catch (error) {
+        console.error('Failed to save notification settings:', error);
+        return false;
+      }
+    });
+    
+    ipcMain.handle('get-notification-history', async (event, limit) => {
+      try {
+        const notificationService = require('./notification-service').default;
+        return notificationService.getHistory(limit);
+      } catch (error) {
+        console.error('Failed to get notification history:', error);
+        return [];
+      }
+    });
+    
+    ipcMain.handle('clear-notification-history', async () => {
+      try {
+        const notificationService = require('./notification-service').default;
+        notificationService.clearHistory();
+        return true;
+      } catch (error) {
+        console.error('Failed to clear notification history:', error);
+        return false;
+      }
+    });
+    
     console.log('All IPC handlers registered successfully');
   }
 }
 
-new TradingApp();
+const tradingApp = new TradingApp();
+
+export function getMainWindow(): BrowserWindow | null {
+  return tradingApp.getMainWindow();
+}

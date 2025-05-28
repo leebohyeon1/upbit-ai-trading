@@ -37,6 +37,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Simulation methods
   getSimulationStatus: () => ipcRenderer.invoke('get-simulation-status'),
   
+  // Notification methods
+  getNotificationSettings: () => ipcRenderer.invoke('get-notification-settings'),
+  saveNotificationSettings: (settings) => ipcRenderer.invoke('save-notification-settings', settings),
+  getNotificationHistory: (limit) => ipcRenderer.invoke('get-notification-history', limit),
+  clearNotificationHistory: () => ipcRenderer.invoke('clear-notification-history'),
+  
   // Trade History methods
   getTradeHistory: () => ipcRenderer.invoke('get-trade-history'),
   getProfitHistory: (days) => ipcRenderer.invoke('get-profit-history', days),

@@ -6,6 +6,7 @@ import { CoinSpecificConfig } from './trading-config';
 import { LearningService } from './learning-service';
 import { ApiClient } from './api-client';
 import kellyService from './kelly-criterion-service';
+import notificationService from './notification-service';
 
 export interface TradingConfig {
   enableRealTrading: boolean;
@@ -249,6 +250,15 @@ class TradingEngine extends EventEmitter {
       } else {
         console.log('Switching to real trading mode');
       }
+      
+      // 모드 변경 알림
+      notificationService.notifySystemStatus({
+        type: 'started',
+        message: this.config.enableRealTrading ? '실거래 모드 활성화' : '시뮬레이션 모드 활성화',
+        details: this.config.enableRealTrading ? 
+          '실제 자금으로 거래가 시작됩니다. 주의하세요!' : 
+          '가상 자금으로 시뮬레이션이 시작됩니다.'
+      });
     }
     
     console.log('Trading config updated:', {
@@ -296,10 +306,25 @@ class TradingEngine extends EventEmitter {
 
       this.emit('tradingStarted');
       console.log('Trading engine started');
+      
+      // 자동매매 시작 알림
+      notificationService.notifySystemStatus({
+        type: 'started',
+        message: '자동매매 시작',
+        details: `분석 주기: ${analysisIntervalMs / 1000}초`
+      });
+      
       return true;
     } catch (error) {
       console.error('Failed to start trading engine:', error);
       this._isRunning = false;
+      
+      // 오류 알림
+      notificationService.notifyError({
+        title: '자동매매 시작 실패',
+        message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      });
+      
       return false;
     }
   }
@@ -321,6 +346,14 @@ class TradingEngine extends EventEmitter {
 
     this.emit('tradingStopped');
     console.log('Trading engine stopped');
+    
+    // 자동매매 중지 알림
+    notificationService.notifySystemStatus({
+      type: 'stopped',
+      message: '자동매매 중지',
+      details: '자동매매가 중지되었습니다.'
+    });
+    
     return true;
   }
 
@@ -766,6 +799,14 @@ class TradingEngine extends EventEmitter {
           };
           this.recordTrade(trade);
           
+          // 알림 발송
+          notificationService.notifyTradeExecuted({
+            market,
+            type: 'BUY',
+            price: analysis.currentPrice,
+            amount: parseFloat(buyAmountStr)
+          });
+          
           // 학습 시스템에 매수 진입점 기록
           this.recordEntryForLearning(market, technical, analysis);
           
@@ -892,6 +933,16 @@ class TradingEngine extends EventEmitter {
             profit
           };
           this.recordTrade(trade);
+          
+          // 알림 발송
+          notificationService.notifyTradeExecuted({
+            market,
+            type: 'SELL',
+            price: analysis.currentPrice,
+            amount: sellValue,
+            profit: sellValue * (profit / 100),
+            profitRate: profit
+          });
           
           // 학습 시스템에 거래 결과 기록
           this.recordTradeResultForLearning(market, profit, technical, analysis);

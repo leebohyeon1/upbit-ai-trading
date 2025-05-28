@@ -19,7 +19,7 @@ const COLORS = [
   '#82CA9D', '#FFC658', '#8DD1E1', '#A4DE6C', '#FFD93D'
 ];
 
-export const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({ 
+const PortfolioPieChartComponent: React.FC<PortfolioPieChartProps> = ({ 
   data, 
   title = '포트폴리오 구성' 
 }) => {
@@ -84,3 +84,5 @@ export const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
     </Card>
   );
 };
+
+export const PortfolioPieChart = React.memo(PortfolioPieChartComponent);

@@ -15,7 +15,7 @@ interface StatCardProps {
   color?: 'primary' | 'secondary' | 'success' | 'error' | 'warning' | 'info' | 'grey';
 }
 
-export const StatCard: React.FC<StatCardProps> = ({
+const StatCardComponent: React.FC<StatCardProps> = ({
   icon,
   title,
   value,
@@ -59,3 +59,5 @@ export const StatCard: React.FC<StatCardProps> = ({
     </Card>
   );
 };
+
+export const StatCard = React.memo(StatCardComponent);

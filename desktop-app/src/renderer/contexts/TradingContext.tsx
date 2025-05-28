@@ -219,6 +219,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
 
         const savedAnalysisConfigs = await (window as any).electronAPI.getAnalysisConfigs();
         if (savedAnalysisConfigs && savedAnalysisConfigs.length > 0) {
+          console.log('[TradingContext] Loaded analysis configs from file:', savedAnalysisConfigs);
           setAnalysisConfigs(savedAnalysisConfigs);
         }
 
@@ -276,14 +277,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
         setTradingConfig(defaultTradingConfig);
       }
 
-      const savedAnalysisConfigs = localStorage.getItem('analysisConfigs');
-      if (savedAnalysisConfigs) {
-        try {
-          setAnalysisConfigs(JSON.parse(savedAnalysisConfigs));
-        } catch (e) {
-          console.error('Failed to parse saved analysis configs:', e);
-        }
-      }
+      // analysisConfigs는 electronAPI에서만 로드 (localStorage 제거)
       
       console.log('[TradingContext] Setting isLoading to false');
       setIsLoading(false);

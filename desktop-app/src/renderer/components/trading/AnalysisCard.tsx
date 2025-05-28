@@ -46,7 +46,7 @@ const getFailureIcon = (reason?: TradeFailureReason) => {
   }
 };
 
-export const AnalysisCard: React.FC<AnalysisCardProps> = ({
+const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
   analysis,
   onClick,
   showAI = false
@@ -175,3 +175,5 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({
     </Card>
   );
 };
+
+export const AnalysisCard = React.memo(AnalysisCardComponent);
