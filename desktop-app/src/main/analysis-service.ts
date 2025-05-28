@@ -646,32 +646,18 @@ class AnalysisService {
       return score * (indicatorWeights[indicatorType] || 1.0);
     };
 
-    // 가중치를 적용한 점수 계산
+    // 가중치를 적용한 점수 계산 (단순화)
     let buyScore = 0;
     let sellScore = 0;
 
-    // RSI 관련 신호들
-    buyScore += buySignalsWithWeight.slice(0, 5).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.rsi;
-    sellScore += sellSignalsWithWeight.slice(0, 5).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.rsi;
-
-    // MACD 관련 신호들 (인덱스 조정 필요)
-    buyScore += buySignalsWithWeight.slice(10, 12).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.macd;
-    sellScore += sellSignalsWithWeight.slice(9, 11).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.macd;
-
-    // 볼린저 밴드 관련
-    buyScore += buySignalsWithWeight.slice(5, 7).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.bollinger;
-    sellScore += sellSignalsWithWeight.slice(5, 7).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.bollinger;
-
-    // 거래량 관련
-    buyScore += buySignalsWithWeight.slice(12, 15).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.volume;
-    sellScore += sellSignalsWithWeight.slice(11, 14).filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0) * indicatorWeights.volume;
-
-    // 나머지 신호들 (기본 가중치)
-    const remainingBuySignals = buySignalsWithWeight.slice(15);
-    const remainingSellSignals = sellSignalsWithWeight.slice(14);
+    // 단순히 모든 신호의 가중치를 합산
+    buyScore = buySignalsWithWeight
+      .filter(s => s.condition)
+      .reduce((sum, s) => sum + s.weight, 0);
     
-    buyScore += remainingBuySignals.filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0);
-    sellScore += remainingSellSignals.filter(s => s.condition).reduce((sum, s) => sum + s.weight, 0);
+    sellScore = sellSignalsWithWeight
+      .filter(s => s.condition)
+      .reduce((sum, s) => sum + s.weight, 0);
 
     // 최대 가능 점수 (모든 조건이 true일 때)
     const maxBuyScore = buySignalsWithWeight.reduce((sum, signal) => sum + signal.weight, 0);
@@ -680,19 +666,41 @@ class AnalysisService {
     // 정규화된 점수 (0-100) - NaN 방지
     const normalizedBuyScore = maxBuyScore > 0 ? (buyScore / maxBuyScore) * 100 : 0;
     const normalizedSellScore = maxSellScore > 0 ? (sellScore / maxSellScore) * 100 : 0;
+    
+    // 디버깅용 로그
+    console.log(`[${candles[0].market}] 신호 점수:`, {
+      buyScore: buyScore.toFixed(2),
+      sellScore: sellScore.toFixed(2),
+      maxBuyScore: maxBuyScore.toFixed(2),
+      maxSellScore: maxSellScore.toFixed(2),
+      normalizedBuyScore: normalizedBuyScore.toFixed(2),
+      normalizedSellScore: normalizedSellScore.toFixed(2),
+      activeBuySignals: buySignalsWithWeight.filter(s => s.condition).length,
+      activeSellSignals: sellSignalsWithWeight.filter(s => s.condition).length
+    });
 
-    // 더 정교한 신호 결정
-    if (normalizedBuyScore > 25 && normalizedBuyScore > normalizedSellScore * 1.2) {
+    // 더 정교한 신호 결정 (임계값 낮춤)
+    if (normalizedBuyScore > 15 && normalizedBuyScore > normalizedSellScore * 1.3) {
       signal = 'BUY';
-      confidence = Math.min(50 + normalizedBuyScore * 0.45, 95); // 50-95% 범위
-    } else if (normalizedSellScore > 25 && normalizedSellScore > normalizedBuyScore * 1.2) {
+      confidence = Math.min(40 + normalizedBuyScore * 0.6, 95); // 40-95% 범위
+    } else if (normalizedSellScore > 15 && normalizedSellScore > normalizedBuyScore * 1.3) {
       signal = 'SELL';
-      confidence = Math.min(50 + normalizedSellScore * 0.45, 95); // 50-95% 범위
+      confidence = Math.min(40 + normalizedSellScore * 0.6, 95); // 40-95% 범위
     } else {
       signal = 'HOLD';
-      // HOLD일 때도 어느 쪽에 더 가까운지에 따라 신뢰도 조정
+      // HOLD일 때도 더 넓은 범위의 신뢰도 허용
+      const maxScore = Math.max(normalizedBuyScore, normalizedSellScore);
       const scoreDiff = Math.abs(normalizedBuyScore - normalizedSellScore);
-      confidence = Math.max(30, 50 - scoreDiff * 0.5); // 30-50% 범위
+      
+      if (maxScore > 10) {
+        // 어느 한쪽이 10% 이상이면 더 높은 신뢰도
+        confidence = 35 + maxScore * 0.3 + scoreDiff * 0.2;
+      } else {
+        // 둘 다 낮으면 낮은 신뢰도
+        confidence = 20 + maxScore * 0.5;
+      }
+      
+      confidence = Math.min(Math.max(confidence, 20), 60); // 20-60% 범위
     }
     
     // NaN 체크 및 기본값 설정

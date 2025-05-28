@@ -36,17 +36,17 @@ export const AVAILABLE_COINS = [
   { symbol: 'STX', name: '스택스' }
 ];
 
-// 기본 설정값
+// 기본 설정값 (보수적인 전략)
 export const DEFAULT_CONFIG = {
-  BUY_RATIO: 0.3,
-  SELL_RATIO: 0.5,
-  MAX_INVESTMENT_PER_COIN: 100000,
-  MIN_CONFIDENCE_BUY: 60,
-  MIN_CONFIDENCE_SELL: 70,
-  STOP_LOSS: 5,
-  TAKE_PROFIT: 10,
-  BUY_COOLDOWN: 300,
-  SELL_COOLDOWN: 180,
+  BUY_RATIO: 0.1,  // 10%만 투자 (리스크 최소화)
+  SELL_RATIO: 0.3,  // 30%만 매도 (분할 매도로 추가 상승 기회 확보)
+  MAX_INVESTMENT_PER_COIN: 50000,  // 코인당 최대 5만원 (분산 투자)
+  MIN_CONFIDENCE_BUY: 65,  // 높은 확신이 있을 때만 매수
+  MIN_CONFIDENCE_SELL: 45,  // 조금이라도 위험 신호가 있으면 매도
+  STOP_LOSS: 3,  // 3% 손실에서 손절 (빠른 손절)
+  TAKE_PROFIT: 8,  // 8% 수익에서 일부 익절
+  BUY_COOLDOWN: 600,  // 10분 매수 쿨타임 (신중한 진입)
+  SELL_COOLDOWN: 60,   // 1분 매도 쿨타임 (빠른 탈출 가능)
   RSI_PERIOD: 14,
   RSI_OVERBOUGHT: 70,
   RSI_OVERSOLD: 30,

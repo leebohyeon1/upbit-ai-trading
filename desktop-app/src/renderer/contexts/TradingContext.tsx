@@ -56,38 +56,38 @@ interface TradingProviderProps {
   children: React.ReactNode;
 }
 
-// 기본 거래 설정을 컴포넌트 외부에 정의
+// 기본 거래 설정을 컴포넌트 외부에 정의 (보수적 전략)
 const defaultTradingConfig: TradingConfig = {
   buyRatio: DEFAULT_CONFIG.BUY_RATIO,
   sellRatio: DEFAULT_CONFIG.SELL_RATIO,
   maxInvestmentPerCoin: DEFAULT_CONFIG.MAX_INVESTMENT_PER_COIN,
   enableRealTrading: false,
   dynamicConfidence: true,
-  riskLevel: 3,
-  useKellyCriterion: false,
-  maxKellyFraction: 0.25, // Kelly Criterion 기본값 추가
-  volatilityWindow: 20,
-  correlationThreshold: 0.7,
+  riskLevel: 2,  // 낮은 리스크 레벨
+  useKellyCriterion: true,  // Kelly Criterion 사용 (최적 베팅 크기)
+  maxKellyFraction: 0.15,  // 보수적인 Kelly 비율
+  volatilityWindow: 30,  // 더 긴 변동성 관찰 기간
+  correlationThreshold: 0.6,  // 더 엄격한 상관관계 임계값
   minConfidenceForBuy: DEFAULT_CONFIG.MIN_CONFIDENCE_BUY,
   minConfidenceForSell: DEFAULT_CONFIG.MIN_CONFIDENCE_SELL,
-  confidenceWindowSize: 10,
-  buyingCooldown: 30,
-  sellingCooldown: 20,
+  confidenceWindowSize: 15,  // 더 긴 신뢰도 관찰 기간
+  buyingCooldown: DEFAULT_CONFIG.BUY_COOLDOWN / 60,  // 분 단위로 변환
+  sellingCooldown: DEFAULT_CONFIG.SELL_COOLDOWN / 60,  // 분 단위로 변환
   decisionThresholds: {
     buyThreshold: 0.15,
     sellThreshold: -0.2
   },
   scores: {
-    rsi: 1.0,
-    bollinger: 1.0,
-    volume: 0.8,
-    trend: 0.9,
-    volatility: 0.7,
-    orderbook: 0.6,
-    whaleDetection: 0.5,
-    atr: 0.8,
-    marketSentiment: 0.7,
-    kimchiPremium: 0.6
+    rsi: 1.2,  // RSI 중요도 높임 (과매수/과매도 중요)
+    bollinger: 1.1,  // 볼린저 밴드 중요
+    volume: 1.0,  // 거래량 중요
+    trend: 1.0,  // 추세 중요
+    volatility: 1.3,  // 변동성 매우 중요 (위험 관리)
+    orderbook: 0.7,  // 호가 분석
+    whaleDetection: 0.9,  // 고래 감지 중요
+    atr: 1.1,  // ATR 중요 (변동성 측정)
+    marketSentiment: 0.8,  // 시장 심리
+    kimchiPremium: 0.5  // 김프는 상대적으로 덜 중요
   },
   useAI: false,
   aiProvider: 'claude',
@@ -95,14 +95,14 @@ const defaultTradingConfig: TradingConfig = {
     buying: {
       defaultBuyRatio: DEFAULT_CONFIG.BUY_RATIO,
       confidenceBasedAdjustment: true,
-      highConfidenceMultiplier: 1.8,
-      lowConfidenceMultiplier: 0.6
+      highConfidenceMultiplier: 1.5,  // 높은 신뢰도에서도 보수적
+      lowConfidenceMultiplier: 0.3   // 낮은 신뢰도에서는 매우 적게
     },
     selling: {
       defaultSellRatio: DEFAULT_CONFIG.SELL_RATIO,
       confidenceBasedAdjustment: true,
-      highConfidenceMultiplier: 1.5,
-      lowConfidenceMultiplier: 0.7
+      highConfidenceMultiplier: 2.0,  // 위험 신호시 더 많이 매도
+      lowConfidenceMultiplier: 1.0   // 약한 신호에서도 기본 비율 유지
     }
   }
 };
@@ -220,6 +220,13 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           const mergedConfig = {
             ...defaultTradingConfig,
             ...parsedConfig,
+            // 최소 신뢰도는 기본값 사용 (이전 값이 60, 70인 경우)
+            minConfidenceForBuy: parsedConfig.minConfidenceForBuy === 60 ? 
+              DEFAULT_CONFIG.MIN_CONFIDENCE_BUY : 
+              (parsedConfig.minConfidenceForBuy || DEFAULT_CONFIG.MIN_CONFIDENCE_BUY),
+            minConfidenceForSell: parsedConfig.minConfidenceForSell === 70 ? 
+              DEFAULT_CONFIG.MIN_CONFIDENCE_SELL : 
+              (parsedConfig.minConfidenceForSell || DEFAULT_CONFIG.MIN_CONFIDENCE_SELL),
             // 중첩된 객체들도 올바르게 병합
             decisionThresholds: {
               ...defaultTradingConfig.decisionThresholds,

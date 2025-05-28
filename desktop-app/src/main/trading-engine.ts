@@ -241,16 +241,33 @@ class TradingEngine extends EventEmitter {
   }
 
   updateConfig(newConfig: Partial<TradingConfig>) {
+    const previousMode = this.config.enableRealTrading;
     this.config = { ...this.config, ...newConfig };
+    
     // maxInvestmentPerCoin이 0이면 기본값 설정
     if (this.config.maxInvestmentPerCoin === 0) {
       this.config.maxInvestmentPerCoin = 100000; // 10만원 기본값
     }
+    
+    // 모드가 변경되었을 때 가상 포트폴리오 초기화
+    if (previousMode !== this.config.enableRealTrading) {
+      if (!this.config.enableRealTrading) {
+        // 시뮬레이션 모드로 전환 시 가상 포트폴리오 초기화
+        console.log('Switching to simulation mode - resetting virtual portfolio');
+        this.virtualKRW = 10000000; // 1천만원으로 초기화
+        this.virtualPortfolio.clear();
+        this.virtualTradeHistory = [];
+      } else {
+        console.log('Switching to real trading mode');
+      }
+    }
+    
     console.log('Trading config updated:', {
       enableRealTrading: this.config.enableRealTrading,
       buyRatio: this.config.buyRatio,
       sellRatio: this.config.sellRatio,
-      maxInvestmentPerCoin: this.config.maxInvestmentPerCoin
+      maxInvestmentPerCoin: this.config.maxInvestmentPerCoin,
+      modeChanged: previousMode !== this.config.enableRealTrading
     });
   }
 
