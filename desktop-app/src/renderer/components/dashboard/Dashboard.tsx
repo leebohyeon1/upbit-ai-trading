@@ -61,6 +61,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // 디버깅용 로그
   useEffect(() => {
     console.log('[Dashboard] profitHistory:', profitHistory);
+    console.log('[Dashboard] profitHistory details:', JSON.stringify(profitHistory, null, 2));
     console.log('[Dashboard] portfolioChartData:', portfolioChartData);
   }, [profitHistory, portfolioChartData]);
   
@@ -392,18 +393,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Grid container spacing={3}>
           {/* 수익률 차트 */}
           <Grid item xs={12} md={8}>
-            {profitHistory.length > 0 ? (
-              <ProfitChart data={profitHistory} />
-            ) : (
-              <Card sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <LoadingAnimation />
-                  <Typography variant="body2" color="text.secondary" mt={2}>
-                    수익률 데이터를 불러오는 중...
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
+            <ProfitChart data={profitHistory} />
           </Grid>
           
           {/* 포트폴리오 구성 차트 */}

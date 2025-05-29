@@ -38,7 +38,16 @@
       "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"simulateBuyOrder|simulateSellOrder\" trading-engine.ts)",
       "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getSimulationStatus|calculateTotalPortfolioValue\" trading-engine.ts)",
       "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 10 -B 5 \"isSimulationMode.*getAccounts|getAccounts.*isSimulationMode\" trading-engine.ts)",
-      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getAccounts\" trading-engine.ts)"
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getAccounts\" trading-engine.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"interface.*TradeHistory|type.*TradeHistory\" .)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"TradeHistory\" . --type ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"profitHistory.*=|setProfitHistory\" contexts/TradingContext.tsx)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getTradingHistory\" main.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 10 -B 5 \"getTradingHistory\" main.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getTradingHistory\" .)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 15 -B 5 \"get-trading-history\" main.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 30 \"거래 내역 조회 \\(수익률 차트용\\)\" main.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 50 \"초기 자산 계산\" main.ts)"
     ],
     "deny": []
   },

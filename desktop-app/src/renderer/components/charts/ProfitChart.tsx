@@ -26,10 +26,16 @@ interface ProfitChartProps {
 const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data, title = '수익률 추이' }) => {
   const theme = useTheme();
 
+  // 데이터 검증 및 기본값 처리
+  const chartData = data && data.length > 0 ? data : [];
+  
+  console.log('[ProfitChart] Received data:', data);
+  console.log('[ProfitChart] Chart data:', chartData);
+  
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <Card sx={{ p: 1 }}>
+        <Card sx={{ p: 1, minWidth: 150 }}>
           <Typography variant="caption" color="text.secondary">
             {label}
           </Typography>
@@ -47,6 +53,31 @@ const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data, title = '수�
     return null;
   };
 
+  // 데이터가 없는 경우 처리
+  if (chartData.length === 0) {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            {title}
+          </Typography>
+          <Box sx={{ 
+            width: '100%', 
+            height: 300, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: theme.palette.grey[50]
+          }}>
+            <Typography variant="body2" color="text.secondary">
+              수익률 데이터가 없습니다
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardContent>
@@ -55,7 +86,7 @@ const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data, title = '수�
         </Typography>
         <Box sx={{ width: '100%', height: 300 }}>
           <ResponsiveContainer>
-            <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#4caf50" stopOpacity={0.8}/>
@@ -82,10 +113,13 @@ const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data, title = '수�
               <Area
                 type="monotone"
                 dataKey="profitRate"
-                stroke="#4caf50"
+                stroke={chartData.some(d => d.profitRate >= 0) ? "#4caf50" : "#f44336"}
+                strokeWidth={2}
                 fillOpacity={1}
-                fill="url(#colorProfit)"
+                fill={chartData.some(d => d.profitRate >= 0) ? "url(#colorProfit)" : "url(#colorLoss)"}
                 animationDuration={1000}
+                dot={{ r: 4, strokeWidth: 2 }}
+                activeDot={{ r: 6, strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>

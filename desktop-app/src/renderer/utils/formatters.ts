@@ -1,7 +1,9 @@
 // 포맷팅 관련 유틸리티 함수들
 
 export const formatNumber = (num: number | string, decimals: number = 0): string => {
+  if (num === undefined || num === null) return '0';
   const value = typeof num === 'string' ? parseFloat(num) : num;
+  if (isNaN(value)) return '0';
   return value.toLocaleString('ko-KR', { 
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals 
@@ -13,7 +15,9 @@ export const formatPercent = (value: number, decimals: number = 1): string => {
 };
 
 export const formatCurrency = (value: number | string, currency: string = 'KRW'): string => {
+  if (value === undefined || value === null) return currency === 'KRW' ? '₩0' : '0';
   const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return currency === 'KRW' ? '₩0' : '0';
   if (currency === 'KRW') {
     return `₩${formatNumber(num)}`;
   }

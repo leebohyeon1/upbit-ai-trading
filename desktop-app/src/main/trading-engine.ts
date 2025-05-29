@@ -76,6 +76,7 @@ export interface TradeHistory {
   type: 'BUY' | 'SELL';
   price: number;
   amount: number;
+  volume?: number; // 코인 수량 (시뮬레이션용)
   confidence: number;
   timestamp: number;
   profit?: number;

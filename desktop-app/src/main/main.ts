@@ -1423,46 +1423,78 @@ class TradingApp {
           }
         });
         
-        // 실제 거래 내역 기반 수익률 계산
-        // trading-engine의 거래 내역 사용
-        const tradeHistory = tradingEngine.getTradeHistory();
-        console.log('[Main] Trade history:', tradeHistory);
-        const initialAssets = 10000000; // 초기 투자금 1천만원 가정
+        // 거래 설정 확인 (시뮬레이션 vs 실거래)
+        const tradingConfig = await this.getTradingConfig();
+        const isSimulation = !tradingConfig.enableRealTrading;
+        console.log('[Main] Trading mode:', isSimulation ? 'Simulation' : 'Real');
         
-        // 날짜별로 그룹화
-        const dailyProfits = new Map<string, number>();
-        let cumulativeProfit = 0;
-        
-        // 오늘부터 7일 전까지의 날짜 생성
-        for (let i = 6; i >= 0; i--) {
-          const date = new Date(now);
-          date.setDate(date.getDate() - i);
-          const dateKey = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+        if (isSimulation) {
+          // 시뮬레이션 모드: trading-engine에서 시뮬레이션 상태 가져오기
+          const simulationStatus = tradingEngine.getSimulationStatus();
+          console.log('[Main] Simulation status:', simulationStatus);
           
-          // 해당 날짜의 거래 수익 계산
-          const dayStart = new Date(date);
-          dayStart.setHours(0, 0, 0, 0);
-          const dayEnd = new Date(date);
-          dayEnd.setHours(23, 59, 59, 999);
+          const initialAssets = 10000000; // 시뮬레이션 초기 자산 1천만원
+          const currentTotalValue = simulationStatus.totalValue;
+          const currentProfitRate = ((currentTotalValue - initialAssets) / initialAssets) * 100;
           
-          const dayTrades = tradeHistory.filter((trade: any) => 
-            trade.timestamp >= dayStart.getTime() && 
-            trade.timestamp <= dayEnd.getTime() &&
-            trade.type === 'SELL' &&
-            trade.profit !== undefined
-          );
+          // 지난 7일간 시뮬레이션 수익률 추이 생성
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date(now);
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            
+            // 시뮬레이션에서는 점진적 수익률 변화 시뮬레이션
+            const progressRatio = (6 - i) / 6; // 0 ~ 1
+            const profitRate = currentProfitRate * progressRatio;
+            const totalValue = initialAssets + (initialAssets * profitRate / 100);
+            
+            history.push({
+              time: dateKey,
+              profitRate: profitRate,
+              totalValue: totalValue
+            });
+          }
+        } else {
+          // 실거래 모드: 실제 거래 내역 기반 계산
+          const tradeHistory = tradingEngine.getTradeHistory();
+          console.log('[Main] Trade history count:', tradeHistory.length);
           
-          const dayProfit = dayTrades.reduce((sum: number, trade: any) => sum + (trade.profit || 0), 0);
-          cumulativeProfit += dayProfit;
+          // 실제 투자원금 계산
+          const krwAccount = accounts.find((acc: any) => acc.currency === 'KRW');
+          const krwBalance = krwAccount ? parseFloat(krwAccount.balance) : 0;
           
-          const currentAssets = totalAssets + cumulativeProfit;
-          const profitRate = (cumulativeProfit / initialAssets) * 100;
-          
-          history.push({
-            time: dateKey,
-            profitRate: profitRate,
-            totalValue: currentAssets
+          let totalInvested = krwBalance;
+          accounts.filter((acc: any) => acc.currency !== 'KRW').forEach((acc: any) => {
+            const avgBuyPrice = parseFloat(acc.avg_buy_price || '0');
+            const balance = parseFloat(acc.balance || '0');
+            totalInvested += avgBuyPrice * balance;
           });
+          
+          const initialAssets = totalInvested || 10000000;
+          
+          // 날짜별 수익률 계산
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date(now);
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            
+            // 현재 평가액 (모든 날짜에 대해 현재 가격 사용, 향후 개선 가능)
+            let currentTotalAssets = krwBalance;
+            accounts.filter((acc: any) => acc.currency !== 'KRW').forEach((acc: any) => {
+              const ticker = tickers.find((t: any) => t.market === `KRW-${acc.currency}`);
+              if (ticker) {
+                currentTotalAssets += parseFloat(acc.balance) * ticker.trade_price;
+              }
+            });
+            
+            const profitRate = ((currentTotalAssets - initialAssets) / initialAssets) * 100;
+            
+            history.push({
+              time: dateKey,
+              profitRate: profitRate,
+              totalValue: currentTotalAssets
+            });
+          }
         }
         
         console.log('[Main] Returning history:', history);

@@ -372,7 +372,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       if (history && history.length > 0) {
         setProfitHistory(history);
       } else {
-        console.log('[TradingContext] No profit history data, setting empty array');
+         console.log('[TradingContext] No profit history data, setting empty array');
         // 데이터가 없으면 빈 배열 설정
         setProfitHistory([]);
       }
@@ -391,7 +391,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   // 주기적으로 수익률 히스토리 업데이트
   useEffect(() => {
     fetchProfitHistory();
-    const interval = setInterval(fetchProfitHistory, 60000); // 1분마다 업데이트
+    const interval = setInterval(fetchProfitHistory, 300000); // 5분마다 업데이트 (너무 자주 호출하지 않도록)
     return () => clearInterval(interval);
   }, [fetchProfitHistory]);
 

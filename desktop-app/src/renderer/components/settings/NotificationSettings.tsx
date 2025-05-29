@@ -311,14 +311,14 @@ export const NotificationSettings: React.FC = () => {
                       </Box>
                     }
                     secondary={
-                      <>
-                        <Typography variant="body2" color="text.secondary">
+                      <Box>
+                        <Box component="span" display="block" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
                           {item.body}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        </Box>
+                        <Box component="span" display="block" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.5 }}>
                           {new Date(item.timestamp).toLocaleString()}
-                        </Typography>
-                      </>
+                        </Box>
+                      </Box>
                     }
                   />
                 </ListItem>
