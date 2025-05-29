@@ -313,7 +313,7 @@ export const AutoRebalancingPanel: React.FC = () => {
                 <Box mt={2}>
                   <Alert severity="info" icon={<InfoIcon />}>
                     {nextRebalance ? (
-                      <>다음 리밸런싱: {nextRebalance.toLocaleString()}</>
+                      <>다음 리밸런싱: {new Date(nextRebalance).toLocaleString()}</>
                     ) : (
                       <>리밸런싱 스케줄이 설정되지 않았습니다.</>
                     )}
@@ -413,7 +413,7 @@ export const AutoRebalancingPanel: React.FC = () => {
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          ₩{position.value.toLocaleString()}
+                          ₩{position.value?.toLocaleString() || 0}
                         </TableCell>
                         <TableCell align="center">
                           <Chip
