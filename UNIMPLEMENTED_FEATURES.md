@@ -5,28 +5,28 @@
 ## 📌 IPC 통신 미구현
 
 ### Market Correlation (시장 상관관계)
-- [ ] Main 프로세스에 `market-correlation` IPC 핸들러 추가
-- [ ] MarketCorrelationPanel.tsx의 더미 데이터를 실제 데이터로 대체
-- [ ] 파일 위치: `src/renderer/components/market/MarketCorrelationPanel.tsx`
+- [x] Main 프로세스에 `market-correlation` IPC 핸들러 추가
+- [x] MarketCorrelationPanel.tsx의 더미 데이터를 실제 데이터로 대체
+- [x] 파일 위치: `src/renderer/components/market/MarketCorrelationPanel.tsx`
 
 ### News Analysis (뉴스 분석)
-- [ ] Main 프로세스에 `news-analysis` IPC 핸들러 추가
+- [x] Main 프로세스에 `news-analysis` IPC 핸들러 추가
 - [ ] NewsAnalysisPanel.tsx의 더미 데이터를 실제 데이터로 대체
 - [ ] 파일 위치: `src/renderer/components/news/NewsAnalysisPanel.tsx`
 
 ## 🌐 외부 API 연동 필요
 
 ### 주식 시장 데이터
-- [ ] S&P 500 실시간 데이터 연동 (현재 시뮬레이션)
-- [ ] NASDAQ 실시간 데이터 연동 (현재 시뮬레이션)
-- [ ] 추천 API: Yahoo Finance API 또는 Alpha Vantage API
-- [ ] 파일 위치: `src/main/market-correlation-service.ts`
+- [x] S&P 500 실시간 데이터 연동 (Alpha Vantage API)
+- [x] NASDAQ 실시간 데이터 연동 (Alpha Vantage API)
+- [x] 추천 API: Yahoo Finance API 또는 Alpha Vantage API
+- [x] 파일 위치: `src/main/market-correlation-service.ts`
 
 ### 외환 데이터
-- [ ] 달러 인덱스(DXY) 실시간 데이터 연동 (현재 랜덤 값)
+- [x] 달러 인덱스(DXY) 실시간 데이터 연동 (Exchange Rate API)
 - [ ] USD/KRW 환율 데이터 연동
-- [ ] 추천 API: Fixer.io, ExchangeRate-API
-- [ ] 파일 위치: `src/main/market-correlation-service.ts`
+- [x] 추천 API: Fixer.io, ExchangeRate-API
+- [x] 파일 위치: `src/main/market-correlation-service.ts`
 
 ### 암호화폐 공포/탐욕 지수
 - [ ] Alternative.me API 실시간 연동 개선

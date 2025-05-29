@@ -1046,7 +1046,9 @@ export const documentSections = {
       'advanced-strategies.dca-strategy',
       'advanced-strategies.momentum-trading',
       'advanced-strategies.mean-reversion',
-      'advanced-strategies.strategy-combination'
+      'advanced-strategies.strategy-combination',
+      'advanced-strategies.market-correlation',
+      'advanced-strategies.news-analysis'
     ]
   },
   'backtest': {

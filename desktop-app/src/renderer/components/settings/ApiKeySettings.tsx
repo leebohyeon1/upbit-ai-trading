@@ -34,8 +34,12 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
   const [accessKey, setAccessKey] = useState('');
   const [secretKey, setSecretKey] = useState('');
   const [claudeApiKey, setClaudeApiKey] = useState('');
+  const [alphaVantageApiKey, setAlphaVantageApiKey] = useState('');
+  const [exchangeRateApiKey, setExchangeRateApiKey] = useState('');
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [showClaudeKey, setShowClaudeKey] = useState(false);
+  const [showAlphaVantageKey, setShowAlphaVantageKey] = useState(false);
+  const [showExchangeRateKey, setShowExchangeRateKey] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   
@@ -48,6 +52,8 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
           if (savedKeys.upbitAccessKey) setAccessKey(savedKeys.upbitAccessKey);
           if (savedKeys.upbitSecretKey) setSecretKey(savedKeys.upbitSecretKey);
           if (savedKeys.anthropicApiKey) setClaudeApiKey(savedKeys.anthropicApiKey);
+          if (savedKeys.alphaVantageApiKey) setAlphaVantageApiKey(savedKeys.alphaVantageApiKey);
+          if (savedKeys.exchangeRateApiKey) setExchangeRateApiKey(savedKeys.exchangeRateApiKey);
           
           // 저장된 키가 있고 아직 검증되지 않았다면 자동 검증
           if (savedKeys.upbitAccessKey && savedKeys.upbitSecretKey && !apiKeyStatus.isValid) {
@@ -102,7 +108,9 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
         await (window as any).electronAPI.saveApiKeys({
           upbitAccessKey: accessKey,
           upbitSecretKey: secretKey,
-          anthropicApiKey: claudeApiKey
+          anthropicApiKey: claudeApiKey,
+          alphaVantageApiKey: alphaVantageApiKey,
+          exchangeRateApiKey: exchangeRateApiKey
         });
         
         // 계좌 정보 다시 불러오기
@@ -191,6 +199,50 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             }}
           />
 
+          <TextField
+            fullWidth
+            label="Alpha Vantage API Key (선택)"
+            type={showAlphaVantageKey ? 'text' : 'password'}
+            value={alphaVantageApiKey}
+            onChange={(e) => setAlphaVantageApiKey(e.target.value)}
+            placeholder="Alpha Vantage API Key를 입력하세요 (주식시장 상관관계 분석시 필요)"
+            disabled={false}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={() => setShowAlphaVantageKey(!showAlphaVantageKey)}
+                    edge="end"
+                  >
+                    {showAlphaVantageKey ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+
+          <TextField
+            fullWidth
+            label="Exchange Rate API Key (선택)"
+            type={showExchangeRateKey ? 'text' : 'password'}
+            value={exchangeRateApiKey}
+            onChange={(e) => setExchangeRateApiKey(e.target.value)}
+            placeholder="Exchange Rate API Key를 입력하세요 (달러 인덱스 분석시 필요)"
+            disabled={false}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={() => setShowExchangeRateKey(!showExchangeRateKey)}
+                    edge="end"
+                  >
+                    {showExchangeRateKey ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+
           {validationError && (
             <Alert severity="error">{validationError}</Alert>
           )}
@@ -219,6 +271,8 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
                   setAccessKey('');
                   setSecretKey('');
                   setClaudeApiKey('');
+                  setAlphaVantageApiKey('');
+                  setExchangeRateApiKey('');
                   setValidationError(null);
                 }}
                 color="secondary"
@@ -232,6 +286,10 @@ export const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             * Upbit 거래소에서 발급받은 API 키를 입력하세요.
             <br />
             * Claude API 키는 AI 기반 분석을 사용할 때 필요합니다.
+            <br />
+            * Alpha Vantage API는 주식시장 상관관계 분석에 사용됩니다. (무료: https://www.alphavantage.co)
+            <br />
+            * Exchange Rate API는 달러 인덱스 계산에 사용됩니다. (무료: https://app.exchangerate-api.com)
             <br />
             * API 키는 안전하게 로컬에 저장되며, 외부로 전송되지 않습니다.
           </Typography>

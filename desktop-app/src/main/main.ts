@@ -528,6 +528,8 @@ class TradingApp {
         upbitAccessKey: safeStorage.encryptString(keys.upbitAccessKey),
         upbitSecretKey: safeStorage.encryptString(keys.upbitSecretKey),
         anthropicApiKey: keys.anthropicApiKey ? safeStorage.encryptString(keys.anthropicApiKey) : null,
+        alphaVantageApiKey: keys.alphaVantageApiKey ? safeStorage.encryptString(keys.alphaVantageApiKey) : null,
+        exchangeRateApiKey: keys.exchangeRateApiKey ? safeStorage.encryptString(keys.exchangeRateApiKey) : null,
         enableRealTrade: keys.enableRealTrade || false  // 실제 거래 설정 저장
       };
 
@@ -541,6 +543,13 @@ class TradingApp {
         tradingEngine.setApiKeys(keys.upbitAccessKey, keys.upbitSecretKey, keys.anthropicApiKey);
         tradingEngine.setConfig({
           enableRealTrading: keys.enableRealTrade || false
+        });
+        
+        // market-correlation-service에 API 키 업데이트
+        const marketCorrelationService = require('./market-correlation-service').default;
+        marketCorrelationService.updateApiKeys({
+          alphaVantageApiKey: keys.alphaVantageApiKey,
+          exchangeRateApiKey: keys.exchangeRateApiKey
         });
       } catch (error) {
         console.error('Failed to set API keys to trading engine:', error);
@@ -562,6 +571,8 @@ class TradingApp {
           upbitAccessKey: '',
           upbitSecretKey: '',
           anthropicApiKey: '',
+          alphaVantageApiKey: '',
+          exchangeRateApiKey: '',
           enableRealTrade: false
         };
       }
@@ -574,6 +585,12 @@ class TradingApp {
         anthropicApiKey: encryptedKeys.anthropicApiKey 
           ? safeStorage.decryptString(Buffer.from(encryptedKeys.anthropicApiKey))
           : '',
+        alphaVantageApiKey: encryptedKeys.alphaVantageApiKey 
+          ? safeStorage.decryptString(Buffer.from(encryptedKeys.alphaVantageApiKey))
+          : '',
+        exchangeRateApiKey: encryptedKeys.exchangeRateApiKey 
+          ? safeStorage.decryptString(Buffer.from(encryptedKeys.exchangeRateApiKey))
+          : '',
         enableRealTrade: encryptedKeys.enableRealTrade || false
       };
     } catch (error) {
@@ -582,6 +599,8 @@ class TradingApp {
         upbitAccessKey: '',
         upbitSecretKey: '',
         anthropicApiKey: '',
+        alphaVantageApiKey: '',
+        exchangeRateApiKey: '',
         enableRealTrade: false
       };
     }
@@ -1395,6 +1414,47 @@ class TradingApp {
       } catch (error) {
         console.error('Failed to get supported KRW coins:', error);
         return [];
+      }
+    });
+
+    // Market Correlation IPC 핸들러 추가
+    ipcMain.handle('market-correlation', async () => {
+      try {
+        const correlationService = require('./market-correlation-service').default;
+        const result = await correlationService.getMarketCorrelations();
+        console.log('[Main] Market correlation data:', result);
+        return result;
+      } catch (error) {
+        console.error('[Main] Market correlation error:', error);
+        return {
+          btcDominance: 0,
+          sp500: { correlation: 0, change: 0 },
+          nasdaq: { correlation: 0, change: 0 },
+          gold: { correlation: 0, change: 0 },
+          dxy: { correlation: 0, change: 0 },
+          fearGreedIndex: { value: 50, status: 'Neutral' },
+          marketSentiment: 'Neutral',
+          lastUpdated: new Date().toISOString()
+        };
+      }
+    });
+
+    // News Analysis IPC 핸들러 추가
+    ipcMain.handle('news-analysis', async () => {
+      try {
+        const newsService = require('./news-service').default;
+        const results = await newsService.getLatestNews();
+        console.log('[Main] News analysis data:', results);
+        return results;
+      } catch (error) {
+        console.error('[Main] News analysis error:', error);
+        return {
+          sentiment: { positive: 33, negative: 33, neutral: 34 },
+          newsItems: [],
+          keywords: [],
+          impactScore: 50,
+          lastUpdated: new Date().toISOString()
+        };
       }
     });
 

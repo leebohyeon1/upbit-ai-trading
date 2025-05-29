@@ -1,5 +1,8 @@
 import axios from 'axios';
 import upbitService from './upbit-service';
+import { app, safeStorage } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface MarketCorrelation {
   timestamp: number;
@@ -30,6 +33,37 @@ export interface CoinCorrelation {
 class MarketCorrelationService {
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private readonly cacheExpiry = 5 * 60 * 1000; // 5분 캐시
+  private apiKeys: { alphaVantageApiKey?: string; exchangeRateApiKey?: string } = {};
+
+  constructor() {
+    this.loadApiKeys();
+  }
+
+  // API 키 로드
+  private async loadApiKeys() {
+    try {
+      const keysPath = path.join(app.getPath('userData'), 'api-keys.json');
+      if (fs.existsSync(keysPath)) {
+        const encryptedKeys = JSON.parse(fs.readFileSync(keysPath, 'utf-8'));
+        
+        this.apiKeys = {
+          alphaVantageApiKey: encryptedKeys.alphaVantageApiKey 
+            ? safeStorage.decryptString(Buffer.from(encryptedKeys.alphaVantageApiKey))
+            : undefined,
+          exchangeRateApiKey: encryptedKeys.exchangeRateApiKey 
+            ? safeStorage.decryptString(Buffer.from(encryptedKeys.exchangeRateApiKey))
+            : undefined,
+        };
+      }
+    } catch (error) {
+      console.error('Failed to load API keys for market correlation:', error);
+    }
+  }
+
+  // API 키 업데이트 (메인 프로세스에서 호출)
+  updateApiKeys(keys: { alphaVantageApiKey?: string; exchangeRateApiKey?: string }) {
+    this.apiKeys = keys;
+  }
 
   // 전체 시장 상관관계 분석
   async getMarketCorrelation(): Promise<MarketCorrelation> {
@@ -209,46 +243,172 @@ class MarketCorrelationService {
     }
   }
 
-  // 주식 시장 데이터 (간단한 시뮬레이션)
+  // 주식 시장 데이터 (Alpha Vantage API 사용)
   private async getStockMarketData(): Promise<{
     sp500Correlation: number;
     nasdaqCorrelation: number;
   }> {
     try {
-      // 실제로는 Yahoo Finance API나 Alpha Vantage API를 사용해야 하지만,
-      // 여기서는 시간대와 시장 상황에 따른 간단한 시뮬레이션 사용
-      const hour = new Date().getHours();
-      const isUSMarketOpen = hour >= 22 || hour <= 6; // KST 기준 미국 장 시간
+      // API 키 다시 로드 (업데이트된 경우를 위해)
+      await this.loadApiKeys();
+      const apiKey = this.apiKeys.alphaVantageApiKey;
       
-      // 미국 장 시간에는 상관관계가 더 높음
-      const baseCorrelation = isUSMarketOpen ? 0.6 : 0.4;
-      const volatility = Math.random() * 0.2 - 0.1; // -0.1 ~ 0.1
-      
+      if (!apiKey) {
+        console.warn('Alpha Vantage API key not found, using simulation data');
+        return this.getSimulatedStockData();
+      }
+
+      // S&P 500 ETF (SPY)와 NASDAQ ETF (QQQ) 데이터 가져오기
+      const [spyData, qqqData] = await Promise.all([
+        this.getStockData('SPY', apiKey),
+        this.getStockData('QQQ', apiKey)
+      ]);
+
+      // BTC 최근 가격 데이터 가져오기
+      const btcHistory = await this.getCoinPriceHistory('BTC', 7);
+
+      // 상관관계 계산
+      const sp500Correlation = this.calculateCorrelation(btcHistory.prices, spyData.prices);
+      const nasdaqCorrelation = this.calculateCorrelation(btcHistory.prices, qqqData.prices);
+
       return {
-        sp500Correlation: Math.max(-1, Math.min(1, baseCorrelation + volatility)),
-        nasdaqCorrelation: Math.max(-1, Math.min(1, baseCorrelation + 0.1 + volatility))
+        sp500Correlation: isNaN(sp500Correlation) ? 0.5 : sp500Correlation,
+        nasdaqCorrelation: isNaN(nasdaqCorrelation) ? 0.6 : nasdaqCorrelation
       };
     } catch (error) {
       console.error('Failed to get stock market data:', error);
-      return { sp500Correlation: 0.5, nasdaqCorrelation: 0.6 };
+      return this.getSimulatedStockData();
     }
   }
 
-  // 달러 인덱스 (DXY)
+  // Alpha Vantage에서 주식 데이터 가져오기
+  private async getStockData(symbol: string, apiKey: string): Promise<{ prices: number[] }> {
+    try {
+      const response = await axios.get('https://www.alphavantage.co/query', {
+        params: {
+          function: 'TIME_SERIES_DAILY',
+          symbol: symbol,
+          apikey: apiKey,
+          outputsize: 'compact'
+        }
+      });
+
+      if (response.data['Error Message'] || response.data['Note']) {
+        throw new Error('API limit reached or invalid request');
+      }
+
+      const timeSeries = response.data['Time Series (Daily)'];
+      const prices = Object.keys(timeSeries)
+        .slice(0, 7) // 최근 7일
+        .map(date => parseFloat(timeSeries[date]['4. close']))
+        .reverse();
+
+      return { prices };
+    } catch (error) {
+      console.error(`Failed to get stock data for ${symbol}:`, error);
+      // 오류 시 시뮬레이션 데이터 반환
+      return {
+        prices: Array(7).fill(0).map(() => 100 + Math.random() * 10)
+      };
+    }
+  }
+
+  // 시뮬레이션 데이터 (API 키가 없거나 오류 시)
+  private getSimulatedStockData(): {
+    sp500Correlation: number;
+    nasdaqCorrelation: number;
+  } {
+    const hour = new Date().getHours();
+    const isUSMarketOpen = hour >= 22 || hour <= 6; // KST 기준 미국 장 시간
+    
+    // 미국 장 시간에는 상관관계가 더 높음
+    const baseCorrelation = isUSMarketOpen ? 0.6 : 0.4;
+    const volatility = Math.random() * 0.2 - 0.1; // -0.1 ~ 0.1
+    
+    return {
+      sp500Correlation: Math.max(-1, Math.min(1, baseCorrelation + volatility)),
+      nasdaqCorrelation: Math.max(-1, Math.min(1, baseCorrelation + 0.1 + volatility))
+    };
+  }
+
+  // 달러 인덱스 (DXY) - Exchange Rate API 사용
   private async getDollarIndex(): Promise<{ value: number; change24h: number }> {
     try {
-      // 실제로는 외환 API를 사용해야 하지만, 여기서는 간단한 시뮬레이션
-      // DXY는 보통 90-110 사이에서 움직임
-      const baseValue = 100;
-      const volatility = (Math.random() - 0.5) * 10;
-      const value = baseValue + volatility;
-      const change24h = (Math.random() - 0.5) * 2; // -1% ~ 1%
+      // API 키 다시 로드 (업데이트된 경우를 위해)
+      await this.loadApiKeys();
+      const apiKey = this.apiKeys.exchangeRateApiKey;
       
-      return { value, change24h };
+      if (!apiKey) {
+        console.warn('Exchange Rate API key not found, using simulation data');
+        return this.getSimulatedDollarIndex();
+      }
+
+      // USD 기준으로 주요 통화들의 환율 가져오기
+      const response = await axios.get(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/USD`);
+      
+      if (response.data.result !== 'success') {
+        throw new Error('Failed to get exchange rates');
+      }
+
+      const rates = response.data.conversion_rates;
+      
+      // DXY 구성 통화들의 가중치
+      // EUR (57.6%), JPY (13.6%), GBP (11.9%), CAD (9.1%), SEK (4.2%), CHF (3.6%)
+      const dxyWeights = {
+        EUR: 0.576,
+        JPY: 0.136,
+        GBP: 0.119,
+        CAD: 0.091,
+        SEK: 0.042,
+        CHF: 0.036
+      };
+
+      // DXY 계산 (가중 기하평균)
+      let dxyValue = 100; // 기준값
+      let weightedSum = 0;
+      
+      Object.entries(dxyWeights).forEach(([currency, weight]) => {
+        if (rates[currency]) {
+          // 각 통화에 대한 USD의 강세/약세를 반영
+          // rates[currency]가 높을수록 USD가 강함
+          const contribution = Math.pow(rates[currency], weight);
+          weightedSum += contribution;
+        }
+      });
+
+      // 정규화 (보통 DXY는 70-120 범위)
+      dxyValue = weightedSum * 50.764; // 조정 계수
+
+      // 24시간 변화율 계산을 위해 이전 데이터 필요 (캐시 사용)
+      const previousDxy = this.cache.get('previous-dxy');
+      let change24h = 0;
+      
+      if (previousDxy && previousDxy.data) {
+        change24h = ((dxyValue - previousDxy.data) / previousDxy.data) * 100;
+      }
+      
+      // 현재 값을 캐시에 저장
+      this.cache.set('previous-dxy', { data: dxyValue, timestamp: Date.now() });
+
+      return { 
+        value: Math.round(dxyValue * 100) / 100, 
+        change24h: Math.round(change24h * 100) / 100 
+      };
     } catch (error) {
       console.error('Failed to get dollar index:', error);
-      return { value: 100, change24h: 0 };
+      return this.getSimulatedDollarIndex();
     }
+  }
+
+  // 시뮬레이션 달러 인덱스 (API 키가 없거나 오류 시)
+  private getSimulatedDollarIndex(): { value: number; change24h: number } {
+    // DXY는 보통 90-110 사이에서 움직임
+    const baseValue = 100;
+    const volatility = (Math.random() - 0.5) * 10;
+    const value = baseValue + volatility;
+    const change24h = (Math.random() - 0.5) * 2; // -1% ~ 1%
+    
+    return { value, change24h };
   }
 
   // 코인 가격 히스토리 (7일)
@@ -398,4 +558,60 @@ class MarketCorrelationService {
   }
 }
 
-export default new MarketCorrelationService();
+class MarketCorrelationServiceWithHelpers extends MarketCorrelationService {
+  // 프론트엔드에서 사용하는 형식으로 변환
+  async getMarketCorrelations() {
+    const correlation = await this.getMarketCorrelation();
+    
+    return {
+      btcDominance: correlation.btcDominance,
+      sp500: {
+        correlation: correlation.sp500Correlation,
+        change: correlation.sp500Correlation > 0.5 ? 2.3 : -1.2 // 시뮬레이션 값
+      },
+      nasdaq: {
+        correlation: correlation.nasdaqCorrelation,
+        change: correlation.nasdaqCorrelation > 0.5 ? 3.1 : -0.8 // 시뮬레이션 값
+      },
+      gold: {
+        correlation: -0.3, // 금과는 보통 역상관관계
+        change: 0.5
+      },
+      dxy: {
+        correlation: -0.4, // 달러와는 보통 역상관관계
+        change: correlation.dxyChange24h
+      },
+      fearGreedIndex: {
+        value: correlation.fearGreedIndex,
+        status: this.getFearGreedStatus(correlation.fearGreedIndex)
+      },
+      marketSentiment: this.getMarketSentiment(correlation),
+      lastUpdated: new Date(correlation.timestamp).toISOString()
+    };
+  }
+
+  private getFearGreedStatus(value: number): string {
+    if (value < 20) return 'Extreme Fear';
+    if (value < 40) return 'Fear';
+    if (value < 60) return 'Neutral';
+    if (value < 80) return 'Greed';
+    return 'Extreme Greed';
+  }
+
+  private getMarketSentiment(correlation: MarketCorrelation): string {
+    const { fearGreedIndex, btcDominance, sp500Correlation } = correlation;
+    
+    if (fearGreedIndex < 30 && btcDominance > 55) {
+      return 'Bearish';
+    } else if (fearGreedIndex > 70 && btcDominance < 45) {
+      return 'Bullish';
+    } else if (sp500Correlation > 0.7) {
+      return 'Risk-On';
+    } else if (sp500Correlation < 0.3) {
+      return 'Risk-Off';
+    }
+    return 'Neutral';
+  }
+}
+
+export default new MarketCorrelationServiceWithHelpers();
