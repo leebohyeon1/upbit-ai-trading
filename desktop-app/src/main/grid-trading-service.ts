@@ -365,7 +365,7 @@ export class GridTradingService {
       } catch (error) {
         console.error('그리드 모니터링 오류:', error);
       }
-    }, 30000); // 30초마다 체크
+    }, 60000); // 60초마다 체크 (API rate limit 준수)
   }
 
   /**

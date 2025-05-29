@@ -26,29 +26,72 @@ export class ApiRateLimiter extends EventEmitter {
   }
 
   private initializeRateLimits() {
-    // Upbit API rate limits
+    // Upbit API rate limits based on official documentation
+    
+    // Quotation API (시세 API) - REST
     this.rateLimits.set('ticker', {
       endpoint: 'ticker',
-      limit: 600,
-      window: 60, // 600 requests per minute
+      limit: 10,
+      window: 1, // 10 requests per second
       current: 0,
-      resetTime: Date.now() + 60000
+      resetTime: Date.now() + 1000
+    });
+
+    this.rateLimits.set('candles', {
+      endpoint: 'candles',
+      limit: 10,
+      window: 1, // 10 requests per second
+      current: 0,
+      resetTime: Date.now() + 1000
     });
 
     this.rateLimits.set('orderbook', {
       endpoint: 'orderbook',
-      limit: 100,
-      window: 60, // 100 requests per minute
+      limit: 10,
+      window: 1, // 10 requests per second
       current: 0,
-      resetTime: Date.now() + 60000
+      resetTime: Date.now() + 1000
+    });
+
+    this.rateLimits.set('trades', {
+      endpoint: 'trades',
+      limit: 10,
+      window: 1, // 10 requests per second
+      current: 0,
+      resetTime: Date.now() + 1000
+    });
+
+    // Exchange API (주문 API)
+    this.rateLimits.set('orders', {
+      endpoint: 'orders',
+      limit: 8,
+      window: 1, // 8 requests per second for orders
+      current: 0,
+      resetTime: Date.now() + 1000
+    });
+
+    this.rateLimits.set('orders_cancel', {
+      endpoint: 'orders_cancel',
+      limit: 8,
+      window: 1, // 8 requests per second
+      current: 0,
+      resetTime: Date.now() + 1000
+    });
+
+    this.rateLimits.set('orders_bulk_cancel', {
+      endpoint: 'orders_bulk_cancel',
+      limit: 1,
+      window: 2, // 1 request per 2 seconds
+      current: 0,
+      resetTime: Date.now() + 2000
     });
 
     this.rateLimits.set('accounts', {
       endpoint: 'accounts',
       limit: 30,
-      window: 60, // 30 requests per minute
+      window: 1, // 30 requests per second (기타 Exchange API)
       current: 0,
-      resetTime: Date.now() + 60000
+      resetTime: Date.now() + 1000
     });
 
     // Reset counters periodically
@@ -121,6 +164,8 @@ export class ApiRateLimiter extends EventEmitter {
 
     // Check rate limit
     if (!this.canMakeRequest(endpoint)) {
+      console.log(`Rate limit reached for ${endpoint}. Queueing request...`);
+      
       // Add to queue if rate limited
       return new Promise((resolve, reject) => {
         const queue = this.requestQueue.get(endpoint) || [];
@@ -138,7 +183,7 @@ export class ApiRateLimiter extends EventEmitter {
         // Process queue when rate limit resets
         const limit = this.rateLimits.get(endpoint);
         if (limit) {
-          const waitTime = Math.max(0, limit.resetTime - Date.now() + 100);
+          const waitTime = Math.max(0, limit.resetTime - Date.now() + 10);
           setTimeout(() => this.processQueue(endpoint), waitTime);
         }
       });
@@ -154,11 +199,22 @@ export class ApiRateLimiter extends EventEmitter {
       // Handle 429 error specifically
       if (error.response?.status === 429) {
         console.error(`Rate limit exceeded for ${endpoint}. Implementing backoff...`);
+        
+        // Parse remaining-req header if available
+        const remainingReq = error.response.headers['remaining-req'];
+        if (remainingReq) {
+          console.log(`Remaining requests info: ${remainingReq}`);
+        }
+        
         const limit = this.rateLimits.get(endpoint);
         if (limit) {
-          // Double the reset time on 429
-          limit.resetTime = Date.now() + (limit.window * 2000);
+          // Set exponential backoff
+          const backoffTime = Math.min(limit.window * 4000, 60000); // Max 1 minute
+          limit.resetTime = Date.now() + backoffTime;
           limit.current = limit.limit; // Mark as fully used
+          
+          // Add request to queue for retry
+          return this.executeRequest(endpoint, cacheKey, requestFn, ttl);
         }
       }
       throw error;

@@ -143,7 +143,7 @@ class UpbitService {
       const cacheKey = `candles:5m:${market}:${count}`;
       
       return await apiRateLimiter.executeRequest(
-        'ticker', // candles도 ticker 그룹에 포함
+        'candles', // candles 전용 rate limit 사용
         cacheKey,
         async () => {
           const url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
