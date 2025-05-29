@@ -48,12 +48,29 @@ export interface AdvancedIndicatorAnalysis {
 
 export class AdvancedIndicatorsService {
   private upbitService: typeof UpbitService;
+  private lastRequestTime: number = 0;
+  private requestDelay: number = 1000; // 1초 딜레이
   
   // 피보나치 레벨 상수
   private readonly FIBONACCI_LEVELS = [0, 23.6, 38.2, 50, 61.8, 78.6, 100, 127.2, 161.8, 261.8];
 
   constructor() {
     this.upbitService = UpbitService;
+  }
+
+  /**
+   * Rate limiting을 위한 대기
+   */
+  private async waitForRateLimit() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.requestDelay) {
+      const waitTime = this.requestDelay - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
   }
 
   /**
@@ -65,6 +82,9 @@ export class AdvancedIndicatorsService {
     period: number = 200
   ): Promise<AdvancedIndicatorAnalysis> {
     try {
+      // Rate limiting 적용
+      await this.waitForRateLimit();
+      
       // 캔들 데이터 가져오기
       const candles = await this.upbitService.getCandlesByTimeframe(symbol, timeframe, period);
       

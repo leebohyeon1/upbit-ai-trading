@@ -3,7 +3,7 @@ import { Box, Typography, useTheme, alpha, Divider, Paper } from '@mui/material'
 import { allDocContents as docContents } from './docContents_refactored';
 import Markdown from 'markdown-to-jsx';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface DocContentProps {
   sectionId: string;
@@ -69,16 +69,27 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
             fontStyle: 'italic',
           },
           '& code': {
-            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.common.white, 0.08)
+              : alpha(theme.palette.primary.main, 0.1),
             padding: '2px 6px',
             borderRadius: '4px',
             fontSize: '0.9em',
             fontFamily: 'monospace',
+            color: theme.palette.mode === 'dark' 
+              ? theme.palette.primary.light
+              : theme.palette.primary.dark,
           },
           '& pre': {
             margin: 0,
             borderRadius: '8px',
             overflow: 'hidden',
+            backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5',
+            '& code': {
+              backgroundColor: 'transparent !important',
+              padding: '16px !important',
+              display: 'block',
+            },
           },
           '& table': {
             width: '100%',
@@ -91,7 +102,9 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
             textAlign: 'left',
           },
           '& th': {
-            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.common.white, 0.08)
+              : alpha(theme.palette.primary.main, 0.1),
             fontWeight: 600,
           },
           '& img': {
@@ -101,21 +114,27 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
             my: 2,
           },
           '& .warning': {
-            backgroundColor: alpha(theme.palette.warning.main, 0.1),
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.warning.main, 0.15)
+              : alpha(theme.palette.warning.main, 0.1),
             border: `1px solid ${theme.palette.warning.main}`,
             borderRadius: '8px',
             padding: '16px',
             my: 2,
           },
           '& .info': {
-            backgroundColor: alpha(theme.palette.info.main, 0.1),
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.info.main, 0.15)
+              : alpha(theme.palette.info.main, 0.1),
             border: `1px solid ${theme.palette.info.main}`,
             borderRadius: '8px',
             padding: '16px',
             my: 2,
           },
           '& .success': {
-            backgroundColor: alpha(theme.palette.success.main, 0.1),
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.success.main, 0.15)
+              : alpha(theme.palette.success.main, 0.1),
             border: `1px solid ${theme.palette.success.main}`,
             borderRadius: '8px',
             padding: '16px',
@@ -174,9 +193,15 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
                     return (
                       <Box sx={{ my: 2 }}>
                         <SyntaxHighlighter
-                          style={vscDarkPlus as any}
+                          style={theme.palette.mode === 'dark' ? vscDarkPlus : vs as any}
                           language={language}
                           PreTag="div"
+                          customStyle={{
+                            margin: 0,
+                            borderRadius: '8px',
+                            backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5',
+                            padding: '16px',
+                          }}
                         >
                           {children}
                         </SyntaxHighlighter>
@@ -187,7 +212,9 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
                     <Box
                       component="code"
                       sx={{
-                        backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                        backgroundColor: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.common.white, 0.08)
+                          : alpha(theme.palette.primary.main, 0.1),
                         padding: '2px 6px',
                         borderRadius: '4px',
                         fontSize: '0.9em',
@@ -204,7 +231,9 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
                   if (className === 'warning') {
                     return (
                       <Paper sx={{
-                        backgroundColor: alpha(theme.palette.warning.main, 0.1),
+                        backgroundColor: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.warning.main, 0.15)
+                          : alpha(theme.palette.warning.main, 0.1),
                         border: `1px solid ${theme.palette.warning.main}`,
                         borderRadius: '8px',
                         padding: '16px',
@@ -217,7 +246,9 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
                   if (className === 'info') {
                     return (
                       <Paper sx={{
-                        backgroundColor: alpha(theme.palette.info.main, 0.1),
+                        backgroundColor: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.info.main, 0.15)
+                          : alpha(theme.palette.info.main, 0.1),
                         border: `1px solid ${theme.palette.info.main}`,
                         borderRadius: '8px',
                         padding: '16px',
@@ -230,7 +261,9 @@ const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) 
                   if (className === 'success') {
                     return (
                       <Paper sx={{
-                        backgroundColor: alpha(theme.palette.success.main, 0.1),
+                        backgroundColor: theme.palette.mode === 'dark' 
+                          ? alpha(theme.palette.success.main, 0.15)
+                          : alpha(theme.palette.success.main, 0.1),
                         border: `1px solid ${theme.palette.success.main}`,
                         borderRadius: '8px',
                         padding: '16px',

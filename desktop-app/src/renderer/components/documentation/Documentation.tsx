@@ -127,7 +127,9 @@ const Documentation: React.FC = () => {
         sx={{
           width: 280,
           borderRadius: 2,
-          backgroundColor: alpha(theme.palette.background.paper, 0.8),
+          backgroundColor: theme.palette.mode === 'dark' 
+            ? alpha(theme.palette.background.paper, 0.9)
+            : alpha(theme.palette.background.paper, 0.8),
           backdropFilter: 'blur(10px)',
           overflow: 'hidden',
           display: 'flex',
@@ -243,7 +245,9 @@ const Documentation: React.FC = () => {
           sx={{
             height: '100%',
             borderRadius: 2,
-            backgroundColor: alpha(theme.palette.background.paper, 0.8),
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? alpha(theme.palette.background.paper, 0.9)
+              : alpha(theme.palette.background.paper, 0.8),
             backdropFilter: 'blur(10px)',
             overflow: 'hidden',
           }}

@@ -205,7 +205,7 @@ export const AutoRebalancingPanel: React.FC = () => {
   };
 
   // 리밸런싱 시뮬레이션
-  const simulateRebalancing = async () => {
+  const handleSimulateRebalancing = async () => {
     setLoading(true);
     try {
       const simulation = await simulateRebalancing();
@@ -433,7 +433,7 @@ export const AutoRebalancingPanel: React.FC = () => {
                   <Button
                     variant="outlined"
                     size="small"
-                    onClick={simulateRebalancing}
+                    onClick={handleSimulateRebalancing}
                     disabled={loading}
                   >
                     시뮬레이션

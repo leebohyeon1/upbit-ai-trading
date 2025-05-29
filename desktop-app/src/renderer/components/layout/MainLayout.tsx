@@ -146,7 +146,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               mb: 2,
               p: 1.5,
               borderRadius: 2,
-              bgcolor: tradingState.isRunning ? alpha(theme.palette.success.main, 0.1) : 'grey.100',
+              bgcolor: tradingState.isRunning ? alpha(theme.palette.success.main, 0.1) : theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
               border: 1,
               borderColor: tradingState.isRunning ? 'success.main' : 'grey.300'
             }}
@@ -190,7 +190,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 gap: 2,
                 p: 1.5,
                 borderRadius: 2,
-                bgcolor: tradingConfig.useAI ? alpha(theme.palette.primary.main, 0.1) : 'grey.100'
+                bgcolor: tradingConfig.useAI ? alpha(theme.palette.primary.main, 0.1) : theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100'
               }}
             >
               <Psychology color={tradingConfig.useAI ? "primary" : "disabled"} />
@@ -247,7 +247,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         component="main"
         sx={{
           flexGrow: 1,
-          bgcolor: 'grey.50',
+          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
           p: 0,
           overflow: 'auto',
           height: '100vh',

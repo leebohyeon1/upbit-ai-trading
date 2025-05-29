@@ -40,6 +40,8 @@ export interface MultiTimeframeAnalysis {
 
 export class MultiTimeframeService {
   private upbitService: typeof UpbitService;
+  private lastRequestTime: number = 0;
+  private requestDelay: number = 1000; // 1초 딜레이
   private defaultTimeframes: TimeframeConfig[] = [
     { interval: '1m', period: 100, weight: 0.1, enabled: true },
     { interval: '5m', period: 100, weight: 0.15, enabled: true },
@@ -51,6 +53,21 @@ export class MultiTimeframeService {
 
   constructor() {
     this.upbitService = UpbitService;
+  }
+
+  /**
+   * Rate limiting을 위한 대기
+   */
+  private async waitForRateLimit() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.requestDelay) {
+      const waitTime = this.requestDelay - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
   }
 
   /**
@@ -89,6 +106,9 @@ export class MultiTimeframeService {
    */
   private async analyzeTimeframe(symbol: string, config: TimeframeConfig): Promise<TimeframeData | null> {
     try {
+      // Rate limiting 적용
+      await this.waitForRateLimit();
+      
       const candles = await this.upbitService.getCandlesByTimeframe(symbol, config.interval, config.period);
       
       if (!candles || candles.length === 0) {

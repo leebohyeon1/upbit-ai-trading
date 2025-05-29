@@ -198,8 +198,16 @@ class UpbitService {
       
       const response = await axios.get(url);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to get candles by timeframe:', error);
+      
+      // 429 에러(Too Many Requests) 처리
+      if (error.response?.status === 429) {
+        console.warn(`Rate limit exceeded for ${market} ${interval}. Returning empty array.`);
+        return [];
+      }
+      
+      // 기타 에러는 빈 배열 반환
       return [];
     }
   }
