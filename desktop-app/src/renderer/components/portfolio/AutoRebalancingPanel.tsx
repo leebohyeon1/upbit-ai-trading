@@ -95,6 +95,7 @@ export const AutoRebalancingPanel: React.FC = () => {
   const [nextRebalance, setNextRebalance] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [targetWeights, setTargetWeights] = useState<{[key: string]: number}>({});
   const [simulationResult, setSimulationResult] = useState<any>(null);
 
   // 설정 불러오기
@@ -116,12 +117,39 @@ export const AutoRebalancingPanel: React.FC = () => {
 
   const loadCurrentPositions = async () => {
     try {
-      const portfolio = await electronAPI.getPortfolio();
-      const totalValue = portfolio.reduce((sum, p) => sum + p.value, 0);
+      const accounts = await electronAPI.fetchAccounts();
+      const tickers = await electronAPI.fetchTickers(
+        accounts
+          .filter((acc: any) => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0)
+          .map((acc: any) => `KRW-${acc.currency}`)
+      );
       
-      const positionsWithWeights = portfolio.map(p => {
-        const currentWeight = p.value / totalValue;
-        const targetWeight = config.targetWeights.find(t => t.symbol === p.symbol)?.weight || 0;
+      // 총 자산 계산
+      let totalValue = 0;
+      const positionsData = [];
+      
+      for (const account of accounts) {
+        if (account.currency === 'KRW') {
+          totalValue += parseFloat(account.balance);
+        } else if (parseFloat(account.balance) > 0) {
+          const ticker = tickers.find((t: any) => t.market === `KRW-${account.currency}`);
+          if (ticker) {
+            const value = parseFloat(account.balance) * ticker.trade_price;
+            totalValue += value;
+            positionsData.push({
+              symbol: account.currency,
+              value: value,
+              balance: parseFloat(account.balance),
+              price: ticker.trade_price
+            });
+          }
+        }
+      }
+      
+      // 포지션 가중치 계산
+      const positionsWithWeights = positionsData.map((p: any) => {
+        const currentWeight = totalValue > 0 ? p.value / totalValue : 0;
+        const targetWeight = config.targetWeights.find((t: any) => t.symbol === p.symbol)?.weight || 0;
         
         return {
           symbol: p.symbol,
@@ -176,6 +204,57 @@ export const AutoRebalancingPanel: React.FC = () => {
       console.error('Simulation failed:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 목표 비중 편집 다이얼로그 열기
+  const openEditDialog = () => {
+    // 현재 목표 비중을 state에 복사
+    const weights: {[key: string]: number} = {};
+    
+    // 모든 포지션의 목표 비중 설정
+    positions.forEach(pos => {
+      const targetWeight = config.targetWeights.find(t => t.symbol === pos.symbol)?.weight || 0;
+      weights[pos.symbol] = targetWeight * 100;
+    });
+    
+    // 목표 비중이 설정되어 있지만 현재 포지션에 없는 경우도 추가
+    config.targetWeights.forEach(tw => {
+      if (!weights.hasOwnProperty(tw.symbol)) {
+        weights[tw.symbol] = tw.weight * 100;
+      }
+    });
+    
+    setTargetWeights(weights);
+    setEditDialogOpen(true);
+  };
+
+  // 목표 비중 저장
+  const saveTargetWeights = async () => {
+    try {
+      // 총합이 100%인지 확인
+      const total = Object.values(targetWeights).reduce((sum, weight) => sum + weight, 0);
+      if (Math.abs(total - 100) > 0.01) {
+        alert('목표 비중의 총합은 100%가 되어야 합니다.');
+        return;
+      }
+
+      // 새로운 targetWeights 배열 생성
+      const newTargetWeights = Object.entries(targetWeights).map(([symbol, weight]) => ({
+        symbol,
+        weight: weight / 100
+      }));
+
+      // config 업데이트
+      const newConfig = { ...config, targetWeights: newTargetWeights };
+      await saveConfig(newConfig);
+      
+      // UI 업데이트를 위해 positions 재계산
+      await loadCurrentPositions();
+      
+      setEditDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to save target weights:', error);
     }
   };
 
@@ -392,9 +471,7 @@ export const AutoRebalancingPanel: React.FC = () => {
                             {(position.targetWeight * 100).toFixed(1)}%
                             <IconButton 
                               size="small" 
-                              onClick={() => {
-                                // 목표 비중 편집
-                              }}
+                              onClick={openEditDialog}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
@@ -494,12 +571,65 @@ export const AutoRebalancingPanel: React.FC = () => {
             <Typography variant="body2" color="text.secondary" gutterBottom>
               각 자산의 목표 비중을 설정하세요. 총합은 100%가 되어야 합니다.
             </Typography>
-            {/* 목표 비중 편집 UI */}
+            
+            <Box mt={3}>
+              {positions.map((position) => (
+                <Box key={position.symbol} mb={2}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Typography variant="body1" sx={{ minWidth: 80 }}>
+                      {position.symbol}
+                    </Typography>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={targetWeights[position.symbol] || 0}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          setTargetWeights({
+                            ...targetWeights,
+                            [position.symbol]: Math.max(0, Math.min(100, value))
+                          });
+                        }}
+                        inputProps={{
+                          min: 0,
+                          max: 100,
+                          step: 0.1
+                        }}
+                        sx={{ width: 100 }}
+                      />
+                      <Typography variant="body2">%</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              ))}
+              
+              <Divider sx={{ my: 2 }} />
+              
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography variant="body1" fontWeight="bold">
+                  총합
+                </Typography>
+                <Typography 
+                  variant="body1" 
+                  fontWeight="bold"
+                  color={Math.abs(Object.values(targetWeights).reduce((sum, w) => sum + w, 0) - 100) < 0.01 ? 'success.main' : 'error.main'}
+                >
+                  {Object.values(targetWeights).reduce((sum, w) => sum + w, 0).toFixed(1)}%
+                </Typography>
+              </Box>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialogOpen(false)}>취소</Button>
-          <Button variant="contained" onClick={() => setEditDialogOpen(false)}>저장</Button>
+          <Button 
+            variant="contained" 
+            onClick={saveTargetWeights}
+            disabled={Math.abs(Object.values(targetWeights).reduce((sum, w) => sum + w, 0) - 100) > 0.01}
+          >
+            저장
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

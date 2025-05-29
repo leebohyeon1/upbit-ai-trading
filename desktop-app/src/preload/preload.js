@@ -13,8 +13,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSupportedKrwCoins: () => ipcRenderer.invoke('get-supported-krw-coins'),
   
   // Trading methods
-  toggleTrading: (tradingConfig, analysisConfigs) => ipcRenderer.invoke('start-trading', tradingConfig, analysisConfigs),
+  startTrading: (tradingConfig, analysisConfigs) => ipcRenderer.invoke('start-trading', tradingConfig, analysisConfigs),
   stopTrading: () => ipcRenderer.invoke('stop-trading'),
+  toggleTrading: (tradingConfig, analysisConfigs) => ipcRenderer.invoke('start-trading', tradingConfig, analysisConfigs),
   getTradingState: () => ipcRenderer.invoke('get-trading-state'),
   
   // Backtest methods
@@ -82,13 +83,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   
   onSingleAnalysisCompleted: (callback) => {
-    ipcRenderer.on('single-analysis-completed', (event, analysis) => callback(analysis));
-    return () => ipcRenderer.removeAllListeners('single-analysis-completed');
+    console.log('[Preload] Setting up single-analysis-completed listener');
+    const listener = (event, analysis) => {
+      console.log('[Preload] single-analysis-completed event received:', analysis);
+      callback(analysis);
+    };
+    ipcRenderer.on('single-analysis-completed', listener);
+    return () => {
+      console.log('[Preload] Removing single-analysis-completed listener');
+      ipcRenderer.removeListener('single-analysis-completed', listener);
+    };
   },
   
   onTradingStateChanged: (callback) => {
-    ipcRenderer.on('trading-state-changed', (event, state) => callback(state));
-    return () => ipcRenderer.removeAllListeners('trading-state-changed');
+    console.log('[Preload] Setting up trading-state-changed listener');
+    const listener = (event, state) => {
+      console.log('[Preload] trading-state-changed event received:', state);
+      callback(state);
+    };
+    ipcRenderer.on('trading-state-changed', listener);
+    return () => {
+      console.log('[Preload] Removing trading-state-changed listener');
+      ipcRenderer.removeListener('trading-state-changed', listener);
+    };
   },
   
   onLearningProgress: (callback) => {

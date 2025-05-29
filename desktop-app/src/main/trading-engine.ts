@@ -90,6 +90,9 @@ export interface TradeHistory {
   confidence: number;
   timestamp: number;
   profit?: number;
+  profitRate?: number; // 수익률 (%)
+  krwBalance?: number; // 거래 후 KRW 잔액 (시뮬레이션용)
+  coinBalance?: number; // 거래 후 코인 잔액 (시뮬레이션용)
 }
 
 export interface DynamicParameters {
@@ -1975,7 +1978,10 @@ class TradingEngine extends EventEmitter {
       volume, // 코인 수량
       confidence,
       timestamp: Date.now(),
-      profit: 0
+      profit: 0,
+      krwBalance: this.virtualKRW,
+      coinBalance: newBalance,
+      profitRate: 0
     });
     
     console.log(`[시뮬레이션] ${coin} 매수 완료:`);
@@ -2023,7 +2029,10 @@ class TradingEngine extends EventEmitter {
       volume, // 코인 수량
       confidence,
       timestamp: Date.now(),
-      profit: profitAmount
+      profit: profitAmount,
+      krwBalance: this.virtualKRW,
+      coinBalance: portfolio.balance,
+      profitRate: profitRate
     });
     
     console.log(`[시뮬레이션] ${coin} 매도 완료:`);

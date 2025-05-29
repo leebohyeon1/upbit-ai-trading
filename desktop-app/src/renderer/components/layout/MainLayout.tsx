@@ -48,8 +48,31 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onTabChange
 }) => {
   const theme = useTheme();
-  const { tradingState, tradingConfig, toggleTrading } = useTradingContext();
+  const context = useTradingContext();
+  const { tradingState, tradingConfig, toggleTrading } = context;
   const [drawerOpen, setDrawerOpen] = useState(true);
+  
+  // 디버그: 전체 컨텍스트 추적
+  React.useEffect(() => {
+    console.log('[MainLayout] Full context:', context);
+    console.log('[MainLayout] Trading state:', tradingState);
+    console.log('[MainLayout] Trading config:', tradingConfig);
+    console.log('[MainLayout] Analyses:', context.analyses);
+  });
+  
+  // 디버그: tradingState 변경 추적
+  React.useEffect(() => {
+    console.log('[MainLayout] Trading state updated:', tradingState);
+    console.log('[MainLayout] Is running:', tradingState?.isRunning);
+    console.log('[MainLayout] Enable real trading:', tradingConfig?.enableRealTrading);
+  }, [tradingState, tradingConfig]);
+
+  // 시뮬레이션 탭 표시 조건
+  const showSimulationTab = tradingState?.isRunning && !tradingConfig?.enableRealTrading;
+  console.log('[MainLayout] Show simulation tab?', showSimulationTab, {
+    isRunning: tradingState?.isRunning,
+    enableRealTrading: tradingConfig?.enableRealTrading
+  });
 
   const menuItems = [
     { text: '대시보드', icon: <Dashboard />, value: TAB_INDEX.OVERVIEW },
@@ -58,7 +81,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     { text: '거래 설정', icon: <Settings />, value: TAB_INDEX.SETTINGS },
     { text: '학습 상태', icon: <School />, value: TAB_INDEX.LEARNING },
     { text: '백테스트', icon: <ShowChart />, value: TAB_INDEX.BACKTEST },
-    ...(tradingState.isRunning && !tradingConfig.enableRealTrading ? 
+    ...(showSimulationTab ? 
       [{ text: '시뮬레이션 성과', icon: <Psychology />, value: TAB_INDEX.SIMULATION }] : []
     ),
     { text: 'Kill Switch', icon: <Shield />, value: TAB_INDEX.KILL_SWITCH },

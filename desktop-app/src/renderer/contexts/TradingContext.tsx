@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import {
   TradingState,
@@ -10,10 +10,10 @@ import {
   TickerData,
   ApiKeyStatus,
   PortfolioCoin,
-  LearningState
+  LearningState,
+  BacktestResult
 } from '../types';
 import { DEFAULT_CONFIG } from '../constants';
-import { useElectronAPI } from '../hooks/useElectronAPI';
 
 interface ProfitHistoryItem {
   time: string;
@@ -124,7 +124,23 @@ const defaultTradingConfig: TradingConfig = {
 };
 
 export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) => {
-  const electronAPI = useElectronAPI();
+  // 직접 상태 관리
+  const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus>({ 
+    accessKey: '', 
+    isValid: false 
+  });
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [markets, setMarkets] = useState<MarketData[]>([]);
+  const [tickers, setTickers] = useState<TickerData[]>([]);
+  const [analyses, setAnalyses] = useState<Analysis[]>([]);
+  const [learningStates, setLearningStates] = useState<LearningState[]>([]);
+  const [supportedCoins, setSupportedCoins] = useState<string[]>([]);
+  const [localTradingState, setLocalTradingState] = useState<TradingState>({
+    isRunning: false,
+    enableRealTrading: false,
+    maxInvestmentPerCoin: 100000,
+    aiEnabled: false
+  });
   
   // 초기값은 null로 설정하여 localStorage에서 로드할 때까지 기다림
   const [tradingConfig, setTradingConfig] = useState<TradingConfig | null>(null);
@@ -133,6 +149,82 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const [profitHistory, setProfitHistory] = useState<ProfitHistoryItem[]>([]);
   const [portfolioChartData, setPortfolioChartData] = useState<PortfolioChartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // API 함수들
+  const validateApiKey = useCallback(async (accessKey: string, secretKey: string, claudeApiKey?: string) => {
+    try {
+      const result = await window.electronAPI.validateApiKey(accessKey, secretKey, claudeApiKey);
+      setApiKeyStatus(result);
+      return result;
+    } catch (error) {
+      console.error('API key validation failed:', error);
+      return { accessKey: '', isValid: false };
+    }
+  }, []);
+
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const data = await window.electronAPI.fetchAccounts();
+      setAccounts(data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch accounts:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchMarkets = useCallback(async () => {
+    try {
+      const data = await window.electronAPI.fetchMarkets();
+      setMarkets(data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch markets:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchTickers = useCallback(async (symbols: string[]) => {
+    try {
+      const data = await window.electronAPI.fetchTickers(symbols);
+      setTickers(data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch tickers:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchSupportedCoins = useCallback(async () => {
+    try {
+      const coins = await window.electronAPI.getSupportedKrwCoins();
+      setSupportedCoins(coins);
+      return coins;
+    } catch (error) {
+      console.error('Failed to fetch supported coins:', error);
+      return [];
+    }
+  }, []);
+
+  const toggleLearning = useCallback(async (ticker: string, isRunning: boolean) => {
+    try {
+      console.log('[TradingContext] toggleLearning called:', ticker, isRunning);
+      await window.electronAPI.toggleLearning(ticker, isRunning);
+      
+      // 학습 상태가 업데이트될 때까지 잠시 대기 후 상태 다시 가져오기
+      setTimeout(async () => {
+        try {
+          const updatedStates = await window.electronAPI.getLearningStates();
+          console.log('[TradingContext] Updated learning states:', updatedStates);
+          setLearningStates(updatedStates);
+        } catch (error) {
+          console.error('[TradingContext] Failed to get updated learning states:', error);
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Failed to toggle learning:', error);
+    }
+  }, []);
 
   // Actions
   const updateTradingConfig = useCallback((config: TradingConfig) => {
@@ -151,19 +243,25 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const toggleTrading = useCallback(async () => {
     if (!tradingConfig) return;
     
+    // 실제 거래가 비활성화되어 있을 때도 시뮬레이션 모드로 동작 가능
     try {
       // 활성화된 코인 목록
       const activeTickers = portfolio
         .filter(p => p.enabled)
         .map(p => `KRW-${p.symbol}`);
       
-      await electronAPI.toggleTrading(tradingConfig, analysisConfigs);
+      if (localTradingState.isRunning) {
+        await window.electronAPI.stopTrading();
+      } else {
+        console.log('[TradingContext] Starting trading with config:', { enableRealTrading: tradingConfig.enableRealTrading });
+        await window.electronAPI.startTrading(tradingConfig, analysisConfigs);
+      }
       // 상태 업데이트는 이벤트 리스너에서 처리됨
     } catch (error) {
       console.error('Failed to toggle trading:', error);
       throw error;
     }
-  }, [tradingConfig, analysisConfigs, portfolio, electronAPI]);
+  }, [tradingConfig, analysisConfigs, portfolio, localTradingState]);
 
   // Load saved data on mount
   useEffect(() => {
@@ -291,6 +389,78 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     });
   }, []);
 
+  // 이벤트 리스너 설정
+  useEffect(() => {
+    const removeApiKeyListener = window.electronAPI.onApiKeyStatus((status) => {
+      setApiKeyStatus(status);
+    });
+
+    const removeAnalysisListener = window.electronAPI.onAnalysisCompleted((data) => {
+      console.log('[TradingContext] Analysis completed event received:', data);
+      setAnalyses(data);
+    });
+    
+    // single-analysis-completed 이벤트도 리스닝
+    console.log('[TradingContext] Setting up single-analysis-completed listener');
+    const removeSingleAnalysisListener = window.electronAPI.onSingleAnalysisCompleted((analysis) => {
+      console.log('[TradingContext] Single analysis completed event received:', analysis);
+      setAnalyses(prev => {
+        console.log('[TradingContext] Previous analyses:', prev);
+        // 기존 분석 중 같은 ticker가 있으면 업데이트, 없으면 추가
+        const existingIndex = prev.findIndex(a => a.ticker === analysis.ticker);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = analysis;
+          console.log('[TradingContext] Updated analyses:', updated);
+          return updated;
+        } else {
+          const newAnalyses = [...prev, analysis];
+          console.log('[TradingContext] New analyses:', newAnalyses);
+          return newAnalyses;
+        }
+      });
+    });
+
+    console.log('[TradingContext] Setting up trading state listener');
+    const removeTradingStateListener = window.electronAPI.onTradingStateChanged((state) => {
+      console.log('[TradingContext] Trading state changed event received:', state);
+      console.log('[TradingContext] Previous state:', localTradingState);
+      // 새 객체로 복사하여 React가 변경을 감지하도록 함
+      setLocalTradingState({ ...state });
+    });
+
+    const removeLearningListener = window.electronAPI.onLearningProgress((states) => {
+      console.log('[TradingContext] Learning progress event received:', states);
+      setLearningStates(states);
+    });
+    
+    // 초기 거래 상태 로드
+    window.electronAPI.getTradingState().then((state) => {
+      console.log('[TradingContext] Initial trading state loaded:', state);
+      setLocalTradingState(state);
+    }).catch(console.error);
+    
+    // 초기 학습 상태 로드
+    window.electronAPI.getLearningStates().then((states) => {
+      console.log('[TradingContext] Initial learning states loaded:', states);
+      setLearningStates(states);
+    }).catch(console.error);
+
+    // 초기 지원 코인 목록 로드
+    window.electronAPI.getSupportedKrwCoins().then((coins) => {
+      console.log('[TradingContext] Supported coins loaded:', coins);
+      setSupportedCoins(coins);
+    }).catch(console.error);
+
+    return () => {
+      removeApiKeyListener();
+      removeAnalysisListener();
+      removeSingleAnalysisListener();
+      removeTradingStateListener();
+      removeLearningListener();
+    };
+  }, []);
+
   // Save configurations when they change
   useEffect(() => {
     // isLoading이 false일 때만 저장 (초기 로딩 중에는 저장하지 않음)
@@ -326,14 +496,14 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   // 포트폴리오 차트 데이터 계산
   const calculatePortfolioData = useCallback(() => {
     console.log('[TradingContext] Calculating portfolio data...');
-    console.log('[TradingContext] Accounts:', electronAPI.accounts);
-    console.log('[TradingContext] Tickers:', electronAPI.tickers);
+    console.log('[TradingContext] Accounts:', accounts);
+    console.log('[TradingContext] Tickers:', tickers);
     
-    const coinAccounts = electronAPI.accounts.filter(acc => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0);
-    const krwAccount = electronAPI.accounts.find(acc => acc.currency === 'KRW');
+    const coinAccounts = accounts.filter(acc => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0);
+    const krwAccount = accounts.find(acc => acc.currency === 'KRW');
     
     const data: PortfolioChartItem[] = coinAccounts.map(acc => {
-      const ticker = electronAPI.tickers.find(t => t.market === `KRW-${acc.currency}`);
+      const ticker = tickers.find(t => t.market === `KRW-${acc.currency}`);
       const value = ticker ? parseFloat(acc.balance) * ticker.trade_price : 0;
       return {
         name: acc.currency,
@@ -359,7 +529,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     
     console.log('[TradingContext] Portfolio chart data:', data);
     setPortfolioChartData(data);
-  }, [electronAPI.accounts, electronAPI.tickers]);
+  }, [accounts, tickers]);
 
   // 수익률 히스토리 가져오기
   const fetchProfitHistory = useCallback(async () => {
@@ -395,28 +565,18 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     return () => clearInterval(interval);
   }, [fetchProfitHistory]);
 
-  // 로딩 중이면 로딩 화면 표시
-  if (isLoading || tradingConfig === null) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  const value: TradingContextType = {
-    // States from electronAPI
-    tradingState: electronAPI.tradingState,
-    analyses: electronAPI.analyses,
-    accounts: electronAPI.accounts,
-    markets: electronAPI.markets,
-    tickers: electronAPI.tickers,
-    apiKeyStatus: electronAPI.apiKeyStatus,
-    learningStates: electronAPI.learningStates,
-    supportedCoins: electronAPI.supportedCoins,
-    
-    // Local states
-    tradingConfig,
+  // value 객체를 미리 생성 (Hook은 조건문 이전에 호출되어야 함)
+  const value: TradingContextType = useMemo(() => ({
+    // States
+    tradingState: localTradingState,
+    analyses,
+    accounts,
+    markets,
+    tickers,
+    apiKeyStatus,
+    learningStates,
+    supportedCoins,
+    tradingConfig: tradingConfig || defaultTradingConfig,
     analysisConfigs,
     portfolio,
     profitHistory,
@@ -427,24 +587,50 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     updateAnalysisConfigs,
     updatePortfolio,
     toggleTrading,
-    validateApiKey: electronAPI.validateApiKey,
-    fetchAccounts: async () => {
-      const accounts = await electronAPI.fetchAccounts();
-      return accounts;
-    },
-    fetchMarkets: async () => {
-      const markets = await electronAPI.fetchMarkets();
-      return markets;
-    },
-    fetchTickers: async (symbols: string[]) => {
-      const tickers = await electronAPI.fetchTickers(symbols);
-      return tickers;
-    },
-    toggleLearning: electronAPI.toggleLearning,
-    fetchSupportedCoins: electronAPI.fetchSupportedCoins,
+    validateApiKey,
+    fetchAccounts,
+    fetchMarkets,
+    fetchTickers,
+    toggleLearning,
+    fetchSupportedCoins,
     fetchProfitHistory,
     calculatePortfolioData
-  };
+  }), [
+    localTradingState,
+    analyses,
+    accounts,
+    markets,
+    tickers,
+    apiKeyStatus,
+    learningStates,
+    supportedCoins,
+    tradingConfig,
+    analysisConfigs,
+    portfolio,
+    profitHistory,
+    portfolioChartData,
+    updateTradingConfig,
+    updateAnalysisConfigs,
+    updatePortfolio,
+    toggleTrading,
+    validateApiKey,
+    fetchAccounts,
+    fetchMarkets,
+    fetchTickers,
+    toggleLearning,
+    fetchSupportedCoins,
+    fetchProfitHistory,
+    calculatePortfolioData
+  ]);
+
+  // 로딩 중이면 로딩 화면 표시
+  if (isLoading || tradingConfig === null) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <TradingContext.Provider value={value}>

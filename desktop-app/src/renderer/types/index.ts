@@ -147,6 +147,7 @@ export interface TradingState {
   enableRealTrading: boolean;
   maxInvestmentPerCoin: number;
   aiEnabled: boolean;
+  lastUpdate?: string;
 }
 
 export interface AnalysisConfig {

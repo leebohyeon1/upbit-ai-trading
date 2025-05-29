@@ -81,14 +81,38 @@ export const useElectronAPI = () => {
   const toggleTrading = useCallback(async (tradingConfig: TradingConfig, analysisConfigs: any[]) => {
     try {
       if (tradingState.isRunning) {
+        console.log('[useElectronAPI] Stopping trading...');
         await window.electronAPI.stopTrading();
       } else {
-        await window.electronAPI.toggleTrading(tradingConfig, analysisConfigs);
+        console.log('[useElectronAPI] Starting trading with config:', { enableRealTrading: tradingConfig.enableRealTrading });
+        await window.electronAPI.startTrading(tradingConfig, analysisConfigs);
       }
     } catch (error) {
       console.error('Failed to toggle trading:', error);
     }
   }, [tradingState.isRunning]);
+
+  // 거래 시작
+  const startTrading = useCallback(async (tradingConfig: TradingConfig, analysisConfigs: any[]) => {
+    try {
+      console.log('[useElectronAPI] Starting trading with config:', { enableRealTrading: tradingConfig.enableRealTrading });
+      return await window.electronAPI.startTrading(tradingConfig, analysisConfigs);
+    } catch (error) {
+      console.error('Failed to start trading:', error);
+      throw error;
+    }
+  }, []);
+
+  // 거래 중지
+  const stopTrading = useCallback(async () => {
+    try {
+      console.log('[useElectronAPI] Stopping trading...');
+      return await window.electronAPI.stopTrading();
+    } catch (error) {
+      console.error('Failed to stop trading:', error);
+      throw error;
+    }
+  }, []);
 
   // 백테스트 실행
   const runBacktest = useCallback(async (
@@ -220,17 +244,48 @@ export const useElectronAPI = () => {
     });
 
     const removeAnalysisListener = window.electronAPI.onAnalysisCompleted((data) => {
+      console.log('[useElectronAPI] Analysis completed event received:', data);
       setAnalyses(data);
     });
+    
+    // single-analysis-completed 이벤트도 리스닝
+    const removeSingleAnalysisListener = window.electronAPI.onSingleAnalysisCompleted((analysis) => {
+      console.log('[useElectronAPI] Single analysis completed event received:', analysis);
+      setAnalyses(prev => {
+        console.log('[useElectronAPI] Previous analyses:', prev);
+        // 기존 분석 중 같은 ticker가 있으면 업데이트, 없으면 추가
+        const existingIndex = prev.findIndex(a => a.ticker === analysis.ticker);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = analysis;
+          console.log('[useElectronAPI] Updated analyses:', updated);
+          return updated;
+        } else {
+          const newAnalyses = [...prev, analysis];
+          console.log('[useElectronAPI] New analyses:', newAnalyses);
+          return newAnalyses;
+        }
+      });
+    });
 
+    console.log('[useElectronAPI] Setting up trading state listener');
     const removeTradingStateListener = window.electronAPI.onTradingStateChanged((state) => {
-      setTradingState(state);
+      console.log('[useElectronAPI] Trading state changed event received:', state);
+      console.log('[useElectronAPI] Previous state:', tradingState);
+      // 새 객체로 복사하여 React가 변경을 감지하도록 함
+      setTradingState({ ...state });
     });
 
     const removeLearningListener = window.electronAPI.onLearningProgress((states) => {
       console.log('[useElectronAPI] Learning progress event received:', states);
       setLearningStates(states);
     });
+    
+    // 초기 거래 상태 로드
+    window.electronAPI.getTradingState().then((state) => {
+      console.log('[useElectronAPI] Initial trading state loaded:', state);
+      setTradingState(state);
+    }).catch(console.error);
     
     // 초기 학습 상태 로드
     window.electronAPI.getLearningStates().then((states) => {
@@ -247,6 +302,7 @@ export const useElectronAPI = () => {
     return () => {
       removeApiKeyListener();
       removeAnalysisListener();
+      removeSingleAnalysisListener();
       removeTradingStateListener();
       removeLearningListener();
     };
@@ -269,6 +325,8 @@ export const useElectronAPI = () => {
     fetchMarkets,
     fetchTickers,
     toggleTrading,
+    startTrading,
+    stopTrading,
     runBacktest,
     toggleLearning,
     fetchSupportedCoins,

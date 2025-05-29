@@ -299,26 +299,28 @@ export const NotificationSettings: React.FC = () => {
                 <ListItem key={index} divider={index < history.length - 1}>
                   <ListItemText
                     primary={
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Typography variant="body1">
-                          {getTypeIcon(item.type)} {item.title}
-                        </Typography>
+                      <React.Fragment>
+                        <Box component="span" sx={{ mr: 1 }}>
+                          {getTypeIcon(item.type)}
+                        </Box>
+                        {item.title}
                         <Chip
                           label={item.type}
                           size="small"
                           color={getTypeColor(item.type) as any}
+                          sx={{ ml: 1 }}
                         />
-                      </Box>
+                      </React.Fragment>
                     }
                     secondary={
-                      <Box>
-                        <Box component="span" display="block" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                      <React.Fragment>
+                        <Typography component="span" variant="body2" display="block">
                           {item.body}
-                        </Box>
-                        <Box component="span" display="block" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.5 }}>
+                        </Typography>
+                        <Typography component="span" variant="caption" display="block" sx={{ mt: 0.5 }}>
                           {new Date(item.timestamp).toLocaleString()}
-                        </Box>
-                      </Box>
+                        </Typography>
+                      </React.Fragment>
                     }
                   />
                 </ListItem>

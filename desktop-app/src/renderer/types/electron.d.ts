@@ -26,8 +26,9 @@ declare global {
       getSupportedKrwCoins: () => Promise<string[]>;
       
       // Trading methods
+      startTrading: (tradingConfig: TradingConfig, analysisConfigs: AnalysisConfig[]) => Promise<boolean>;
+      stopTrading: () => Promise<boolean>;
       toggleTrading: (tradingConfig: TradingConfig, analysisConfigs: AnalysisConfig[]) => Promise<void>;
-      stopTrading: () => Promise<void>;
       getTradingState: () => Promise<TradingState>;
       
       // Backtest methods

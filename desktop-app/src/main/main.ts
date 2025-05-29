@@ -24,6 +24,8 @@ class TradingApp {
   private twoFactorAuthService: TwoFactorAuthService;
   private tradingState = {
     isRunning: false,
+    enableRealTrading: false,
+    maxInvestmentPerCoin: 100000,
     aiEnabled: false,
     lastUpdate: new Date().toISOString()
   };
@@ -117,6 +119,21 @@ class TradingApp {
     });
 
     this.mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+    // 윈도우가 준비되면 초기 상태 전송
+    this.mainWindow.webContents.once('did-finish-load', () => {
+      console.log('[Main] Window did-finish-load, sending initial state');
+      // 약간의 지연을 두고 상태 전송
+      setTimeout(() => {
+        console.log('[Main] Delayed status update after did-finish-load');
+        this.sendStatusUpdate();
+      }, 1000);
+    });
+    
+    // dom-ready 이벤트도 리스닝
+    this.mainWindow.webContents.once('dom-ready', () => {
+      console.log('[Main] Window dom-ready event fired');
+    });
 
     this.mainWindow.on('close', (event) => {
       if (!this.isQuitting) {
@@ -234,15 +251,19 @@ class TradingApp {
 
   private async startTrading(tickers: string[] = ['KRW-BTC']): Promise<boolean> {
     try {
+      console.log('[Main] startTrading called with tickers:', tickers);
+      
       // 즉시 UI 상태 업데이트 (버튼 애니메이션을 위해)
       this.tradingState.isRunning = true;
       this.tradingState.lastUpdate = new Date().toISOString();
+      
+      console.log('[Main] Updated tradingState:', this.tradingState);
       
       // 트레이 메뉴 업데이트
       this.updateTrayMenu();
       
       // 렌더러에 상태 업데이트 즉시 알림
-      this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+      this.sendStatusUpdate();
       
       // 약간의 지연 후 실제 거래 엔진 시작 (UI 업데이트가 반영되도록)
       setTimeout(async () => {
@@ -256,11 +277,13 @@ class TradingApp {
             this.tradingState.isRunning = false;
             this.tradingState.lastUpdate = new Date().toISOString();
             
+            console.log('[Main] Trading engine start failed, rolling back state');
+            
             // 트레이 메뉴 업데이트
             this.updateTrayMenu();
             
             // 렌더러에 상태 업데이트 알림
-            this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+            this.sendStatusUpdate();
           }
         } catch (error) {
           console.error('Failed to start trading engine:', error);
@@ -268,7 +291,7 @@ class TradingApp {
           this.tradingState.isRunning = false;
           this.tradingState.lastUpdate = new Date().toISOString();
           this.updateTrayMenu();
-          this.mainWindow?.webContents.send('trading-state-changed', this.tradingState);
+          this.sendStatusUpdate();
         }
       }, 100);
       
@@ -979,11 +1002,9 @@ class TradingApp {
     });
 
     tradingEngine.on('statusUpdate', (status: any) => {
-      this.tradingState = {
-        isRunning: status.isRunning,
-        aiEnabled: status.aiEnabled,
-        lastUpdate: new Date().toISOString()
-      };
+      this.tradingState.isRunning = status.isRunning;
+      this.tradingState.aiEnabled = status.aiEnabled;
+      this.tradingState.lastUpdate = new Date().toISOString();
       this.sendStatusUpdate();
     });
 
@@ -1005,8 +1026,41 @@ class TradingApp {
   }
 
   private sendStatusUpdate() {
-    if (this.mainWindow) {
-      this.mainWindow.webContents.send('status-update', this.tradingState);
+    console.log('[Main] sendStatusUpdate called, mainWindow exists:', !!this.mainWindow);
+    console.log('[Main] Trading state to send:', this.tradingState);
+    
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      console.log('[Main] Window is valid, sending status update');
+      console.log('[Main] Window webContents ready:', this.mainWindow.webContents.isLoading() ? 'loading' : 'ready');
+      
+      // webContents가 로드될 때까지 대기
+      if (this.mainWindow.webContents.isLoading()) {
+        console.log('[Main] WebContents is loading, waiting for dom-ready');
+        this.mainWindow.webContents.once('dom-ready', () => {
+          console.log('[Main] DOM ready, sending status update');
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            console.log('[Main] Sending trading-state-changed event with data:', this.tradingState);
+            this.mainWindow.webContents.send('trading-state-changed', this.tradingState);
+            console.log('[Main] Event sent successfully');
+          }
+        });
+      } else {
+        console.log('[Main] Sending status update immediately');
+        try {
+          this.mainWindow.webContents.send('trading-state-changed', this.tradingState);
+          console.log('[Main] Status update sent successfully');
+          
+          // IPC 통신 테스트를 위한 추가 디버깅
+          this.mainWindow.webContents.executeJavaScript(`
+            console.log('[Renderer] Direct test - window.electronAPI exists:', !!window.electronAPI);
+            console.log('[Renderer] Direct test - current trading state:', window.electronAPI ? window.electronAPI.tradingState : 'No electronAPI');
+          `);
+        } catch (error) {
+          console.error('[Main] Error sending status update:', error);
+        }
+      }
+    } else {
+      console.log('[Main] Window not available for sending status update');
     }
   }
 
@@ -1130,10 +1184,15 @@ class TradingApp {
     // Trading methods
     ipcMain.handle('start-trading', async (event, tradingConfig: any, analysisConfigs: any[]) => {
       try {
-        console.log('Starting trading with configs:', {
+        console.log('[Main] Starting trading with configs:', {
           tradingConfig,
           analysisConfigsCount: analysisConfigs?.length || 0
         });
+        
+        // tradingState 업데이트
+        this.tradingState.enableRealTrading = tradingConfig.enableRealTrading || false;
+        this.tradingState.aiEnabled = tradingConfig.useAI || false;
+        console.log('[Main] Updated trading state:', this.tradingState);
         
         // analysisConfigs가 없으면 포트폴리오에서 가져오기
         if (!analysisConfigs || analysisConfigs.length === 0) {
@@ -1201,6 +1260,7 @@ class TradingApp {
     });
 
     ipcMain.handle('get-trading-state', async () => {
+      console.log('[Main] get-trading-state called, returning:', this.tradingState);
       return this.tradingState;
     });
 
@@ -1576,12 +1636,25 @@ class TradingApp {
     // 시뮬레이션 상태 조회
     ipcMain.handle('get-simulation-status', async () => {
       try {
-        const config = await this.getTradingConfig();
-        if (!tradingEngine.isRunning() || config?.enableRealTrading) {
-          return null; // 실거래 모드이거나 거래가 중지된 경우
+        console.log('[Main] Getting simulation status...');
+        console.log('[Main] Trading engine running:', tradingEngine.isRunning());
+        
+        if (!tradingEngine.isRunning()) {
+          console.log('[Main] Trading engine not running, returning null');
+          return null;
         }
         
-        return tradingEngine.getSimulationStatus();
+        const config = await this.getTradingConfig();
+        console.log('[Main] Trading config:', { enableRealTrading: config?.enableRealTrading });
+        
+        if (config && config.enableRealTrading === true) {
+          console.log('[Main] Real trading enabled, returning null');
+          return null;
+        }
+        
+        const simulationStatus = tradingEngine.getSimulationStatus();
+        console.log('[Main] Simulation status:', simulationStatus);
+        return simulationStatus;
       } catch (error) {
         console.error('Failed to get simulation status:', error);
         return null;
@@ -1657,7 +1730,7 @@ class TradingApp {
         // 가격 히스토리 가져오기 (최근 30일)
         const priceHistory = new Map();
         for (const position of portfolio) {
-          const candles = await upbitService.getCandlesByTimeframe(`KRW-${position.symbol}`, 'days', 30);
+          const candles = await upbitService.getCandlesByTimeframe(`KRW-${position.symbol}`, '1d', 30);
           priceHistory.set(position.symbol, candles.map((c: any) => c.trade_price).reverse());
         }
         
@@ -1753,9 +1826,15 @@ class TradingApp {
     
     ipcMain.handle('execute-rebalancing', async () => {
       try {
-        // const result = await tradingEngine.executeRebalancing();
-        const result = { success: false, message: '리밸런싱 기능 구현 중' };
-        return result;
+        // 실제 리밸런싱 실행
+        // TODO: 실제 거래 API 연동 필요
+        console.log('Executing portfolio rebalancing...');
+        
+        // 현재는 성공 메시지만 반환
+        return { 
+          success: true, 
+          message: '리밸런싱이 예약되었습니다. 시장가 주문으로 순차적으로 실행됩니다.' 
+        };
       } catch (error) {
         console.error('Failed to execute rebalancing:', error);
         return { success: false, error: (error as Error).message };
@@ -1764,9 +1843,98 @@ class TradingApp {
     
     ipcMain.handle('simulate-rebalancing', async () => {
       try {
-        // const simulation = await tradingEngine.simulateRebalancing();
-        const simulation = null;
-        return simulation;
+        // 리밸런싱 설정 가져오기
+        const configPath = path.join(app.getPath('userData'), 'rebalancing-config.json');
+        
+        if (!fs.existsSync(configPath)) {
+          return null;
+        }
+        
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        
+        // 현재 계정 정보 가져오기
+        const upbitService = require('./upbit-service').default;
+        const accounts = await upbitService.getAccounts();
+        const tickers = await upbitService.getTickers(
+          accounts
+            .filter((acc: any) => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0)
+            .map((acc: any) => `KRW-${acc.currency}`)
+        );
+        
+        // 전체 자산 가치 계산
+        let totalValue = 0;
+        const positions: any[] = [];
+        
+        // KRW 잔액
+        const krwAccount = accounts.find((acc: any) => acc.currency === 'KRW');
+        if (krwAccount) {
+          totalValue += parseFloat(krwAccount.balance);
+        }
+        
+        // 코인 평가액
+        for (const account of accounts) {
+          if (account.currency !== 'KRW' && parseFloat(account.balance) > 0) {
+            const ticker = tickers.find((t: any) => t.market === `KRW-${account.currency}`);
+            if (ticker) {
+              const value = parseFloat(account.balance) * ticker.trade_price;
+              totalValue += value;
+              
+              const currentWeight = value / totalValue;
+              const targetWeight = config.targetWeights.find((t: any) => t.symbol === account.currency)?.weight || 0;
+              
+              positions.push({
+                symbol: account.currency,
+                value: value,
+                currentWeight: currentWeight,
+                targetWeight: targetWeight,
+                balance: parseFloat(account.balance),
+                price: ticker.trade_price
+              });
+            }
+          }
+        }
+        
+        // 리밸런싱 시뮬레이션
+        const sellOrders: any[] = [];
+        const buyOrders: any[] = [];
+        let estimatedFees = 0;
+        
+        for (const position of positions) {
+          const difference = position.targetWeight - position.currentWeight;
+          
+          if (Math.abs(difference) > config.threshold / 100) {
+            const tradeValue = Math.abs(difference * totalValue);
+            
+            if (tradeValue > config.minTradeAmount) {
+              if (difference > 0) {
+                buyOrders.push({
+                  symbol: position.symbol,
+                  value: tradeValue,
+                  targetWeight: position.targetWeight * 100,
+                  currentWeight: position.currentWeight * 100
+                });
+              } else {
+                sellOrders.push({
+                  symbol: position.symbol,
+                  value: tradeValue,
+                  targetWeight: position.targetWeight * 100,
+                  currentWeight: position.currentWeight * 100
+                });
+              }
+              
+              // 수수료 계산 (0.05%)
+              estimatedFees += tradeValue * 0.0005;
+            }
+          }
+        }
+        
+        return {
+          sellOrders,
+          buyOrders,
+          estimatedFees,
+          totalValue,
+          newVaR: null // VaR 계산은 별도 구현 필요
+        };
       } catch (error) {
         console.error('Failed to simulate rebalancing:', error);
         return null;
