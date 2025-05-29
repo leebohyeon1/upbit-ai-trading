@@ -1597,7 +1597,7 @@ class TradingApp {
         // 가격 히스토리 가져오기 (최근 30일)
         const priceHistory = new Map();
         for (const position of portfolio) {
-          const candles = await upbitService.getCandles(`KRW-${position.symbol}`, 'days', 30);
+          const candles = await upbitService.getCandlesByTimeframe(`KRW-${position.symbol}`, 'days', 30);
           priceHistory.set(position.symbol, candles.map((c: any) => c.trade_price).reverse());
         }
         
