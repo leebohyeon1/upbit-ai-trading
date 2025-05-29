@@ -1712,6 +1712,12 @@ class TradingEngine extends EventEmitter {
     const coin = market.split('-')[1];
     const volume = amount / price;
     
+    // 잔고 확인
+    if (this.virtualKRW < amount) {
+      console.log(`[시뮬레이션] ${coin} 매수 실패: KRW 잔고 부족 (필요: ₩${amount.toLocaleString()}, 보유: ₩${this.virtualKRW.toLocaleString()})`);
+      return;
+    }
+    
     // 가상 KRW 차감
     this.virtualKRW -= amount;
     
@@ -1719,7 +1725,10 @@ class TradingEngine extends EventEmitter {
     const existing = this.virtualPortfolio.get(market) || { balance: 0, avgBuyPrice: 0, totalBought: 0 };
     const newBalance = existing.balance + volume;
     const newTotalBought = existing.totalBought + amount;
-    const newAvgBuyPrice = newTotalBought / newBalance;
+    
+    // 올바른 평균 매수가 계산: (기존 평균가 * 기존 수량 + 새 매수가 * 새 수량) / 전체 수량
+    const newAvgBuyPrice = newBalance > 0 ? 
+      (existing.avgBuyPrice * existing.balance + price * volume) / newBalance : price;
     
     this.virtualPortfolio.set(market, {
       balance: newBalance,
@@ -1732,7 +1741,8 @@ class TradingEngine extends EventEmitter {
       market,
       type: 'BUY',
       price,
-      amount,
+      amount, // KRW 금액
+      volume, // 코인 수량
       confidence,
       timestamp: Date.now(),
       profit: 0
@@ -1765,7 +1775,10 @@ class TradingEngine extends EventEmitter {
     
     // 포트폴리오 업데이트
     portfolio.balance -= volume;
-    portfolio.totalBought = portfolio.balance * portfolio.avgBuyPrice;
+    
+    // 매도한 비율만큼 totalBought 감소
+    const sellRatio = volume / (portfolio.balance + volume);
+    portfolio.totalBought = portfolio.totalBought * (1 - sellRatio);
     
     if (portfolio.balance <= 0) {
       this.virtualPortfolio.delete(market);
@@ -1776,7 +1789,8 @@ class TradingEngine extends EventEmitter {
       market,
       type: 'SELL',
       price,
-      amount: sellAmount,
+      amount: sellAmount, // KRW 금액
+      volume, // 코인 수량
       confidence,
       timestamp: Date.now(),
       profit: profitAmount
@@ -1801,8 +1815,12 @@ class TradingEngine extends EventEmitter {
     
     this.virtualPortfolio.forEach((portfolio, market) => {
       const analysis = this.analysisResults.get(market);
-      if (analysis) {
+      if (analysis && analysis.currentPrice) {
         totalValue += portfolio.balance * analysis.currentPrice;
+      } else {
+        // 현재가를 찾을 수 없는 경우 평균 매수가 사용
+        console.warn(`[시뮬레이션] ${market} 현재가 조회 실패, 평균 매수가 사용`);
+        totalValue += portfolio.balance * portfolio.avgBuyPrice;
       }
     });
     

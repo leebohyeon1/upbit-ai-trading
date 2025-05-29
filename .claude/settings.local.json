@@ -34,7 +34,11 @@
       "Bash(npm install:*)",
       "WebFetch(domain:api.upbit.com)",
       "Bash(npm uninstall:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"simulateBuyOrder|simulateSellOrder\" trading-engine.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getSimulationStatus|calculateTotalPortfolioValue\" trading-engine.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 10 -B 5 \"isSimulationMode.*getAccounts|getAccounts.*isSimulationMode\" trading-engine.ts)",
+      "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getAccounts\" trading-engine.ts)"
     ],
     "deny": []
   },
