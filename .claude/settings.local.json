@@ -33,8 +33,10 @@
       "Bash(touch:*)",
       "Bash(npm install:*)",
       "WebFetch(domain:api.upbit.com)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": false
 }

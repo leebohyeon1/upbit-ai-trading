@@ -112,7 +112,7 @@ export const docSections: DocSection[] = [
       { id: 'learning-activation', title: '학습 시스템 활성화' },
       { id: 'auto-learning', title: '거래 결과 자동 학습' },
       { id: 'weight-optimization', title: '가중치 최적화' },
-      { id: 'performance-stats', title: '성과 통계 활용' },
+      { id: 'performance-statistics', title: '성과 통계 활용' },
     ],
   },
   {
@@ -129,10 +129,11 @@ export const docSections: DocSection[] = [
     id: 'risk-management',
     title: '리스크 관리',
     subsections: [
-      { id: 'kelly-overview', title: 'Kelly Criterion 이해' },
-      { id: 'position-management', title: '포지션 사이징' },
-      { id: 'diversification', title: '분산 투자 가이드' },
-      { id: 'loss-limits', title: '최대 손실 한도' },
+      { id: 'overview', title: '리스크 관리 개요' },
+      { id: 'stop-loss', title: '손절 전략' },
+      { id: 'portfolio-risk', title: '포트폴리오 리스크' },
+      { id: 'capital-management', title: '자금 관리 원칙' },
+      { id: 'monitoring', title: '실시간 리스크 모니터링' },
     ],
   },
   {
@@ -177,7 +178,7 @@ export const docSections: DocSection[] = [
 ];
 
 // Import final contents from the merged file
-import { finalDocContents } from './docContentsFinal';
+import { finalDocContents } from './docContentsFinalNew';
 
 // Export the complete documentation contents
 export const docContents: Record<string, DocContent> = {
