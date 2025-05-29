@@ -39,7 +39,7 @@ import {
   Key,
   PhoneAndroid
 } from '@mui/icons-material';
-import { useElectronAPI } from '../../hooks/useElectronAPI';
+import { useTradingContext } from '../../contexts/TradingContext';
 
 interface TwoFactorStatus {
   isEnabled: boolean;
@@ -54,7 +54,14 @@ interface SetupData {
 }
 
 export const TwoFactorAuthSettings: React.FC = () => {
-  const electronAPI = useElectronAPI();
+  const {
+    get2FAStatus,
+    setup2FA,
+    enable2FA,
+    disable2FA,
+    verify2FA,
+    regenerateBackupCodes
+  } = useTradingContext();
   const [status, setStatus] = useState<TwoFactorStatus>({
     isEnabled: false,
     setupComplete: false,
@@ -78,7 +85,7 @@ export const TwoFactorAuthSettings: React.FC = () => {
 
   const loadStatus = async () => {
     try {
-      const result = await electronAPI.get2FAStatus();
+      const result = await get2FAStatus();
       setStatus(result);
     } catch (error) {
       console.error('2FA 상태 로드 실패:', error);
@@ -90,7 +97,7 @@ export const TwoFactorAuthSettings: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const result = await electronAPI.setup2FA();
+      const result = await setup2FA();
       setSetupData(result);
       setSetupDialog(true);
       setCurrentStep(0);
@@ -110,7 +117,7 @@ export const TwoFactorAuthSettings: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const success = await electronAPI.enable2FA(verificationCode);
+      const success = await enable2FA(verificationCode);
       
       if (success) {
         setSuccess('2단계 인증이 성공적으로 활성화되었습니다!');
@@ -137,7 +144,7 @@ export const TwoFactorAuthSettings: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const success = await electronAPI.disable2FA(disableCode);
+      const success = await disable2FA(disableCode);
       
       if (success) {
         setSuccess('2단계 인증이 비활성화되었습니다.');
@@ -163,7 +170,7 @@ export const TwoFactorAuthSettings: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const codes = await electronAPI.regenerateBackupCodes(verificationCode);
+      const codes = await regenerateBackupCodes(verificationCode);
       setNewBackupCodes(codes);
       setBackupCodesDialog(true);
       setVerificationCode('');

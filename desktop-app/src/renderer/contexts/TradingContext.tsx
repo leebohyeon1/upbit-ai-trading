@@ -48,7 +48,7 @@ interface TradingContextType {
   updateAnalysisConfigs: (configs: AnalysisConfig[]) => void;
   updatePortfolio: (portfolio: PortfolioCoin[]) => void;
   toggleTrading: () => Promise<void>;
-  validateApiKey: (accessKey: string, secretKey: string) => Promise<ApiKeyStatus>;
+  validateApiKey: (accessKey: string, secretKey: string, claudeApiKey?: string) => Promise<ApiKeyStatus>;
   fetchAccounts: () => Promise<Account[]>;
   fetchMarkets: () => Promise<MarketData[]>;
   fetchTickers: (symbols: string[]) => Promise<TickerData[]>;
@@ -56,6 +56,33 @@ interface TradingContextType {
   fetchSupportedCoins: () => Promise<string[]>;
   fetchProfitHistory: () => Promise<void>;
   calculatePortfolioData: () => void;
+  generateRiskReport: () => Promise<any>;
+  getPortfolio: () => Promise<PortfolioCoin[]>;
+  getRebalancingConfig: () => Promise<any>;
+  saveRebalancingConfig: (config: any) => Promise<boolean>;
+  executeRebalancing: () => Promise<{ success: boolean }>;
+  simulateRebalancing: () => Promise<any>;
+  getCooldownInfo: (market: string) => Promise<any>;
+  runBacktest: (ticker: string, startDate: string, endDate: string, config: any) => Promise<BacktestResult | null>;
+  startTrading: (tradingConfig: TradingConfig, analysisConfigs: any[]) => Promise<any>;
+  stopTrading: () => Promise<any>;
+  
+  // 2FA methods
+  get2FAStatus: () => Promise<any>;
+  setup2FA: () => Promise<any>;
+  enable2FA: (token: string) => Promise<any>;
+  disable2FA: (token: string) => Promise<any>;
+  verify2FA: (token: string) => Promise<any>;
+  regenerateBackupCodes: (token: string) => Promise<any>;
+  
+  // Multi-timeframe analysis
+  analyzeMultiTimeframe: (params: any) => Promise<any>;
+  
+  // Support/Resistance analysis
+  analyzeSupportResistance: (params: any) => Promise<any>;
+  
+  // Advanced indicators analysis
+  analyzeAdvancedIndicators: (params: any) => Promise<any>;
 }
 
 const TradingContext = createContext<TradingContextType | null>(null);
@@ -223,6 +250,109 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       }, 100);
     } catch (error) {
       console.error('Failed to toggle learning:', error);
+    }
+  }, []);
+
+  // 추가 API 메서드들
+  const generateRiskReport = useCallback(async () => {
+    try {
+      return await window.electronAPI.generateRiskReport();
+    } catch (error) {
+      console.error('Failed to generate risk report:', error);
+      return null;
+    }
+  }, []);
+
+  const getPortfolio = useCallback(async () => {
+    try {
+      return await window.electronAPI.getPortfolio();
+    } catch (error) {
+      console.error('Failed to get portfolio:', error);
+      return [];
+    }
+  }, []);
+
+  const getRebalancingConfig = useCallback(async () => {
+    try {
+      return await window.electronAPI.getRebalancingConfig();
+    } catch (error) {
+      console.error('Failed to get rebalancing config:', error);
+      return null;
+    }
+  }, []);
+
+  const saveRebalancingConfig = useCallback(async (config: any) => {
+    try {
+      return await window.electronAPI.saveRebalancingConfig(config);
+    } catch (error) {
+      console.error('Failed to save rebalancing config:', error);
+      return false;
+    }
+  }, []);
+
+  const executeRebalancing = useCallback(async () => {
+    try {
+      return await window.electronAPI.executeRebalancing();
+    } catch (error) {
+      console.error('Failed to execute rebalancing:', error);
+      return { success: false };
+    }
+  }, []);
+
+  const simulateRebalancing = useCallback(async () => {
+    try {
+      return await window.electronAPI.simulateRebalancing();
+    } catch (error) {
+      console.error('Failed to simulate rebalancing:', error);
+      return null;
+    }
+  }, []);
+
+  const getCooldownInfo = useCallback(async (market: string) => {
+    try {
+      return await window.electronAPI.getCooldownInfo(market);
+    } catch (error) {
+      console.error('Failed to get cooldown info:', error);
+      return {
+        buyRemaining: 0,
+        sellRemaining: 0,
+        buyTotal: 30,
+        sellTotal: 20
+      };
+    }
+  }, []);
+
+  const runBacktest = useCallback(async (
+    ticker: string, 
+    startDate: string, 
+    endDate: string, 
+    config: any
+  ): Promise<BacktestResult | null> => {
+    try {
+      return await window.electronAPI.runBacktest(ticker, startDate, endDate, config);
+    } catch (error) {
+      console.error('Backtest failed:', error);
+      return null;
+    }
+  }, []);
+
+  const startTrading = useCallback(async (tradingConfig: TradingConfig, analysisConfigs: any[]) => {
+    try {
+      console.log('[TradingContext] Starting trading with config:', { enableRealTrading: tradingConfig.enableRealTrading });
+      return await window.electronAPI.startTrading(tradingConfig, analysisConfigs);
+    } catch (error) {
+      console.error('Failed to start trading:', error);
+      throw error;
+    }
+  }, []);
+
+  const stopTrading = useCallback(async () => {
+    try {
+      console.log('[TradingContext] Stopping trading...');
+      return await window.electronAPI.stopTrading();
+    } catch (error) {
+      console.error('Failed to stop trading:', error);
+      throw error;
     }
   }, []);
 
@@ -594,7 +724,34 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     toggleLearning,
     fetchSupportedCoins,
     fetchProfitHistory,
-    calculatePortfolioData
+    calculatePortfolioData,
+    generateRiskReport,
+    getPortfolio,
+    getRebalancingConfig,
+    saveRebalancingConfig,
+    executeRebalancing,
+    simulateRebalancing,
+    getCooldownInfo,
+    runBacktest,
+    startTrading,
+    stopTrading,
+    
+    // 2FA methods
+    get2FAStatus: window.electronAPI.get2FAStatus,
+    setup2FA: window.electronAPI.setup2FA,
+    enable2FA: window.electronAPI.enable2FA,
+    disable2FA: window.electronAPI.disable2FA,
+    verify2FA: window.electronAPI.verify2FA,
+    regenerateBackupCodes: window.electronAPI.regenerateBackupCodes,
+    
+    // Multi-timeframe analysis
+    analyzeMultiTimeframe: window.electronAPI.analyzeMultiTimeframe,
+    
+    // Support/Resistance analysis
+    analyzeSupportResistance: window.electronAPI.analyzeSupportResistance,
+    
+    // Advanced indicators analysis
+    analyzeAdvancedIndicators: window.electronAPI.analyzeAdvancedIndicators
   }), [
     localTradingState,
     analyses,
@@ -620,7 +777,17 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     toggleLearning,
     fetchSupportedCoins,
     fetchProfitHistory,
-    calculatePortfolioData
+    calculatePortfolioData,
+    generateRiskReport,
+    getPortfolio,
+    getRebalancingConfig,
+    saveRebalancingConfig,
+    executeRebalancing,
+    simulateRebalancing,
+    getCooldownInfo,
+    runBacktest,
+    startTrading,
+    stopTrading
   ]);
 
   // 로딩 중이면 로딩 화면 표시

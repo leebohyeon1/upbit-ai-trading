@@ -56,7 +56,7 @@ import {
   Info,
   Refresh
 } from '@mui/icons-material';
-import { useElectronAPI } from '../../hooks/useElectronAPI';
+// import removed - not using electronAPI
 
 interface GridConfig {
   symbol: string;
@@ -112,7 +112,7 @@ interface GridTradingStatus {
 }
 
 export const GridTradingPanel: React.FC = () => {
-  const electronAPI = useElectronAPI();
+  // electronAPI removed - using mock data
   const [status, setStatus] = useState<GridTradingStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);

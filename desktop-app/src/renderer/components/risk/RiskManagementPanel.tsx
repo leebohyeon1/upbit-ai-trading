@@ -30,7 +30,7 @@ import {
   Assessment as AssessmentIcon,
   AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material';
-import { useElectronAPI } from '../../hooks/useElectronAPI';
+import { useTradingContext } from '../../contexts/TradingContext';
 
 interface VaRData {
   dailyVaR95: number;
@@ -58,7 +58,7 @@ interface RiskReport {
 }
 
 export const RiskManagementPanel: React.FC = () => {
-  const electronAPI = useElectronAPI();
+  const { generateRiskReport } = useTradingContext();
   const [loading, setLoading] = useState(false);
   const [riskReport, setRiskReport] = useState<RiskReport | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -67,7 +67,7 @@ export const RiskManagementPanel: React.FC = () => {
   const fetchRiskReport = async () => {
     setLoading(true);
     try {
-      const report = await electronAPI.generateRiskReport();
+      const report = await generateRiskReport();
       setRiskReport(report);
       setLastUpdate(new Date());
     } catch (error) {

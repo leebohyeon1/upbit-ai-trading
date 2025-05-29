@@ -44,7 +44,7 @@ import {
   Cloud,
   Functions
 } from '@mui/icons-material';
-import { useElectronAPI } from '../../hooks/useElectronAPI';
+import { useTradingContext } from '../../contexts/TradingContext';
 
 interface IchimokuCloud {
   tenkanSen: number;
@@ -93,7 +93,7 @@ interface AdvancedIndicatorAnalysis {
 }
 
 export const AdvancedIndicatorsPanel: React.FC = () => {
-  const electronAPI = useElectronAPI();
+  const { analyzeAdvancedIndicators } = useTradingContext();
   const [analysis, setAnalysis] = useState<AdvancedIndicatorAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -134,7 +134,7 @@ export const AdvancedIndicatorsPanel: React.FC = () => {
     setError('');
     
     try {
-      const result = await electronAPI.analyzeAdvancedIndicators({
+      const result = await analyzeAdvancedIndicators({
         symbol: selectedSymbol,
         timeframe,
         period: 200

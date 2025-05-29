@@ -44,7 +44,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon
 } from '@mui/icons-material';
-import { useElectronAPI } from '../../hooks/useElectronAPI';
+import { useTradingContext } from '../../contexts/TradingContext';
 
 interface TargetWeight {
   symbol: string;
@@ -79,7 +79,17 @@ interface RebalancingHistory {
 }
 
 export const AutoRebalancingPanel: React.FC = () => {
-  const electronAPI = useElectronAPI();
+  const {
+    accounts,
+    fetchAccounts,
+    fetchTickers,
+    tickers,
+    getPortfolio,
+    getRebalancingConfig,
+    saveRebalancingConfig,
+    executeRebalancing,
+    simulateRebalancing
+  } = useTradingContext();
   const [config, setConfig] = useState<RebalancingConfig>({
     enabled: false,
     interval: 24,
@@ -106,7 +116,7 @@ export const AutoRebalancingPanel: React.FC = () => {
 
   const loadRebalancingConfig = async () => {
     try {
-      const savedConfig = await electronAPI.getRebalancingConfig();
+      const savedConfig = await getRebalancingConfig();
       if (savedConfig) {
         setConfig(savedConfig);
       }
@@ -117,9 +127,9 @@ export const AutoRebalancingPanel: React.FC = () => {
 
   const loadCurrentPositions = async () => {
     try {
-      const accounts = await electronAPI.fetchAccounts();
-      const tickers = await electronAPI.fetchTickers(
-        accounts
+      const accountsData = await fetchAccounts();
+      const tickersData = await fetchTickers(
+        accountsData
           .filter((acc: any) => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0)
           .map((acc: any) => `KRW-${acc.currency}`)
       );
@@ -128,11 +138,11 @@ export const AutoRebalancingPanel: React.FC = () => {
       let totalValue = 0;
       const positionsData = [];
       
-      for (const account of accounts) {
+      for (const account of accountsData) {
         if (account.currency === 'KRW') {
           totalValue += parseFloat(account.balance);
         } else if (parseFloat(account.balance) > 0) {
-          const ticker = tickers.find((t: any) => t.market === `KRW-${account.currency}`);
+          const ticker = tickersData.find((t: any) => t.market === `KRW-${account.currency}`);
           if (ticker) {
             const value = parseFloat(account.balance) * ticker.trade_price;
             totalValue += value;
@@ -171,7 +181,7 @@ export const AutoRebalancingPanel: React.FC = () => {
   // 설정 저장
   const saveConfig = async (newConfig: RebalancingConfig) => {
     try {
-      await electronAPI.saveRebalancingConfig(newConfig);
+      await saveRebalancingConfig(newConfig);
       setConfig(newConfig);
     } catch (error) {
       console.error('Failed to save config:', error);
@@ -182,7 +192,7 @@ export const AutoRebalancingPanel: React.FC = () => {
   const executeManualRebalancing = async () => {
     setLoading(true);
     try {
-      const result = await electronAPI.executeRebalancing();
+      const result = await executeRebalancing();
       if (result.success) {
         setLastRebalance(new Date());
         loadCurrentPositions();
@@ -198,7 +208,7 @@ export const AutoRebalancingPanel: React.FC = () => {
   const simulateRebalancing = async () => {
     setLoading(true);
     try {
-      const simulation = await electronAPI.simulateRebalancing();
+      const simulation = await simulateRebalancing();
       setSimulationResult(simulation);
     } catch (error) {
       console.error('Simulation failed:', error);

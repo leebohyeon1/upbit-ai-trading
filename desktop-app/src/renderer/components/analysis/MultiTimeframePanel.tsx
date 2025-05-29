@@ -40,7 +40,7 @@ import {
   CheckCircle,
   Error
 } from '@mui/icons-material';
-import { useElectronAPI } from '../../hooks/useElectronAPI';
+import { useTradingContext } from '../../contexts/TradingContext';
 
 interface TimeframeConfig {
   interval: string;
@@ -76,7 +76,7 @@ interface MultiTimeframeAnalysis {
 }
 
 export const MultiTimeframePanel: React.FC = () => {
-  const electronAPI = useElectronAPI();
+  const { analyzeMultiTimeframe } = useTradingContext();
   const [analysis, setAnalysis] = useState<MultiTimeframeAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -129,7 +129,7 @@ export const MultiTimeframePanel: React.FC = () => {
     setError('');
     
     try {
-      const result = await electronAPI.analyzeMultiTimeframe({
+      const result = await analyzeMultiTimeframe({
         symbol: selectedSymbol,
         timeframes: timeframeConfig.filter(tf => tf.enabled)
       });

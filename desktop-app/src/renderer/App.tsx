@@ -24,6 +24,9 @@ import { TradingSettings } from './components/settings/TradingSettings';
 import { NotificationSettings } from './components/settings/NotificationSettings';
 import { TwoFactorAuthSettings } from './components/settings/TwoFactorAuthSettings';
 import { AnalysisSettings } from './components/analysis/AnalysisSettings';
+import { MultiTimeframePanel } from './components/analysis/MultiTimeframePanel';
+import { AdvancedIndicatorsPanel } from './components/analysis/AdvancedIndicatorsPanel';
+import PatternRecognitionPanel from './components/analysis/PatternRecognitionPanel';
 import { LearningStatus } from './components/learning/LearningStatus';
 import { BacktestPanel } from './components/backtest/BacktestPanel';
 import { SimulationStatus } from './components/trading/SimulationStatus';
@@ -163,6 +166,25 @@ const AppContent: React.FC = () => {
                 시뮬레이션 성과
               </Typography>
               <SimulationStatus />
+            </Box>
+          );
+        case TAB_INDEX.ADVANCED_ANALYSIS:
+          return (
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, height: '100%', overflow: 'auto' }}>
+              <Typography variant="h4" fontWeight="bold" gutterBottom>
+                고급 분석
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <MultiTimeframePanel />
+                </Grid>
+                <Grid item xs={12}>
+                  <AdvancedIndicatorsPanel />
+                </Grid>
+                <Grid item xs={12}>
+                  <PatternRecognitionPanel />
+                </Grid>
+              </Grid>
             </Box>
           );
         case TAB_INDEX.KILL_SWITCH:
