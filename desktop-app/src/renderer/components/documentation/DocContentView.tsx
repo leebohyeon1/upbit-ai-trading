@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography, useTheme, alpha, Divider, Paper } from '@mui/material';
-import { docContents } from './docContents';
+import { allDocContents as docContents } from './docContents_refactored';
 import Markdown from 'markdown-to-jsx';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -13,7 +13,7 @@ interface DocContentProps {
 const DocContentView: React.FC<DocContentProps> = ({ sectionId, subSectionId }) => {
   const theme = useTheme();
   const contentId = subSectionId ? `${sectionId}.${subSectionId}` : sectionId;
-  const content = docContents[contentId];
+  const content = docContents[contentId as keyof typeof docContents];
 
   if (!content) {
     return (

@@ -48,7 +48,8 @@
       "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 15 -B 5 \"get-trading-history\" main.ts)",
       "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 30 \"거래 내역 조회 \\(수익률 차트용\\)\" main.ts)",
       "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 50 \"초기 자산 계산\" main.ts)",
-      "mcp__filesystem__search_files"
+      "mcp__filesystem__search_files",
+      "Bash(timeout 60s npm run build)"
     ],
     "deny": []
   },

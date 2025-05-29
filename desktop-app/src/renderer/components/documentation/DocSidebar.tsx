@@ -31,7 +31,15 @@ import {
   ExpandLess,
   ExpandMore,
 } from '@mui/icons-material';
-import { DocSection } from './docContents';
+import { allDocContents as docContents } from './docContents_refactored';
+
+// DocSection type definition moved inline
+interface DocSection {
+  id: string;
+  title: string;
+  items: string[];
+  subsections?: string[];
+}
 
 interface DocSidebarProps {
   sections: DocSection[];
@@ -142,34 +150,41 @@ const DocSidebar: React.FC<DocSidebarProps> = ({
             {section.subsections && (
               <Collapse in={expandedSections.includes(section.id)} timeout="auto" unmountOnExit>
                 <List component="div" disablePadding sx={{ pl: 2 }}>
-                  {section.subsections.map((subsection) => (
-                    <ListItem key={subsection.id} disablePadding sx={{ mb: 0.5 }}>
-                      <ListItemButton
-                        onClick={() => onSectionSelect(section.id, subsection.id)}
-                        selected={selectedSection === section.id && selectedSubSection === subsection.id}
-                        sx={{
-                          borderRadius: 1,
-                          pl: 3,
-                          '&.Mui-selected': {
-                            backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                            borderLeft: `3px solid ${theme.palette.primary.main}`,
-                            pl: 2.6,
-                          },
-                        }}
-                      >
-                        <ListItemText
-                          primary={subsection.title}
-                          primaryTypographyProps={{
-                            fontSize: '0.85rem',
-                            fontWeight: selectedSubSection === subsection.id ? 500 : 400,
-                            color: selectedSubSection === subsection.id 
-                              ? theme.palette.primary.main 
-                              : theme.palette.text.secondary,
+                  {section.subsections.map((subsectionId) => {
+                    // 문서 콘텐츠에서 해당 서브섹션의 제목을 찾아옴
+                    const contentKey = `${section.id}.${subsectionId}`;
+                    const subsectionContent = docContents[contentKey as keyof typeof docContents];
+                    const subsectionTitle = subsectionContent?.title || subsectionId;
+                    
+                    return (
+                      <ListItem key={subsectionId} disablePadding sx={{ mb: 0.5 }}>
+                        <ListItemButton
+                          onClick={() => onSectionSelect(section.id, subsectionId)}
+                          selected={selectedSection === section.id && selectedSubSection === subsectionId}
+                          sx={{
+                            borderRadius: 1,
+                            pl: 3,
+                            '&.Mui-selected': {
+                              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                              borderLeft: `3px solid ${theme.palette.primary.main}`,
+                              pl: 2.6,
+                            },
                           }}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
+                        >
+                          <ListItemText
+                            primary={subsectionTitle}
+                            primaryTypographyProps={{
+                              fontSize: '0.85rem',
+                              fontWeight: selectedSubSection === subsectionId ? 500 : 400,
+                              color: selectedSubSection === subsectionId 
+                                ? theme.palette.primary.main 
+                                : theme.palette.text.secondary,
+                            }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
                 </List>
               </Collapse>
             )}
