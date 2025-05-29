@@ -1,7 +1,7 @@
 // 모든 문서 내용을 통합하는 파일
 import { gettingStartedContents } from './docContents_new_part1';
 import { initialSetupContents } from './docContents_new_part2';
-import { coreConcepts } from './docContents_new_part3';
+import { coreConcepts, patternRecognition } from './docContents_new_part3';
 import { interfaceContents } from './docContents_new_part4';
 import { 
   tradingStrategyContents,
@@ -21,6 +21,8 @@ import {
   aiLearningExtendedContents 
 } from './docContents_new_part8';
 import { riskManagementContents } from './docContents_new_part9';
+import { killSwitchContents } from './docContents_killSwitch';
+import { smartOrderContents } from './docContents_smartOrder';
 
 // 나머지 빈 섹션들에 대한 기본 내용
 const notificationContents = {
@@ -559,8 +561,10 @@ export const finalDocContents = {
   ...gettingStartedContents,
   ...initialSetupContents,
   ...coreConcepts,
+  ...patternRecognition,
   ...interfaceContents,
   ...tradingStrategyContents,
+  ...smartOrderContents,
   ...coinSettingsContents,
   ...autoTradingContents,
   ...calculationsContents,
@@ -570,6 +574,7 @@ export const finalDocContents = {
   ...backtestContents,
   ...riskManagementOverview,
   ...riskManagementContents,
+  ...killSwitchContents,
   ...notificationContents,
   ...troubleshootingContents,
   ...advancedContents,

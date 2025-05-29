@@ -27,9 +27,11 @@ import {
   ChevronLeft,
   Menu as MenuIcon,
   ShowChart,
-  MenuBook
+  MenuBook,
+  Shield
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
+import { ThemeToggle } from '../common/ThemeToggle';
 import { TAB_INDEX } from '../../constants';
 
 interface MainLayoutProps {
@@ -59,6 +61,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     ...(tradingState.isRunning && !tradingConfig.enableRealTrading ? 
       [{ text: '시뮬레이션 성과', icon: <Psychology />, value: TAB_INDEX.SIMULATION }] : []
     ),
+    { text: 'Kill Switch', icon: <Shield />, value: TAB_INDEX.KILL_SWITCH },
     { text: '사용 설명서', icon: <MenuBook />, value: TAB_INDEX.DOCUMENTATION },
   ];
 
@@ -96,6 +99,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             {drawerOpen ? <ChevronLeft /> : <MenuIcon />}
           </IconButton>
         </Box>
+        
+        {/* Theme Toggle */}
+        {drawerOpen && (
+          <Box sx={{ px: 2, pb: 1 }}>
+            <ThemeToggle variant="switch" showLabel />
+          </Box>
+        )}
         
         <Divider />
         

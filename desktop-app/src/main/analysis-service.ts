@@ -1,6 +1,7 @@
 import { CandleData } from './upbit-service';
 import upbitService from './upbit-service';
 import newsService, { NewsAnalysis } from './news-service';
+import PatternRecognitionService from './pattern-recognition-service';
 
 export interface TechnicalAnalysis {
   market: string;
@@ -78,9 +79,32 @@ export interface TechnicalAnalysis {
   };
   // 뉴스 분석
   newsAnalysis?: NewsAnalysis;
+  // 패턴 분석
+  patterns?: {
+    candlePatterns: Array<{
+      pattern: string;
+      type: 'bullish' | 'bearish' | 'neutral';
+      confidence: number;
+      description: string;
+    }>;
+    chartPatterns: Array<{
+      pattern: string;
+      type: 'bullish' | 'bearish' | 'continuation';
+      confidence: number;
+      targetPrice?: number;
+    }>;
+    patternSignal: 'BUY' | 'SELL' | 'HOLD';
+    patternConfidence: number;
+  };
 }
 
 class AnalysisService {
+  private patternService: PatternRecognitionService;
+
+  constructor() {
+    this.patternService = new PatternRecognitionService();
+  }
+
   // RSI 계산
   calculateRSI(prices: number[], period: number = 14): number {
     if (prices.length < period + 1) return 50;
@@ -745,8 +769,69 @@ class AnalysisService {
       }
     }
 
+    // 패턴 분석 추가
+    let patterns;
+    try {
+      // 캔들 데이터 준비
+      const candleData = candles.map(c => ({
+        open: c.opening_price,
+        high: c.high_price,
+        low: c.low_price,
+        close: c.trade_price,
+        volume: c.candle_acc_trade_volume,
+        timestamp: new Date(c.candle_date_time_utc).getTime()
+      }));
+      
+      // 패턴 인식
+      const candlePatterns = this.patternService.detectCandlePatterns(candleData);
+      const chartPatterns = this.patternService.detectChartPatterns(candleData);
+      
+      // 패턴 신호 변환
+      const patternSignalResult = this.patternService.convertToSignal(candlePatterns, chartPatterns);
+      
+      patterns = {
+        candlePatterns: candlePatterns.slice(0, 3).map(p => ({
+          pattern: p.pattern,
+          type: p.type,
+          confidence: p.confidence,
+          description: p.description
+        })),
+        chartPatterns: chartPatterns.slice(0, 3).map(p => ({
+          pattern: p.pattern,
+          type: p.type,
+          confidence: p.confidence,
+          targetPrice: p.targetPrice
+        })),
+        patternSignal: patternSignalResult.signal,
+        patternConfidence: patternSignalResult.confidence
+      };
+      
+      // 패턴 신호를 전체 신호에 반영 (가중치 적용)
+      const patternWeight = 0.15; // 패턴 분석의 가중치 15%
+      if (patternSignalResult.signal === 'BUY' && patternSignalResult.confidence > 0.6) {
+        confidence = confidence * (1 - patternWeight) + patternSignalResult.confidence * 100 * patternWeight;
+        if (signal === 'HOLD' && patternSignalResult.confidence > 0.7) {
+          signal = 'BUY';
+        }
+      } else if (patternSignalResult.signal === 'SELL' && patternSignalResult.confidence > 0.6) {
+        confidence = confidence * (1 - patternWeight) + patternSignalResult.confidence * 100 * patternWeight;
+        if (signal === 'HOLD' && patternSignalResult.confidence > 0.7) {
+          signal = 'SELL';
+        }
+      }
+      
+    } catch (error) {
+      console.error('Pattern recognition failed:', error);
+      patterns = undefined;
+    }
+
     // 활성화된 주요 신호들 수집
     const activeSignals: string[] = [];
+    
+    // 주요 패턴을 activeSignals에 추가 (변수 선언 후로 이동)
+    if (patterns && patterns.candlePatterns.length > 0 && patterns.candlePatterns[0].confidence > 0.7) {
+      activeSignals.push(`패턴: ${patterns.candlePatterns[0].pattern}`);
+    }
     
     if (signal === 'BUY') {
       buySignalsWithWeight.forEach(sig => {
@@ -809,6 +894,7 @@ class AnalysisService {
         activeSignals
       },
       newsAnalysis,
+      patterns,
       // Additional properties for compatibility
       volumeRatio,
       obvTrend: obv ? (obv.trend === 'UP' ? 1 : obv.trend === 'DOWN' ? -1 : 0) : 0,

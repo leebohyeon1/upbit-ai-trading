@@ -1,4 +1,253 @@
 // Core Concepts 섹션
+// Pattern Recognition 섹션
+export const patternRecognition = {
+  'pattern-recognition': {
+    title: '패턴 인식 ✨ NEW',
+    content: `
+# 패턴 인식 ✨ NEW
+
+## 개요
+
+패턴 인식은 과거 가격 움직임에서 반복되는 형태를 찾아내어 미래 가격을 예측하는 기술적 분석 방법입니다.
+
+<div class="success">
+✅ **핵심**: 캔들 패턴과 차트 패턴을 자동으로 인식하여 매매 신호를 생성합니다.
+</div>
+
+## 캔들 패턴
+
+### 단일 캔들 패턴
+
+#### 1. Doji (십자선)
+\`\`\`
+특징: 시가와 종가가 거의 같음
+의미: 매수세와 매도세의 균형, 추세 전환 가능성
+신뢰도: 60%
+
+    |
+ ---|---
+    |
+\`\`\`
+
+#### 2. Hammer (망치형)
+\`\`\`
+특징: 긴 아래꼬리, 짧은 몸통
+의미: 하락 추세 후 반전 신호
+신뢰도: 70%
+
+    □
+    |
+    |
+    |
+\`\`\`
+
+#### 3. Shooting Star (유성형)
+\`\`\`
+특징: 긴 위꼬리, 짧은 몸통
+의미: 상승 추세 후 반전 신호
+신뢰도: 70%
+
+    |
+    |
+    |
+    ■
+\`\`\`
+
+### 2-캔들 패턴
+
+#### 1. Bullish Engulfing (상승 장악형)
+\`\`\`
+특징: 작은 음봉 후 큰 양봉이 완전히 감싸는 형태
+의미: 강력한 상승 반전 신호
+신뢰도: 80%
+
+  ■     □
+  ■   □   □
+      □   □
+        □
+\`\`\`
+
+#### 2. Bearish Engulfing (하락 장악형)
+\`\`\`
+특징: 작은 양봉 후 큰 음봉이 완전히 감싸는 형태
+의미: 강력한 하락 반전 신호
+신뢰도: 80%
+
+  □     ■
+  □   ■   ■
+      ■   ■
+        ■
+\`\`\`
+
+### 3-캔들 패턴
+
+#### 1. Morning Star (샛별형)
+\`\`\`
+특징: 큰 음봉 → 작은 캔들 → 큰 양봉
+의미: 강력한 상승 반전 패턴
+신뢰도: 85%
+
+■         □
+■         □
+■   · ·   □
+■         □
+\`\`\`
+
+#### 2. Three White Soldiers (적삼병)
+\`\`\`
+특징: 3개의 연속 상승 양봉
+의미: 강한 상승 추세 지속
+신뢰도: 80%
+
+        □
+      □ □
+    □ □ □
+  □ □ □
+\`\`\`
+
+## 차트 패턴
+
+### 반전 패턴
+
+#### 1. Head and Shoulders (머리어깨)
+\`\`\`
+특징: 좌측 어깨 - 머리 - 우측 어깨
+의미: 상승 추세의 끝, 하락 전환
+목표가: 넥라인 - (머리 - 넥라인)
+
+      /\\
+     /  \\
+ /\\  /    \\  /\\
+/  \\/      \\/  \\
+-----------------  넥라인
+\`\`\`
+
+#### 2. Double Top/Bottom (이중 천정/바닥)
+\`\`\`
+특징: 비슷한 높이의 두 개 고점/저점
+의미: 추세 반전
+목표가: 지지/저항 ± 패턴 높이
+
+Double Top:
+  /\\      /\\
+ /  \\    /  \\
+/    \\  /    \\
+      \\/
+\`\`\`
+
+### 지속 패턴
+
+#### 1. Triangle (삼각형)
+\`\`\`
+상승 삼각형: 수평 저항선, 상승 지지선
+하락 삼각형: 하락 저항선, 수평 지지선
+대칭 삼각형: 수렴하는 추세선
+
+  /\\    /\\
+ /  \\  /  \\  /
+/    \\/    \\/
+\`\`\`
+
+#### 2. Flag & Pennant (깃발형)
+\`\`\`
+특징: 강한 추세 후 짧은 조정
+의미: 추세 지속
+목표가: 깃대 길이만큼 추가 상승/하락
+
+   |/////|
+   |/////|  ← Flag
+   |
+   |  ← Flagpole
+   |
+\`\`\`
+
+## 패턴 인식 활용법
+
+### 신호 강도 계산
+\`\`\`javascript
+// 패턴 신호 통합
+function integratePatternSignals(candlePatterns, chartPatterns) {
+  let bullishScore = 0;
+  let bearishScore = 0;
+  
+  // 캔들 패턴 점수
+  for (const pattern of candlePatterns) {
+    const score = pattern.confidence * pattern.reliability;
+    if (pattern.type === 'bullish') {
+      bullishScore += score;
+    } else if (pattern.type === 'bearish') {
+      bearishScore += score;
+    }
+  }
+  
+  // 차트 패턴 점수 (더 높은 가중치)
+  for (const pattern of chartPatterns) {
+    if (pattern.type === 'bullish') {
+      bullishScore += pattern.confidence * 1.5;
+    } else if (pattern.type === 'bearish') {
+      bearishScore += pattern.confidence * 1.5;
+    }
+  }
+  
+  return {
+    signal: bullishScore > bearishScore ? 'BUY' : 'SELL',
+    confidence: Math.abs(bullishScore - bearishScore)
+  };
+}
+\`\`\`
+
+### 패턴 필터링
+\`\`\`javascript
+// 신뢰도 높은 패턴만 사용
+const reliablePatterns = patterns.filter(p => 
+  p.confidence > 0.7 && p.reliability > 0.65
+);
+
+// 최근 패턴 우선
+const recentPatterns = patterns
+  .sort((a, b) => b.position - a.position)
+  .slice(0, 5);
+\`\`\`
+
+## 주의사항
+
+<div class="danger">
+⚠️ **경고**: 
+- 패턴은 확률일 뿐, 100% 확실하지 않습니다
+- 다른 지표와 함께 사용하세요
+- 거래량 확인이 중요합니다
+- 시장 상황을 고려하세요
+</div>
+
+## 실전 활용 예시
+
+### 매수 시나리오
+\`\`\`
+1. RSI 30 이하 (과매도)
+2. Bullish Engulfing 패턴 발생
+3. Double Bottom 형성 중
+4. 거래량 증가
+
+→ 강력한 매수 신호 (신뢰도 85%)
+\`\`\`
+
+### 매도 시나리오
+\`\`\`
+1. RSI 70 이상 (과매수)
+2. Shooting Star 패턴 발생
+3. Head and Shoulders 완성
+4. 거래량 감소
+
+→ 강력한 매도 신호 (신뢰도 85%)
+\`\`\`
+
+<div class="info">
+💡 **팁**: 패턴 인식은 보조 지표입니다. 주요 기술적 지표와 함께 사용할 때 가장 효과적입니다.
+</div>
+    `,
+  },
+};
+
 export const coreConcepts = {
   'core-concepts': {
     title: '핵심 개념',

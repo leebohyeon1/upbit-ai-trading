@@ -91,6 +91,63 @@ declare global {
       getTradeHistory: () => Promise<any[]>;
       getProfitHistory: (days?: number) => Promise<Array<{ time: string; profitRate: number; totalValue: number }>>;
       
+      // VaR and Risk Management methods
+      generateRiskReport: () => Promise<{
+        VaR: {
+          dailyVaR95: number;
+          dailyVaR99: number;
+          weeklyVaR95: number;
+          monthlyVaR95: number;
+          percentageVaR95: number;
+          percentageVaR99: number;
+          methodology: string;
+          confidence: number;
+          calculatedAt: number;
+        } | null;
+        CVaR: number;
+        stressTest: Array<{
+          scenario: string;
+          loss: number;
+          percentage: number;
+        }>;
+        recommendations: string[];
+      }>;
+      
+      // Rebalancing methods
+      getRebalancingConfig: () => Promise<{
+        enabled: boolean;
+        interval: number;
+        threshold: number;
+        minTradeAmount: number;
+        targetWeights: Array<{ symbol: string; weight: number }>;
+        useVaRConstraints: boolean;
+        maxVaR: number;
+      } | null>;
+      saveRebalancingConfig: (config: any) => Promise<boolean>;
+      executeRebalancing: () => Promise<{ success: boolean; trades?: any[] }>;
+      simulateRebalancing: () => Promise<{
+        sellOrders: any[];
+        buyOrders: any[];
+        estimatedFees: number;
+        newVaR: number;
+      } | null>;
+      
+      // Kill Switch methods
+      getKillSwitchStatus: () => Promise<{
+        isActive: boolean;
+        config: any;
+        history: any[];
+        systemStatus: {
+          dailyLoss: number;
+          currentDrawdown: number;
+          apiHealth: boolean;
+          lastCheck: number;
+        };
+      }>;
+      activateKillSwitch: (reason: string) => Promise<any>;
+      deactivateKillSwitch: () => Promise<boolean>;
+      updateKillSwitchConfig: (config: any) => Promise<boolean>;
+
       // Settings methods
       saveApiKeys: (keys: { accessKey: string; secretKey: string }) => Promise<void>;
       getApiKeys: () => Promise<{ accessKey: string; secretKey: string }>;
@@ -102,6 +159,23 @@ declare global {
       getTradingConfig: () => Promise<TradingConfig>;
       resetAllSettings: () => Promise<void>;
       
+      // 2FA methods
+      get2FAStatus: () => Promise<{ isEnabled: boolean; setupComplete: boolean; backupCodesRemaining: number }>;
+      setup2FA: () => Promise<{ secret: string; qrUri: string; backupCodes: string[] }>;
+      enable2FA: (token: string) => Promise<boolean>;
+      disable2FA: (token: string) => Promise<boolean>;
+      verify2FA: (token: string) => Promise<boolean>;
+      regenerateBackupCodes: (token: string) => Promise<string[]>;
+      
+      // Multi-timeframe analysis methods
+      analyzeMultiTimeframe: (params: { symbol: string; timeframes: any[] }) => Promise<any>;
+      
+      // Support/Resistance analysis methods
+      analyzeSupportResistance: (params: { symbol: string; timeframe?: string; period?: number }) => Promise<any>;
+      
+      // Advanced indicators analysis methods
+      analyzeAdvancedIndicators: (params: { symbol: string; timeframe?: string; period?: number }) => Promise<any>;
+
       // Event listeners
       onApiKeyStatus: (callback: (status: ApiKeyStatus) => void) => () => void;
       onAnalysisCompleted: (callback: (analyses: Analysis[]) => void) => () => void;

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { 
   Box, 
@@ -16,58 +15,25 @@ import {
   CircularProgress
 } from '@mui/material';
 import { TradingProvider, useTradingContext } from './contexts/TradingContext';
+import { ThemeContextProvider } from './contexts/ThemeContext';
 import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { PortfolioManager } from './components/portfolio/PortfolioManager';
 import { ApiKeySettings } from './components/settings/ApiKeySettings';
 import { TradingSettings } from './components/settings/TradingSettings';
 import { NotificationSettings } from './components/settings/NotificationSettings';
+import { TwoFactorAuthSettings } from './components/settings/TwoFactorAuthSettings';
 import { AnalysisSettings } from './components/analysis/AnalysisSettings';
 import { LearningStatus } from './components/learning/LearningStatus';
 import { BacktestPanel } from './components/backtest/BacktestPanel';
 import { SimulationStatus } from './components/trading/SimulationStatus';
 import Documentation from './components/documentation/Documentation';
+import KillSwitchPanel from './components/emergency/KillSwitchPanel';
 import { Analysis } from './types';
 import { TAB_INDEX } from './constants';
 import { formatAIReason, getDecisionText, getDecisionColor } from './utils/formatters';
 import { PageTransition } from './components/common/PageTransition';
 
-// Material-UI 테마 설정
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-    background: {
-      default: '#f5f5f5',
-    },
-  },
-  typography: {
-    fontFamily: '"Pretendard", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          borderRadius: 8,
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-        },
-      },
-    },
-  },
-});
 
 const AppContent: React.FC = () => {
   const context = useTradingContext();
@@ -180,6 +146,9 @@ const AppContent: React.FC = () => {
                 <Grid item xs={12}>
                   <NotificationSettings />
                 </Grid>
+                <Grid item xs={12}>
+                  <TwoFactorAuthSettings />
+                </Grid>
               </Grid>
             </Box>
           );
@@ -194,6 +163,12 @@ const AppContent: React.FC = () => {
                 시뮬레이션 성과
               </Typography>
               <SimulationStatus />
+            </Box>
+          );
+        case TAB_INDEX.KILL_SWITCH:
+          return (
+            <Box sx={{ width: '100%', height: '100%' }}>
+              <KillSwitchPanel />
             </Box>
           );
         case TAB_INDEX.DOCUMENTATION:
@@ -325,14 +300,14 @@ const AppContent: React.FC = () => {
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeContextProvider>
       <CssBaseline />
       <TradingProvider>
         <React.Suspense fallback={<Box display="flex" justifyContent="center" alignItems="center" height="100vh"><CircularProgress /></Box>}>
           <AppContent />
         </React.Suspense>
       </TradingProvider>
-    </ThemeProvider>
+    </ThemeContextProvider>
   );
 }
 

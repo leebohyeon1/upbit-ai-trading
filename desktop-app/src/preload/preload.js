@@ -48,6 +48,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProfitHistory: (days) => ipcRenderer.invoke('get-profit-history', days),
   getTradingHistory: () => ipcRenderer.invoke('get-trading-history'),
   
+  // VaR and Risk Management methods
+  generateRiskReport: () => ipcRenderer.invoke('generate-risk-report'),
+  
+  // Rebalancing methods
+  getRebalancingConfig: () => ipcRenderer.invoke('get-rebalancing-config'),
+  saveRebalancingConfig: (config) => ipcRenderer.invoke('save-rebalancing-config', config),
+  executeRebalancing: () => ipcRenderer.invoke('execute-rebalancing'),
+  simulateRebalancing: () => ipcRenderer.invoke('simulate-rebalancing'),
+  
   // Settings methods
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
   getApiKeys: () => ipcRenderer.invoke('get-api-keys'),
@@ -90,5 +99,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLearningUpdated: (callback) => {
     ipcRenderer.on('learning-updated', (event, data) => callback(data));
     return () => ipcRenderer.removeAllListeners('learning-updated');
-  }
+  },
+  
+  // Kill Switch methods
+  getKillSwitchStatus: () => ipcRenderer.invoke('get-kill-switch-status'),
+  activateKillSwitch: (reason) => ipcRenderer.invoke('activate-kill-switch', reason),
+  deactivateKillSwitch: () => ipcRenderer.invoke('deactivate-kill-switch'),
+  updateKillSwitchConfig: (config) => ipcRenderer.invoke('update-kill-switch-config', config),
+  
+  // 2FA methods
+  get2FAStatus: () => ipcRenderer.invoke('get-2fa-status'),
+  setup2FA: () => ipcRenderer.invoke('setup-2fa'),
+  enable2FA: (token) => ipcRenderer.invoke('enable-2fa', token),
+  disable2FA: (token) => ipcRenderer.invoke('disable-2fa', token),
+  verify2FA: (token) => ipcRenderer.invoke('verify-2fa', token),
+  regenerateBackupCodes: (token) => ipcRenderer.invoke('regenerate-backup-codes', token),
+  
+  // Multi-timeframe analysis methods
+  analyzeMultiTimeframe: (params) => ipcRenderer.invoke('analyze-multi-timeframe', params),
+  
+  // Support/Resistance analysis methods
+  analyzeSupportResistance: (params) => ipcRenderer.invoke('analyze-support-resistance', params),
+  
+  // Advanced indicators analysis methods
+  analyzeAdvancedIndicators: (params) => ipcRenderer.invoke('analyze-advanced-indicators', params)
 });

@@ -384,6 +384,118 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
         </Card>
       </Grid>
 
+      {/* 스마트 주문 설정 */}
+      <Grid item xs={12}>
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={2} mb={3}>
+              <TrendingUp color="primary" />
+              <Typography variant="h6" fontWeight="bold">
+                스마트 주문 설정
+              </Typography>
+            </Box>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  스마트 주문은 호가창 분석을 통해 시장가와 지정가를 자동으로 선택합니다.
+                </Alert>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={(config as any).enableSmartOrder ?? true}
+                      onChange={(e) => handleChange('enableSmartOrder' as any, e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography>스마트 주문 활성화</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        시장 상황에 따라 주문 타입 자동 선택
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      {/* 트레일링 스톱 설정 */}
+      <Grid item xs={12}>
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={2} mb={3}>
+              <TrendingDown color="error" />
+              <Typography variant="h6" fontWeight="bold">
+                트레일링 스톱 설정
+              </Typography>
+            </Box>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={(config as any).enableTrailingStop ?? false}
+                      onChange={(e) => handleChange('enableTrailingStop' as any, e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography>트레일링 스톱 활성화</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        수익 보호를 위한 자동 손절선 조정
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Grid>
+
+              {(config as any).enableTrailingStop && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="트레일링 시작 수익률"
+                      type="number"
+                      value={(config as any).trailingStartPercent ?? 5}
+                      onChange={(e) => handleChange('trailingStartPercent' as any, parseFloat(e.target.value) || 5)}
+                      InputProps={{
+                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                        inputProps: { min: 1, max: 20, step: 0.5 }
+                      }}
+                      helperText="트레일링 스톱이 활성화되는 수익률"
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="트레일링 스톱 비율"
+                      type="number"
+                      value={(config as any).trailingStopPercent ?? 2}
+                      onChange={(e) => handleChange('trailingStopPercent' as any, parseFloat(e.target.value) || 2)}
+                      InputProps={{
+                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                        inputProps: { min: 0.5, max: 10, step: 0.5 }
+                      }}
+                      helperText="최고가 대비 하락 허용 비율"
+                    />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+          </CardContent>
+        </Card>
+      </Grid>
+
         {config.enableRealTrading && (
           <Grid item xs={12}>
             <Alert severity="warning">

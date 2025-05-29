@@ -138,6 +138,81 @@ export const useElectronAPI = () => {
     }
   }, []);
 
+  // VaR 리포트 생성
+  const generateRiskReport = useCallback(async () => {
+    try {
+      return await window.electronAPI.generateRiskReport();
+    } catch (error) {
+      console.error('Failed to generate risk report:', error);
+      return null;
+    }
+  }, []);
+
+  // 포트폴리오 정보 조회
+  const getPortfolio = useCallback(async () => {
+    try {
+      return await window.electronAPI.getPortfolio();
+    } catch (error) {
+      console.error('Failed to get portfolio:', error);
+      return [];
+    }
+  }, []);
+
+  // 리밸런싱 설정 조회
+  const getRebalancingConfig = useCallback(async () => {
+    try {
+      return await window.electronAPI.getRebalancingConfig();
+    } catch (error) {
+      console.error('Failed to get rebalancing config:', error);
+      return null;
+    }
+  }, []);
+
+  // 리밸런싱 설정 저장
+  const saveRebalancingConfig = useCallback(async (config: any) => {
+    try {
+      return await window.electronAPI.saveRebalancingConfig(config);
+    } catch (error) {
+      console.error('Failed to save rebalancing config:', error);
+      return false;
+    }
+  }, []);
+
+  // 리밸런싱 실행
+  const executeRebalancing = useCallback(async () => {
+    try {
+      return await window.electronAPI.executeRebalancing();
+    } catch (error) {
+      console.error('Failed to execute rebalancing:', error);
+      return { success: false };
+    }
+  }, []);
+
+  // 리밸런싱 시뮬레이션
+  const simulateRebalancing = useCallback(async () => {
+    try {
+      return await window.electronAPI.simulateRebalancing();
+    } catch (error) {
+      console.error('Failed to simulate rebalancing:', error);
+      return null;
+    }
+  }, []);
+
+  // 쿨다운 정보 조회
+  const getCooldownInfo = useCallback(async (market: string) => {
+    try {
+      return await window.electronAPI.getCooldownInfo(market);
+    } catch (error) {
+      console.error('Failed to get cooldown info:', error);
+      return {
+        buyRemaining: 0,
+        sellRemaining: 0,
+        buyTotal: 30,
+        sellTotal: 20
+      };
+    }
+  }, []);
+
   // 이벤트 리스너 설정
   useEffect(() => {
     const removeApiKeyListener = window.electronAPI.onApiKeyStatus((status) => {
@@ -196,6 +271,30 @@ export const useElectronAPI = () => {
     toggleTrading,
     runBacktest,
     toggleLearning,
-    fetchSupportedCoins
+    fetchSupportedCoins,
+    generateRiskReport,
+    getPortfolio,
+    getRebalancingConfig,
+    saveRebalancingConfig,
+    executeRebalancing,
+    simulateRebalancing,
+    getCooldownInfo,
+    
+    // 2FA methods
+    get2FAStatus: window.electronAPI.get2FAStatus,
+    setup2FA: window.electronAPI.setup2FA,
+    enable2FA: window.electronAPI.enable2FA,
+    disable2FA: window.electronAPI.disable2FA,
+    verify2FA: window.electronAPI.verify2FA,
+    regenerateBackupCodes: window.electronAPI.regenerateBackupCodes,
+    
+    // Multi-timeframe analysis
+    analyzeMultiTimeframe: window.electronAPI.analyzeMultiTimeframe,
+    
+    // Support/Resistance analysis
+    analyzeSupportResistance: window.electronAPI.analyzeSupportResistance,
+    
+    // Advanced indicators analysis
+    analyzeAdvancedIndicators: window.electronAPI.analyzeAdvancedIndicators
   };
 };

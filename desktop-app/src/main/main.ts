@@ -6,6 +6,12 @@ import { spawn, ChildProcess } from 'child_process';
 import * as dotenv from 'dotenv';
 import tradingEngine from './trading-engine';
 import UpbitService from './upbit-service';
+import RiskManagementService from './risk-management-service';
+import killSwitchService from './kill-switch-service';
+import { TwoFactorAuthService } from './two-factor-auth-service';
+import multiTimeframeService from './multi-timeframe-service';
+import supportResistanceService from './support-resistance-service';
+import advancedIndicatorsService from './advanced-indicators-service';
 
 // Load environment variables
 dotenv.config();
@@ -15,6 +21,7 @@ class TradingApp {
   private tray: Tray | null = null;
   private pythonProcess: ChildProcess | null = null;
   private isQuitting = false;
+  private twoFactorAuthService: TwoFactorAuthService;
   private tradingState = {
     isRunning: false,
     aiEnabled: false,
@@ -22,6 +29,7 @@ class TradingApp {
   };
 
   constructor() {
+    this.twoFactorAuthService = new TwoFactorAuthService();
     this.setupApp();
     this.setupTradingEngine();
     this.setupIpcHandlers();
@@ -1560,6 +1568,294 @@ class TradingApp {
       } catch (error) {
         console.error('Failed to clear notification history:', error);
         return false;
+      }
+    });
+    
+    // VaR and Risk Management handlers
+    ipcMain.handle('generate-risk-report', async () => {
+      try {
+        const riskService = new (require('./risk-management-service').RiskManagementService)();
+        const upbitService = require('./upbit-service').default;
+        
+        // 포트폴리오 정보 가져오기
+        const accounts = await upbitService.getAccounts();
+        const portfolio: Array<{symbol: string; balance: number; avgBuyPrice: number; currentPrice: number; value: number}> = [];
+        
+        for (const account of accounts) {
+          if (account.currency !== 'KRW' && parseFloat(account.balance) > 0) {
+            const ticker = await upbitService.getTicker(`KRW-${account.currency}`);
+            portfolio.push({
+              symbol: account.currency,
+              balance: parseFloat(account.balance),
+              avgBuyPrice: parseFloat(account.avg_buy_price),
+              currentPrice: ticker ? ticker.trade_price : 0,
+              value: parseFloat(account.balance) * (ticker ? ticker.trade_price : 0)
+            });
+          }
+        }
+        
+        // 가격 히스토리 가져오기 (최근 30일)
+        const priceHistory = new Map();
+        for (const position of portfolio) {
+          const candles = await upbitService.getCandles(`KRW-${position.symbol}`, 'days', 30);
+          priceHistory.set(position.symbol, candles.map((c: any) => c.trade_price).reverse());
+        }
+        
+        // VaR 계산
+        // 포트폴리오 데이터를 RiskManagementService 형식에 맞게 변환
+        const riskPortfolio = portfolio.map(pos => ({
+          market: pos.symbol,
+          balance: pos.balance,
+          avgBuyPrice: pos.avgBuyPrice,
+          currentPrice: pos.currentPrice,
+          value: pos.value,
+          weight: pos.value / portfolio.reduce((sum: number, p: any) => sum + p.value, 0)
+        }));
+        
+        const varResult = riskService.calculateVaR(riskPortfolio, priceHistory);
+        
+        // CVaR 계산
+        const cvar = riskService.calculateCVaR(riskPortfolio);
+        
+        // 스트레스 테스트
+        // 스트레스 테스트 시나리오 정의
+        const scenarios = [
+          {
+            name: '급락 시나리오',
+            shocks: new Map(riskPortfolio.map(pos => [pos.market, -20]))
+          },
+          {
+            name: '보통 하락',
+            shocks: new Map(riskPortfolio.map(pos => [pos.market, -10]))
+          }
+        ];
+        
+        const stressTest = riskService.performStressTest(riskPortfolio, scenarios);
+        
+        // 권장사항 생성
+        // 권장사항 생성
+        const recommendations = [];
+        if (varResult.percentageVaR95 > 10) {
+          recommendations.push('포트폴리오 위험도가 높습니다. 포지션 축소를 고려하세요.');
+        }
+        if (varResult.confidence < 0.7) {
+          recommendations.push('VaR 신뢰도가 낮습니다. 더 많은 가격 데이터가 필요합니다.');
+        }
+        
+        return {
+          VaR: varResult,
+          CVaR: cvar,
+          stressTest,
+          recommendations
+        };
+      } catch (error) {
+        console.error('Failed to generate risk report:', error);
+        return {
+          VaR: null,
+          CVaR: 0,
+          stressTest: [],
+          recommendations: ['리스크 분석을 위한 데이터가 부족합니다.']
+        };
+      }
+    });
+    
+    // Rebalancing handlers
+    ipcMain.handle('get-rebalancing-config', async () => {
+      try {
+        const configPath = path.join(app.getPath('userData'), 'rebalancing-config.json');
+        if (fs.existsSync(configPath)) {
+          return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to get rebalancing config:', error);
+        return null;
+      }
+    });
+    
+    ipcMain.handle('save-rebalancing-config', async (event, config) => {
+      try {
+        const configPath = path.join(app.getPath('userData'), 'rebalancing-config.json');
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        
+        // Trading engine에 리밸런싱 설정 적용
+        if (config.enabled) {
+          // tradingEngine.setRebalancingConfig(config);
+          // 리밸런싱 설정은 별도로 관리
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('Failed to save rebalancing config:', error);
+        return false;
+      }
+    });
+    
+    ipcMain.handle('execute-rebalancing', async () => {
+      try {
+        // const result = await tradingEngine.executeRebalancing();
+        const result = { success: false, message: '리밸런싱 기능 구현 중' };
+        return result;
+      } catch (error) {
+        console.error('Failed to execute rebalancing:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+    
+    ipcMain.handle('simulate-rebalancing', async () => {
+      try {
+        // const simulation = await tradingEngine.simulateRebalancing();
+        const simulation = null;
+        return simulation;
+      } catch (error) {
+        console.error('Failed to simulate rebalancing:', error);
+        return null;
+      }
+    });
+    
+    // Kill Switch 핸들러
+    ipcMain.handle('get-kill-switch-status', async () => {
+      try {
+        return {
+          isActive: killSwitchService.isKillSwitchActive(),
+          config: killSwitchService.getConfig(),
+          history: killSwitchService.getHistory(),
+          systemStatus: {
+            dailyLoss: 0, // TODO: 실제 값 계산
+            currentDrawdown: 0, // TODO: 실제 값 계산
+            apiHealth: true,
+            lastCheck: Date.now()
+          }
+        };
+      } catch (error) {
+        console.error('Failed to get kill switch status:', error);
+        return null;
+      }
+    });
+    
+    ipcMain.handle('activate-kill-switch', async (event, reason: string) => {
+      try {
+        const result = await killSwitchService.triggerManual(reason);
+        return result;
+      } catch (error) {
+        console.error('Failed to activate kill switch:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('deactivate-kill-switch', async () => {
+      try {
+        await killSwitchService.deactivate();
+        return true;
+      } catch (error) {
+        console.error('Failed to deactivate kill switch:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('update-kill-switch-config', async (event, config) => {
+      try {
+        await killSwitchService.updateConfig(config);
+        return true;
+      } catch (error) {
+        console.error('Failed to update kill switch config:', error);
+        throw error;
+      }
+    });
+    
+    // Kill Switch 모니터링 시작
+    killSwitchService.startMonitoring();
+    
+    // 2FA 핸들러
+    ipcMain.handle('get-2fa-status', async () => {
+      try {
+        return this.twoFactorAuthService.getStatus();
+      } catch (error) {
+        console.error('Failed to get 2FA status:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('setup-2fa', async () => {
+      try {
+        return await this.twoFactorAuthService.setup();
+      } catch (error) {
+        console.error('Failed to setup 2FA:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('enable-2fa', async (event, token: string) => {
+      try {
+        return await this.twoFactorAuthService.enable(token);
+      } catch (error) {
+        console.error('Failed to enable 2FA:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('disable-2fa', async (event, token: string) => {
+      try {
+        return await this.twoFactorAuthService.disable(token);
+      } catch (error) {
+        console.error('Failed to disable 2FA:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('verify-2fa', async (event, token: string) => {
+      try {
+        return await this.twoFactorAuthService.authenticate(token);
+      } catch (error) {
+        console.error('Failed to verify 2FA:', error);
+        return false;
+      }
+    });
+    
+    ipcMain.handle('regenerate-backup-codes', async (event, token: string) => {
+      try {
+        return await this.twoFactorAuthService.regenerateBackupCodes(token);
+      } catch (error) {
+        console.error('Failed to regenerate backup codes:', error);
+        throw error;
+      }
+    });
+    
+    // 멀티 타임프레임 분석 핸들러
+    ipcMain.handle('analyze-multi-timeframe', async (event, params) => {
+      try {
+        return await multiTimeframeService.analyzeMultiTimeframe(params.symbol, params.timeframes);
+      } catch (error) {
+        console.error('Failed to analyze multi-timeframe:', error);
+        throw error;
+      }
+    });
+    
+    // 지지/저항선 분석 핸들러
+    ipcMain.handle('analyze-support-resistance', async (event, params) => {
+      try {
+        return await supportResistanceService.analyzeSupportResistance(
+          params.symbol, 
+          params.timeframe || '1h', 
+          params.period || 200
+        );
+      } catch (error) {
+        console.error('Failed to analyze support/resistance:', error);
+        throw error;
+      }
+    });
+    
+    // 고급 지표 분석 핸들러
+    ipcMain.handle('analyze-advanced-indicators', async (event, params) => {
+      try {
+        return await advancedIndicatorsService.analyzeAdvancedIndicators(
+          params.symbol, 
+          params.timeframe || '1h', 
+          params.period || 200
+        );
+      } catch (error) {
+        console.error('Failed to analyze advanced indicators:', error);
+        throw error;
       }
     });
     

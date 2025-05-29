@@ -28,6 +28,8 @@ import { ProfitChart } from '../charts/ProfitChart';
 import { PortfolioPieChart } from '../charts/PortfolioPieChart';
 import { AnimatedCard } from '../common/AnimatedCard';
 import { LoadingAnimation } from '../common/LoadingAnimation';
+import { RiskManagementPanel } from '../risk/RiskManagementPanel';
+import PatternRecognitionPanel from '../analysis/PatternRecognitionPanel';
 
 interface DashboardProps {
   onTabChange: (tab: number) => void;
@@ -410,6 +412,61 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </Card>
             )}
           </Grid>
+        </Grid>
+      </Box>
+
+      {/* 리스크 관리 섹션 */}
+      <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', mb: 4 }}>
+        <Typography variant="h6" fontWeight="bold" mb={2}>
+          리스크 관리
+        </Typography>
+        <RiskManagementPanel />
+      </Box>
+
+      {/* 패턴 인식 섹션 */}
+      <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', mb: 4 }}>
+        <Typography variant="h6" fontWeight="bold" mb={2}>
+          패턴 분석
+        </Typography>
+        <Grid container spacing={3}>
+          {analyses && analyses.length > 0 ? (
+            analyses
+              .filter(analysis => analysis.ticker && analysis.confidence > 70)
+              .slice(0, 3) // 상위 3개만 표시
+              .map((analysis, index) => (
+                <Grid item xs={12} md={4} key={analysis.ticker}>
+                  <AnimatedCard delay={index * 0.1}>
+                    <Box sx={{ position: 'relative' }}>
+                      <Box sx={{ 
+                        position: 'absolute', 
+                        top: 16, 
+                        right: 16, 
+                        zIndex: 1,
+                        backgroundColor: 'background.paper',
+                        borderRadius: 1,
+                        px: 1,
+                        py: 0.5
+                      }}>
+                        <Typography variant="caption" fontWeight="bold">
+                          {analysis.ticker.split('-')[1]}
+                        </Typography>
+                      </Box>
+                      <AnalysisCard analysis={analysis} onClick={() => {}} />
+                    </Box>
+                  </AnimatedCard>
+                </Grid>
+              ))
+          ) : (
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography color="textSecondary" align="center">
+                    패턴 분석 데이터가 없습니다
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
         </Grid>
       </Box>
     </Box>

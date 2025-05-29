@@ -7,6 +7,7 @@ import { LearningService } from './learning-service';
 import { ApiClient } from './api-client';
 import kellyService from './kelly-criterion-service';
 import notificationService from './notification-service';
+import riskManagementService, { VaRResult, PortfolioPosition } from './risk-management-service';
 
 export interface TradingConfig {
   enableRealTrading: boolean;
@@ -25,6 +26,15 @@ export interface TradingConfig {
   dynamicConfidence: boolean; // 신뢰도 임계값 동적 조정 활성화
   useKellyCriterion: boolean; // Kelly Criterion 사용 여부
   maxKellyFraction: number; // Kelly Criterion 최대 배팅 비율
+  // 트레일링 스톱 설정
+  enableTrailingStop?: boolean; // 트레일링 스톱 활성화
+  trailingStopPercent?: number; // 트레일링 스톱 비율 (%)
+  trailingStartPercent?: number; // 트레일링 시작 수익률 (%)
+  // 포트폴리오 리밸런싱 설정
+  enableAutoRebalancing?: boolean; // 자동 리밸런싱 활성화
+  rebalanceInterval?: number; // 리밸런싱 주기 (시간)
+  rebalanceThreshold?: number; // 리밸런싱 임계값 (%)
+  targetPortfolio?: Map<string, number>; // 목표 포트폴리오 비중
   // 백테스트 관련 필드
   cooldownAfterTrade?: number;
   stopLoss?: number;
@@ -132,6 +142,17 @@ class TradingEngine extends EventEmitter {
   private apiClient: ApiClient;
   private useApiServer: boolean = false;
   
+  // 트레일링 스톱을 위한 최고가 추적
+  private highestPrices: Map<string, { price: number; timestamp: number }> = new Map();
+  
+  // VaR 계산을 위한 가격 이력
+  private priceHistoryForVaR: Map<string, number[]> = new Map();
+  private readonly MAX_PRICE_HISTORY = 100; // 최대 100일 가격 보관
+  
+  // 포트폴리오 리밸런싱
+  private lastRebalanceTime: number = 0;
+  private rebalanceInterval: NodeJS.Timeout | null = null;
+  
   // 시뮬레이션 모드를 위한 가상 포트폴리오
   private virtualPortfolio: Map<string, {
     balance: number;
@@ -140,6 +161,9 @@ class TradingEngine extends EventEmitter {
   }> = new Map();
   private virtualKRW: number = 10000000; // 시작 자금 1천만원
   private virtualTradeHistory: TradeHistory[] = [];
+  
+  // Kill Switch를 위한 시스템 잠금 상태
+  private isLocked: boolean = false;
 
   constructor() {
     super();
@@ -147,6 +171,163 @@ class TradingEngine extends EventEmitter {
     this.apiClient = new ApiClient();
     this.setupLearningService();
     this.setupApiClient();
+  }
+  
+  // Kill Switch에서 사용할 시스템 잠금 메서드
+  setLocked(locked: boolean): void {
+    this.isLocked = locked;
+    if (locked) {
+      console.log('⚠️ Trading Engine locked by Kill Switch');
+      this.stop();
+    }
+  }
+
+  // 스마트 주문: 시장 상황에 따라 주문 타입 자동 선택
+  private async determineSmartOrderType(
+    market: string, 
+    side: 'BUY' | 'SELL', 
+    currentPrice: number
+  ): Promise<{
+    orderType: 'market' | 'limit';
+    limitPrice?: number;
+    reason: string;
+  }> {
+    try {
+      // 호가 정보 가져오기
+      const orderbook = await upbitService.getOrderbook(market);
+      if (!orderbook || !orderbook.orderbook_units || orderbook.orderbook_units.length === 0) {
+        return {
+          orderType: 'market',
+          reason: '호가 정보를 가져올 수 없어 시장가 주문 사용'
+        };
+      }
+
+      const units = orderbook.orderbook_units;
+      const bestBid = units[0].bid_price;
+      const bestAsk = units[0].ask_price;
+      const spread = (bestAsk - bestBid) / bestBid * 100; // 스프레드 비율 (%)
+      
+      // 호가 분석 데이터
+      const analysis = orderbook.analysis;
+      const imbalance = analysis?.imbalance || 0;
+      const wallDetected = analysis?.wallDetected;
+
+      // 최근 체결 내역 확인
+      const trades = await upbitService.getTrades(market, 20);
+      const recentTradeSummary = trades[0]?.summary;
+      const dominantSide = recentTradeSummary?.dominantSide;
+
+      // 스마트 주문 결정 로직
+      if (side === 'BUY') {
+        // 매수 주문
+        if (spread > 0.5) {
+          // 스프레드가 넓으면 지정가 주문 (중간값)
+          const limitPrice = Math.floor((bestBid + bestAsk) / 2);
+          return {
+            orderType: 'limit',
+            limitPrice,
+            reason: `스프레드가 ${spread.toFixed(2)}%로 넓어 지정가 주문 사용`
+          };
+        }
+
+        if (imbalance < -30 && !wallDetected?.ask) {
+          // 매도 압력이 강하고 매도벽이 없으면 지정가로 낮은 가격 제시
+          const limitPrice = bestBid;
+          return {
+            orderType: 'limit',
+            limitPrice,
+            reason: `매도 압력 강함(imbalance: ${imbalance.toFixed(1)}), 최고 매수가로 지정가 주문`
+          };
+        }
+
+        if (dominantSide === 'BUY' && imbalance > 20) {
+          // 매수 우세하면 시장가로 빠르게 진입
+          return {
+            orderType: 'market',
+            reason: `매수 우세(${dominantSide}), 빠른 진입을 위해 시장가 주문`
+          };
+        }
+
+        // 기본적으로 지정가 주문 (최고 매수가 + 1호가)
+        const tickSize = this.getTickSize(bestBid);
+        const limitPrice = bestBid + tickSize;
+        return {
+          orderType: 'limit',
+          limitPrice,
+          reason: '안정적인 진입을 위해 지정가 주문 사용'
+        };
+
+      } else {
+        // 매도 주문
+        if (spread > 0.5) {
+          // 스프레드가 넓으면 지정가 주문
+          const limitPrice = Math.floor((bestBid + bestAsk) / 2);
+          return {
+            orderType: 'limit',
+            limitPrice,
+            reason: `스프레드가 ${spread.toFixed(2)}%로 넓어 지정가 주문 사용`
+          };
+        }
+
+        if (imbalance > 30 && !wallDetected?.bid) {
+          // 매수 압력이 강하고 매수벽이 없으면 지정가로 높은 가격 제시
+          const limitPrice = bestAsk;
+          return {
+            orderType: 'limit',
+            limitPrice,
+            reason: `매수 압력 강함(imbalance: ${imbalance.toFixed(1)}), 최저 매도가로 지정가 주문`
+          };
+        }
+
+        if (dominantSide === 'SELL' && imbalance < -20) {
+          // 매도 우세하면 시장가로 빠르게 청산
+          return {
+            orderType: 'market',
+            reason: `매도 우세(${dominantSide}), 빠른 청산을 위해 시장가 주문`
+          };
+        }
+
+        // 급등/급락 시 시장가 사용
+        const priceChangeRate = (currentPrice - bestBid) / bestBid * 100;
+        if (Math.abs(priceChangeRate) > 2) {
+          return {
+            orderType: 'market',
+            reason: `가격 급변동(${priceChangeRate.toFixed(1)}%), 시장가 주문 사용`
+          };
+        }
+
+        // 기본적으로 지정가 주문 (최저 매도가 - 1호가)
+        const tickSize = this.getTickSize(bestAsk);
+        const limitPrice = bestAsk - tickSize;
+        return {
+          orderType: 'limit',
+          limitPrice,
+          reason: '안정적인 청산을 위해 지정가 주문 사용'
+        };
+      }
+
+    } catch (error) {
+      console.error('Smart order determination failed:', error);
+      return {
+        orderType: 'market',
+        reason: '스마트 주문 분석 실패, 기본 시장가 주문 사용'
+      };
+    }
+  }
+
+  // 호가 단위 계산
+  private getTickSize(price: number): number {
+    if (price >= 2000000) return 1000;
+    else if (price >= 1000000) return 500;
+    else if (price >= 500000) return 100;
+    else if (price >= 100000) return 50;
+    else if (price >= 10000) return 10;
+    else if (price >= 1000) return 5;
+    else if (price >= 100) return 1;
+    else if (price >= 10) return 0.1;
+    else if (price >= 1) return 0.01;
+    else if (price >= 0.1) return 0.001;
+    else return 0.0001;
   }
 
   private setupLearningService(): void {
@@ -315,6 +496,11 @@ class TradingEngine extends EventEmitter {
         details: `분석 주기: ${analysisIntervalMs / 1000}초`
       });
       
+      // 자동 리밸런싱 시작
+      if (this.config.enableAutoRebalancing) {
+        this.startAutoRebalancing();
+      }
+      
       return true;
     } catch (error) {
       console.error('Failed to start trading engine:', error);
@@ -343,6 +529,12 @@ class TradingEngine extends EventEmitter {
     if (this.statusInterval) {
       clearInterval(this.statusInterval);
       this.statusInterval = null;
+    }
+
+    // 리밸런싱 중지
+    if (this.rebalanceInterval) {
+      clearInterval(this.rebalanceInterval);
+      this.rebalanceInterval = null;
     }
 
     this.emit('tradingStopped');
@@ -704,6 +896,14 @@ class TradingEngine extends EventEmitter {
           // Kelly Criterion 계산
           let adjustedBuyRatio = coinConfig.defaultBuyRatio;
           
+          // VaR 기반 리스크 조정
+          const varResult = await this.calculatePortfolioVaR();
+          if (varResult && varResult.percentageVaR95 > 10) {
+            console.log(`[${market}] VaR 위험 조정: ${varResult.percentageVaR95.toFixed(2)}%`);
+            const riskAdjustment = 10 / varResult.percentageVaR95; // VaR가 10%를 초과하면 비례적으로 감소
+            adjustedBuyRatio *= riskAdjustment;
+          }
+          
           if (coinConfig.useKellyOptimization && this.config.useKellyCriterion) {
             const metrics = this.performanceMetrics.get(market);
             if (metrics && (metrics.wins + metrics.losses) > 5) { // 최소 5회 거래 후부터 Kelly 적용
@@ -775,19 +975,37 @@ class TradingEngine extends EventEmitter {
           console.log(`Base ratio: ${(this.config.buyRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedBuyRatio * 100).toFixed(1)}%`);
           console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy amount: ₩${buyAmount.toLocaleString()}`);
           
+          // 스마트 주문 타입 결정
+          const smartOrder = await this.determineSmartOrderType(market, 'BUY', analysis.currentPrice);
+          console.log(`Smart order: ${smartOrder.orderType} - ${smartOrder.reason}`);
+          
           // 실제 거래 실행 (테스트 모드에서는 시뮬레이션)
           console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
-            console.log(`Executing REAL BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
-            await upbitService.buyOrder(market, buyAmountStr);
+            if (smartOrder.orderType === 'limit' && smartOrder.limitPrice) {
+              // 지정가 매수: 가격과 수량을 모두 지정
+              const volume = (buyAmount / smartOrder.limitPrice).toFixed(8);
+              console.log(`Executing REAL LIMIT BUY order for ${market}: ${volume} @ ₩${smartOrder.limitPrice.toLocaleString()}`);
+              await upbitService.buyOrder(market, smartOrder.limitPrice.toString(), volume);
+            } else {
+              // 시장가 매수: KRW 금액만 지정
+              console.log(`Executing REAL MARKET BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
+              await upbitService.buyOrder(market, buyAmountStr);
+            }
           } else {
-            console.log(`[시뮬레이션] BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
+            console.log(`[시뮬레이션] ${smartOrder.orderType.toUpperCase()} BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
             // 시뮬레이션 매수 처리
-            this.simulateBuyOrder(market, buyAmount, analysis.currentPrice, technical.confidence);
+            this.simulateBuyOrder(market, buyAmount, smartOrder.limitPrice || analysis.currentPrice, technical.confidence);
           }
           
           // 거래 시간 기록
           this.recordTradeTime(market, 'buy');
+          
+          // 트레일링 스톱을 위한 최고가 초기화
+          this.highestPrices.set(market, { 
+            price: smartOrder.limitPrice || analysis.currentPrice, 
+            timestamp: Date.now() 
+          });
           
           // 거래 기록 저장
           const trade = {
@@ -903,15 +1121,26 @@ class TradingEngine extends EventEmitter {
           console.log(`Base ratio: ${(this.config.sellRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedSellRatio * 100).toFixed(1)}%`);
           console.log(`Total balance: ${totalBalance}, Sell amount: ${sellAmount}, Value: ₩${sellValue.toLocaleString()}`);
           
+          // 스마트 주문 타입 결정
+          const smartOrder = await this.determineSmartOrderType(market, 'SELL', analysis.currentPrice);
+          console.log(`Smart order: ${smartOrder.orderType} - ${smartOrder.reason}`);
+          
           // 실제 거래 실행 (테스트 모드에서는 시뮬레이션)
           console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
-            console.log(`Executing REAL SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
-            await upbitService.sellOrder(market, sellAmountStr);
+            if (smartOrder.orderType === 'limit' && smartOrder.limitPrice) {
+              // 지정가 매도: 가격과 수량을 모두 지정
+              console.log(`Executing REAL LIMIT SELL order for ${market}: ${sellAmountStr} @ ₩${smartOrder.limitPrice.toLocaleString()}`);
+              await upbitService.sellOrder(market, sellAmountStr, smartOrder.limitPrice.toString());
+            } else {
+              // 시장가 매도: 수량만 지정
+              console.log(`Executing REAL MARKET SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
+              await upbitService.sellOrder(market, sellAmountStr);
+            }
           } else {
-            console.log(`[시뮬레이션] SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
+            console.log(`[시뮬레이션] ${smartOrder.orderType.toUpperCase()} SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
             // 시뮬레이션 매도 처리
-            this.simulateSellOrder(market, sellAmount, analysis.currentPrice, technical.confidence);
+            this.simulateSellOrder(market, sellAmount, smartOrder.limitPrice || analysis.currentPrice, technical.confidence);
           }
           
           // 거래 시간 기록
@@ -1893,19 +2122,58 @@ class TradingEngine extends EventEmitter {
       // 코인별 설정 우선, 없으면 전역 설정 사용
       const stopLossPercent = analysisConfig?.stopLoss ?? this.config.stopLossPercent ?? 5;
       const takeProfitPercent = analysisConfig?.takeProfit ?? this.config.takeProfitPercent ?? 10;
+      
+      // 트레일링 스톱 설정
+      const enableTrailingStop = analysisConfig?.enableTrailingStop ?? this.config.enableTrailingStop ?? false;
+      const trailingStopPercent = analysisConfig?.trailingStopPercent ?? this.config.trailingStopPercent ?? 2;
+      const trailingStartPercent = analysisConfig?.trailingStartPercent ?? this.config.trailingStartPercent ?? 5;
 
-      // 손절 체크
-      if (profitRate <= -stopLossPercent) {
-        console.log(`[${market}] 손절 조건 충족: 수익률 ${profitRate.toFixed(2)}% <= -${stopLossPercent}%`);
-        return {
-          shouldSell: true,
-          reason: `손절: 수익률 ${profitRate.toFixed(2)}% (손절선: -${stopLossPercent}%)`
-        };
+      // 트레일링 스톱 체크
+      if (enableTrailingStop && profitRate >= trailingStartPercent) {
+        // 최고가 업데이트
+        const highestData = this.highestPrices.get(market);
+        if (!highestData || currentPrice > highestData.price) {
+          this.highestPrices.set(market, { price: currentPrice, timestamp: Date.now() });
+          console.log(`[${market}] 트레일링 스톱: 최고가 갱신 ₩${currentPrice.toLocaleString()}`);
+        }
+        
+        // 트레일링 스톱 손절선 계산
+        const highest = this.highestPrices.get(market);
+        if (highest) {
+          const trailingStopPrice = highest.price * (1 - trailingStopPercent / 100);
+          const dropFromHighest = ((highest.price - currentPrice) / highest.price) * 100;
+          
+          if (currentPrice <= trailingStopPrice) {
+            console.log(`[${market}] 트레일링 스톱 발동: 최고가 ₩${highest.price.toLocaleString()}에서 ${dropFromHighest.toFixed(2)}% 하락`);
+            return {
+              shouldSell: true,
+              reason: `트레일링 스톱: 최고가에서 ${dropFromHighest.toFixed(2)}% 하락 (현재 수익률: ${profitRate.toFixed(2)}%)`
+            };
+          }
+          
+          // 트레일링 정보 로그
+          console.log(`[${market}] 트레일링 스톱 활성: 최고가 ₩${highest.price.toLocaleString()}, 손절선 ₩${trailingStopPrice.toLocaleString()}, 현재가 ₩${currentPrice.toLocaleString()}`);
+        }
+      }
+
+      // 일반 손절 체크 (트레일링 스톱이 활성화되지 않은 경우에만)
+      if (!enableTrailingStop || profitRate < trailingStartPercent) {
+        if (profitRate <= -stopLossPercent) {
+          console.log(`[${market}] 손절 조건 충족: 수익률 ${profitRate.toFixed(2)}% <= -${stopLossPercent}%`);
+          // 최고가 기록 삭제 (다음 매수를 위해)
+          this.highestPrices.delete(market);
+          return {
+            shouldSell: true,
+            reason: `손절: 수익률 ${profitRate.toFixed(2)}% (손절선: -${stopLossPercent}%)`
+          };
+        }
       }
 
       // 익절 체크
       if (profitRate >= takeProfitPercent) {
         console.log(`[${market}] 익절 조건 충족: 수익률 ${profitRate.toFixed(2)}% >= ${takeProfitPercent}%`);
+        // 최고가 기록 삭제 (다음 매수를 위해)
+        this.highestPrices.delete(market);
         return {
           shouldSell: true,
           reason: `익절: 수익률 ${profitRate.toFixed(2)}% (익절선: ${takeProfitPercent}%)`
@@ -1924,7 +2192,439 @@ class TradingEngine extends EventEmitter {
     return upbitService;
   }
 
+  /**
+   * VaR (Value at Risk) 계산
+   * 포트폴리오의 위험을 측정하고 최대 예상 손실을 계산
+   */
+  public async calculatePortfolioVaR(methodology: 'historical' | 'parametric' | 'monte-carlo' = 'parametric'): Promise<VaRResult | null> {
+    try {
+      // 현재 포트폴리오 구성
+      const portfolio = await this.getCurrentPortfolio();
+      if (portfolio.length === 0) {
+        console.log('VaR 계산 실패: 포트폴리오가 비어있습니다.');
+        return null;
+      }
 
+      // 가격 이력 업데이트
+      await this.updatePriceHistory();
+
+      // VaR 계산
+      const varResult = riskManagementService.calculateVaR(
+        portfolio,
+        this.priceHistoryForVaR,
+        methodology
+      );
+
+      // VaR 초과 시 알림
+      if (varResult.percentageVaR95 > 10) { // 10% 이상 손실 위험
+        notificationService.notifySystemStatus({
+          type: 'error',
+          message: `VaR 경고: 포트폴리오 위험도 높음`,
+          details: `일일 최대 예상 손실 ${varResult.percentageVaR95.toFixed(2)}%`
+        });
+
+        this.emit('varWarning', {
+          varResult,
+          message: `높은 위험: 95% 신뢰수준에서 일일 ${varResult.percentageVaR95.toFixed(2)}% 손실 가능`
+        });
+      }
+
+      return varResult;
+    } catch (error) {
+      console.error('VaR 계산 중 오류:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 현재 포트폴리오 구성 가져오기
+   */
+  private async getCurrentPortfolio(): Promise<PortfolioPosition[]> {
+    const positions: PortfolioPosition[] = [];
+    
+    if (this.config.enableRealTrading) {
+      // 실제 거래 모드
+      const accounts = await upbitService.getAccounts();
+      const totalValue = accounts.reduce((sum, acc) => {
+        if (acc.currency === 'KRW') return sum + parseFloat(acc.balance);
+        const market = `KRW-${acc.currency}`;
+        const analysis = this.analysisResults.get(market);
+        const currentPrice = analysis?.currentPrice || parseFloat(acc.avg_buy_price);
+        return sum + parseFloat(acc.balance) * currentPrice;
+      }, 0);
+
+      for (const account of accounts) {
+        if (account.currency !== 'KRW' && parseFloat(account.balance) > 0) {
+          const market = `KRW-${account.currency}`;
+          const analysis = this.analysisResults.get(market);
+          const currentPrice = analysis?.currentPrice || parseFloat(account.avg_buy_price);
+          const value = parseFloat(account.balance) * currentPrice;
+
+          positions.push({
+            market,
+            balance: parseFloat(account.balance),
+            avgBuyPrice: parseFloat(account.avg_buy_price),
+            currentPrice,
+            value,
+            weight: value / totalValue
+          });
+        }
+      }
+    } else {
+      // 시뮬레이션 모드
+      const totalValue = this.calculateTotalPortfolioValue();
+      
+      this.virtualPortfolio.forEach((data, market) => {
+        if (data.balance > 0) {
+          const analysis = this.analysisResults.get(market);
+          const currentPrice = analysis?.currentPrice || data.avgBuyPrice;
+          const value = data.balance * currentPrice;
+
+          positions.push({
+            market,
+            balance: data.balance,
+            avgBuyPrice: data.avgBuyPrice,
+            currentPrice,
+            value,
+            weight: value / totalValue
+          });
+        }
+      });
+    }
+
+    return positions;
+  }
+
+  /**
+   * 가격 이력 업데이트
+   */
+  private async updatePriceHistory(): Promise<void> {
+    for (const market of this.activeMarkets) {
+      const analysis = this.analysisResults.get(market);
+      if (analysis) {
+        // 기존 이력 가져오기
+        const history = this.priceHistoryForVaR.get(market) || [];
+        
+        // 새 가격 추가
+        history.push(analysis.currentPrice);
+        
+        // 최대 크기 유지
+        if (history.length > this.MAX_PRICE_HISTORY) {
+          history.shift();
+        }
+        
+        this.priceHistoryForVaR.set(market, history);
+      }
+    }
+  }
+
+  /**
+   * CVaR (Conditional Value at Risk) 계산
+   * VaR를 초과하는 손실의 평균값
+   */
+  public async calculateCVaR(confidenceLevel: number = 0.95): Promise<number> {
+    const portfolio = await this.getCurrentPortfolio();
+    if (portfolio.length === 0) return 0;
+
+    return riskManagementService.calculateCVaR(portfolio, confidenceLevel);
+  }
+
+  /**
+   * 스트레스 테스트 실행
+   */
+  public async performStressTest(): Promise<Array<{ scenario: string; loss: number; percentage: number }>> {
+    const portfolio = await this.getCurrentPortfolio();
+    if (portfolio.length === 0) return [];
+
+    // 스트레스 시나리오 정의
+    const scenarios = [
+      {
+        name: '암호화폐 시장 급락 (-20%)',
+        shocks: new Map(portfolio.map(p => [p.market, -20]))
+      },
+      {
+        name: 'BTC 급락 파급효과',
+        shocks: new Map(portfolio.map(p => {
+          if (p.market.includes('BTC')) return [p.market, -30];
+          if (p.market.includes('ETH')) return [p.market, -25];
+          return [p.market, -15]; // 알트코인
+        }))
+      },
+      {
+        name: '규제 리스크 시나리오',
+        shocks: new Map(portfolio.map(p => [p.market, -40]))
+      },
+      {
+        name: '플래시 크래시',
+        shocks: new Map(portfolio.map(p => [p.market, -50]))
+      }
+    ];
+
+    return riskManagementService.performStressTest(portfolio, scenarios);
+  }
+
+  /**
+   * 리스크 기반 포지션 크기 조정
+   */
+  private adjustPositionSizeByVaR(
+    baseSize: number,
+    market: string,
+    varResult: VaRResult | null
+  ): number {
+    if (!varResult) return baseSize;
+
+    // VaR가 높으면 포지션 크기 축소
+    if (varResult.percentageVaR95 > 15) {
+      return baseSize * 0.5; // 50% 축소
+    } else if (varResult.percentageVaR95 > 10) {
+      return baseSize * 0.7; // 30% 축소
+    } else if (varResult.percentageVaR95 > 5) {
+      return baseSize * 0.9; // 10% 축소
+    }
+
+    return baseSize;
+  }
+
+  /**
+   * 일일 리스크 리포트 생성
+   */
+  public async generateRiskReport(): Promise<{
+    VaR: VaRResult | null;
+    CVaR: number;
+    stressTest: Array<{ scenario: string; loss: number; percentage: number }>;
+    recommendations: string[];
+  }> {
+    const varResult = await this.calculatePortfolioVaR();
+    const cvar = await this.calculateCVaR();
+    const stressTest = await this.performStressTest();
+    
+    const recommendations: string[] = [];
+
+    if (varResult) {
+      if (varResult.percentageVaR95 > 15) {
+        recommendations.push('포트폴리오 위험이 매우 높습니다. 포지션 축소를 권장합니다.');
+      } else if (varResult.percentageVaR95 > 10) {
+        recommendations.push('포트폴리오 위험이 높습니다. 리밸런싱을 고려하세요.');
+      }
+
+      if (varResult.confidence < 0.7) {
+        recommendations.push('데이터가 부족합니다. 더 많은 거래 데이터 축적이 필요합니다.');
+      }
+    }
+
+    // 스트레스 테스트 결과 분석
+    const worstCase = stressTest.reduce((worst, test) => 
+      test.percentage > worst.percentage ? test : worst
+    , { scenario: '', loss: 0, percentage: 0 });
+
+    if (worstCase.percentage > 50) {
+      recommendations.push(`최악의 시나리오(${worstCase.scenario})에서 ${worstCase.percentage.toFixed(1)}% 손실 가능성이 있습니다.`);
+    }
+
+    return {
+      VaR: varResult,
+      CVaR: cvar,
+      stressTest,
+      recommendations
+    };
+  }
+
+
+  /**
+   * 포트폴리오 자동 리밸런싱 시작
+   */
+  private startAutoRebalancing(): void {
+    const intervalHours = this.config.rebalanceInterval || 24; // 기본 24시간
+    const intervalMs = intervalHours * 60 * 60 * 1000;
+    
+    console.log(`자동 리밸런싱 시작: ${intervalHours}시간마다 실행`);
+    
+    // 첫 실행
+    this.checkAndRebalance();
+    
+    // 주기적 실행
+    this.rebalanceInterval = setInterval(() => {
+      this.checkAndRebalance();
+    }, intervalMs);
+  }
+
+  /**
+   * 리밸런싱 필요 여부 확인 및 실행
+   */
+  private async checkAndRebalance(): Promise<void> {
+    try {
+      console.log('포트폴리오 리밸런싱 체크 시작...');
+      
+      // 현재 포트폴리오 가져오기
+      const portfolio = await this.getCurrentPortfolio();
+      if (portfolio.length === 0) {
+        console.log('리밸런싱 실패: 포트폴리오가 비어있습니다.');
+        return;
+      }
+      
+      // 목표 포트폴리오 설정
+      const targetWeights = this.config.targetPortfolio || this.getDefaultTargetWeights();
+      
+      // 리밸런싱 제약 조건
+      const constraints = {
+        maxVaR: 10, // 최대 VaR 10%
+        minWeight: 0.05, // 최소 비중 5%
+        maxWeight: 0.4, // 최대 비중 40%
+        rebalanceThreshold: this.config.rebalanceThreshold || 0.05 // 5% 이상 차이 시 리밸런싱
+      };
+      
+      // 리밸런싱 제안 받기
+      const rebalanceResult = riskManagementService.suggestRebalancing(
+        portfolio,
+        targetWeights,
+        constraints
+      );
+      
+      if (!rebalanceResult.needsRebalancing) {
+        console.log('리밸런싱 불필요: 현재 포트폴리오가 목표 범위 내에 있습니다.');
+        return;
+      }
+      
+      // 리밸런싱 실행
+      await this.executeRebalancing(rebalanceResult);
+      
+      // 리밸런싱 완료 알림
+      notificationService.notifySystemStatus({
+        type: 'started',
+        message: '포트폴리오 리밸런싱 완료',
+        details: `매수: ₩${rebalanceResult.totalBuyAmount.toLocaleString()}, 매도: ₩${rebalanceResult.totalSellAmount.toLocaleString()}`
+      });
+      
+      this.lastRebalanceTime = Date.now();
+      
+    } catch (error) {
+      console.error('리밸런싱 중 오류:', error);
+      notificationService.notifyError({
+        title: '리밸런싱 실패',
+        message: error instanceof Error ? error.message : '알 수 없는 오류'
+      });
+    }
+  }
+
+  /**
+   * 리밸런싱 실행
+   */
+  private async executeRebalancing(rebalanceResult: any): Promise<void> {
+    console.log('리밸런싱 실행 시작...');
+    
+    // 매도부터 실행 (자금 확보)
+    for (const [market, action] of rebalanceResult.suggestions) {
+      if (action.action === 'SELL') {
+        try {
+          const account = await this.getAccountForMarket(market);
+          if (account && parseFloat(account.balance) > 0) {
+            const sellRatio = action.amount / (parseFloat(account.balance) * action.currentWeight);
+            const sellAmount = parseFloat(account.balance) * sellRatio;
+            
+            console.log(`[리밸런싱] ${market} 매도: ${sellAmount.toFixed(8)} (${(sellRatio * 100).toFixed(1)}%)`);
+            
+            if (this.config.enableRealTrading) {
+              await upbitService.sellOrder(market, sellAmount.toFixed(8));
+            } else {
+              this.simulateSellOrder(market, sellAmount, 0, 0); // 현재가는 나중에 업데이트
+            }
+          }
+        } catch (error) {
+          console.error(`리밸런싱 매도 실패 (${market}):`, error);
+        }
+      }
+    }
+    
+    // 잠시 대기 (체결 시간)
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // 매수 실행
+    for (const [market, action] of rebalanceResult.suggestions) {
+      if (action.action === 'BUY') {
+        try {
+          console.log(`[리밸런싱] ${market} 매수: ₩${action.amount.toLocaleString()}`);
+          
+          if (this.config.enableRealTrading) {
+            await upbitService.buyOrder(market, action.amount.toFixed(0));
+          } else {
+            const analysis = this.analysisResults.get(market);
+            if (analysis) {
+              this.simulateBuyOrder(market, action.amount, analysis.currentPrice, 0);
+            }
+          }
+        } catch (error) {
+          console.error(`리밸런싱 매수 실패 (${market}):`, error);
+        }
+      }
+    }
+    
+    console.log('리밸런싱 실행 완료');
+    
+    // 리밸런싱 결과 이벤트 발생
+    this.emit('rebalancingCompleted', {
+      timestamp: Date.now(),
+      suggestions: rebalanceResult.suggestions,
+      totalBuyAmount: rebalanceResult.totalBuyAmount,
+      totalSellAmount: rebalanceResult.totalSellAmount
+    });
+  }
+
+  /**
+   * 특정 마켓의 계좌 정보 가져오기
+   */
+  private async getAccountForMarket(market: string): Promise<any> {
+    const currency = market.split('-')[1];
+    const accounts = await upbitService.getAccounts();
+    return accounts.find(acc => acc.currency === currency);
+  }
+
+  /**
+   * 기본 목표 포트폴리오 설정
+   */
+  private getDefaultTargetWeights(): Map<string, number> {
+    const weights = new Map<string, number>();
+    
+    // 기본 전략: 시가총액 가중
+    weights.set('KRW-BTC', 0.4);   // 40%
+    weights.set('KRW-ETH', 0.3);   // 30%
+    weights.set('KRW-XRP', 0.1);   // 10%
+    weights.set('KRW-ADA', 0.1);   // 10%
+    weights.set('KRW-SOL', 0.1);   // 10%
+    
+    return weights;
+  }
+
+  /**
+   * 포트폴리오 리밸런싱 설정 업데이트
+   */
+  public updateRebalancingConfig(config: {
+    enabled: boolean;
+    interval: number;
+    threshold: number;
+    targetWeights: Map<string, number>;
+  }): void {
+    this.config.enableAutoRebalancing = config.enabled;
+    this.config.rebalanceInterval = config.interval;
+    this.config.rebalanceThreshold = config.threshold;
+    this.config.targetPortfolio = config.targetWeights;
+    
+    // 기존 리밸런싱 중지 후 재시작
+    if (this.rebalanceInterval) {
+      clearInterval(this.rebalanceInterval);
+      this.rebalanceInterval = null;
+    }
+    
+    if (config.enabled && this._isRunning) {
+      this.startAutoRebalancing();
+    }
+  }
+
+  /**
+   * 수동 리밸런싱 실행
+   */
+  public async executeManualRebalancing(): Promise<void> {
+    await this.checkAndRebalance();
+  }
 
   getProfitHistory(days: number = 7): Array<{ time: string; profitRate: number; totalValue: number }> {
     const now = new Date();

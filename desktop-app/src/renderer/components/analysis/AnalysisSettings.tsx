@@ -351,7 +351,34 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     }
                     label="변동성 자동 조정"
                   />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={localSettings.enablePatternRecognition !== false}
+                        onChange={(e) => handleChange('enablePatternRecognition', e.target.checked)}
+                      />
+                    }
+                    label="패턴 인식 사용"
+                  />
                 </Box>
+                {localSettings.enablePatternRecognition !== false && (
+                  <Box sx={{ mt: 2, px: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      패턴 가중치: {((localSettings.patternWeight || 0.15) * 100).toFixed(0)}%
+                    </Typography>
+                    <Slider
+                      value={(localSettings.patternWeight || 0.15) * 100}
+                      onChange={(e, value) => handleChange('patternWeight', value as number / 100)}
+                      min={0}
+                      max={30}
+                      marks
+                      valueLabelDisplay="auto"
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      캔들 패턴과 차트 패턴이 전체 신호에 미치는 영향도
+                    </Typography>
+                  </Box>
+                )}
               </Grid>
             </Grid>
 

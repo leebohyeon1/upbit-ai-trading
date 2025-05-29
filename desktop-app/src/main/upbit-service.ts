@@ -128,6 +128,7 @@ class UpbitService {
       return response.data.map((candle: any) => ({
         market: candle.market,
         candle_date_time_utc: candle.candle_date_time_utc,
+        candle_date_time_kst: candle.candle_date_time_kst,
         opening_price: candle.opening_price,
         high_price: candle.high_price,
         low_price: candle.low_price,
@@ -136,6 +137,42 @@ class UpbitService {
       }));
     } catch (error) {
       console.error('Failed to get candles:', error);
+      return [];
+    }
+  }
+
+  // 다양한 타임프레임의 캔들 데이터 조회
+  async getCandlesByTimeframe(market: string, interval: string, count: number = 200): Promise<any[]> {
+    try {
+      let url = '';
+      
+      switch (interval) {
+        case '1m':
+          url = `${this.baseURL}/v1/candles/minutes/1?market=${market}&count=${count}`;
+          break;
+        case '5m':
+          url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
+          break;
+        case '15m':
+          url = `${this.baseURL}/v1/candles/minutes/15?market=${market}&count=${count}`;
+          break;
+        case '1h':
+          url = `${this.baseURL}/v1/candles/minutes/60?market=${market}&count=${count}`;
+          break;
+        case '4h':
+          url = `${this.baseURL}/v1/candles/minutes/240?market=${market}&count=${count}`;
+          break;
+        case '1d':
+          url = `${this.baseURL}/v1/candles/days?market=${market}&count=${count}`;
+          break;
+        default:
+          throw new Error(`지원하지 않는 타임프레임: ${interval}`);
+      }
+      
+      const response = await axios.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get candles by timeframe:', error);
       return [];
     }
   }

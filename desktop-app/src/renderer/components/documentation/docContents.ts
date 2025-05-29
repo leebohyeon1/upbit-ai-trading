@@ -36,6 +36,7 @@ export const docSections: DocSection[] = [
     title: '핵심 개념',
     subsections: [
       { id: 'technical-indicators', title: '기술적 지표 이해하기' },
+      { id: 'pattern-recognition', title: '패턴 인식 ✨ NEW' },
       { id: 'ai-analysis', title: 'AI 분석의 원리' },
       { id: 'confidence-system', title: '신뢰도와 가중치' },
       { id: 'market-conditions', title: '시장 상황 판단' },
