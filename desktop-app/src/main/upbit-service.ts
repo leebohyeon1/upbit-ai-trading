@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import axios from 'axios';
+import { apiRateLimiter } from './api-rate-limiter';
 
 export interface UpbitTicker {
   market: string;
@@ -88,16 +89,25 @@ class UpbitService {
       }
       
       const marketString = validMarkets.join(',');
-      const url = `${this.baseURL}/v1/ticker?markets=${marketString}`;
-      const response = await axios.get(url);
+      const cacheKey = `tickers:${marketString}`;
       
-      return response.data.map((ticker: any) => ({
-        market: ticker.market,
-        trade_price: ticker.trade_price,
-        change_rate: ticker.change_rate,
-        acc_trade_volume_24h: ticker.acc_trade_volume_24h,
-        timestamp: Date.now()
-      }));
+      return await apiRateLimiter.executeRequest(
+        'ticker',
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}/v1/ticker?markets=${marketString}`;
+          const response = await axios.get(url);
+          
+          return response.data.map((ticker: any) => ({
+            market: ticker.market,
+            trade_price: ticker.trade_price,
+            change_rate: ticker.change_rate,
+            acc_trade_volume_24h: ticker.acc_trade_volume_24h,
+            timestamp: Date.now()
+          }));
+        },
+        5000 // 5초 캐시
+      );
     } catch (error: any) {
       console.error('Failed to get tickers:', error);
       if (error.response && error.response.data) {
@@ -110,9 +120,17 @@ class UpbitService {
   // 단일 마켓 현재가 조회
   async getTicker(market: string): Promise<any> {
     try {
-      const url = `${this.baseURL}/v1/ticker?markets=${market}`;
-      const response = await axios.get(url);
-      return response.data[0];
+      const cacheKey = `ticker:${market}`;
+      return await apiRateLimiter.executeRequest(
+        'ticker',
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}/v1/ticker?markets=${market}`;
+          const response = await axios.get(url);
+          return response.data[0];
+        },
+        5000 // 5초 캐시
+      );
     } catch (error) {
       console.error('Failed to get ticker:', error);
       return null;
@@ -122,19 +140,28 @@ class UpbitService {
   // 캔들 데이터 조회 (공개 API) - 기본 5분봉
   async getCandles(market: string, count: number = 200): Promise<CandleData[]> {
     try {
-      const url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
-      const response = await axios.get(url);
+      const cacheKey = `candles:5m:${market}:${count}`;
       
-      return response.data.map((candle: any) => ({
-        market: candle.market,
-        candle_date_time_utc: candle.candle_date_time_utc,
-        candle_date_time_kst: candle.candle_date_time_kst,
-        opening_price: candle.opening_price,
-        high_price: candle.high_price,
-        low_price: candle.low_price,
-        trade_price: candle.trade_price,
-        candle_acc_trade_volume: candle.candle_acc_trade_volume
-      }));
+      return await apiRateLimiter.executeRequest(
+        'ticker', // candles도 ticker 그룹에 포함
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
+          const response = await axios.get(url);
+          
+          return response.data.map((candle: any) => ({
+            market: candle.market,
+            candle_date_time_utc: candle.candle_date_time_utc,
+            candle_date_time_kst: candle.candle_date_time_kst,
+            opening_price: candle.opening_price,
+            high_price: candle.high_price,
+            low_price: candle.low_price,
+            trade_price: candle.trade_price,
+            candle_acc_trade_volume: candle.candle_acc_trade_volume
+          }));
+        },
+        30000 // 30초 캐시 (캔들 데이터는 더 오래 캐시)
+      );
     } catch (error) {
       console.error('Failed to get candles:', error);
       return [];

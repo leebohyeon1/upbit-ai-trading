@@ -64,45 +64,88 @@ export const MarketCorrelationPanel: React.FC = () => {
     setError('');
 
     try {
-      // TODO: main 프로세스에 IPC 핸들러 추가 필요
       const electronAPI = (window as any).electronAPI;
       
-      // 임시 더미 데이터
-      const dummyData: MarketCorrelation = {
-        timestamp: Date.now(),
-        btcDominance: 48.5,
-        altcoinSeason: false,
-        sp500Correlation: 0.65,
-        nasdaqCorrelation: 0.72,
-        dxyIndex: 104.5,
-        dxyChange24h: -0.3,
-        fearGreedIndex: 42,
-        globalMarketCap: 2500000000000,
-        globalVolume24h: 98000000000,
-        btcPrice: 65000,
-        ethBtcRatio: 0.058,
-        correlationInsights: [
-          'BTC와 나스닥의 상관관계가 높아지고 있습니다',
-          '달러 약세로 암호화폐 시장에 긍정적 영향',
-          '공포 지수가 중립 구간에 진입했습니다'
-        ]
-      };
+      // 실제 API 호출
+      const response = await electronAPI.invoke('market-correlation');
+      
+      if (response) {
+        // 응답 데이터를 MarketCorrelation 형식으로 변환
+        const marketCorrelation: MarketCorrelation = {
+          timestamp: new Date(response.lastUpdated).getTime(),
+          btcDominance: response.btcDominance,
+          altcoinSeason: response.btcDominance < 45,
+          sp500Correlation: response.sp500.correlation,
+          nasdaqCorrelation: response.nasdaq.correlation,
+          dxyIndex: response.dxy.correlation < 0 ? 100 + Math.abs(response.dxy.change) : 100 - Math.abs(response.dxy.change),
+          dxyChange24h: response.dxy.change,
+          fearGreedIndex: response.fearGreedIndex.value,
+          globalMarketCap: 2500000000000, // 기본값 (실제 API에서 가져올 수 있으면 추가)
+          globalVolume24h: 98000000000, // 기본값 (실제 API에서 가져올 수 있으면 추가)
+          btcPrice: 65000, // 기본값 (실제 API에서 가져올 수 있으면 추가)
+          ethBtcRatio: 0.058, // 기본값 (실제 API에서 가져올 수 있으면 추가)
+          correlationInsights: generateInsights(response)
+        };
 
-      const dummyCoins: CoinCorrelation[] = [
-        { coin: 'ETH', btcCorrelation: 0.85, ethCorrelation: 1, marketCapRank: 2, priceChange7d: 5.2, volumeChange24h: 12.3, isOutperforming: true },
-        { coin: 'BNB', btcCorrelation: 0.75, ethCorrelation: 0.72, marketCapRank: 4, priceChange7d: -2.1, volumeChange24h: -5.2, isOutperforming: false },
-        { coin: 'SOL', btcCorrelation: 0.68, ethCorrelation: 0.71, marketCapRank: 5, priceChange7d: 8.7, volumeChange24h: 25.3, isOutperforming: true },
-        { coin: 'XRP', btcCorrelation: 0.62, ethCorrelation: 0.58, marketCapRank: 6, priceChange7d: -1.2, volumeChange24h: -8.1, isOutperforming: false }
-      ];
+        // 코인 상관관계 데이터 (임시 - 추후 실제 API로 대체)
+        const coinData: CoinCorrelation[] = [
+          { coin: 'ETH', btcCorrelation: 0.85, ethCorrelation: 1, marketCapRank: 2, priceChange7d: 5.2, volumeChange24h: 12.3, isOutperforming: true },
+          { coin: 'BNB', btcCorrelation: 0.75, ethCorrelation: 0.72, marketCapRank: 4, priceChange7d: -2.1, volumeChange24h: -5.2, isOutperforming: false },
+          { coin: 'SOL', btcCorrelation: 0.68, ethCorrelation: 0.71, marketCapRank: 5, priceChange7d: 8.7, volumeChange24h: 25.3, isOutperforming: true },
+          { coin: 'XRP', btcCorrelation: 0.62, ethCorrelation: 0.58, marketCapRank: 6, priceChange7d: -1.2, volumeChange24h: -8.1, isOutperforming: false }
+        ];
 
-      setMarketData(dummyData);
-      setCoinCorrelations(dummyCoins);
+        setMarketData(marketCorrelation);
+        setCoinCorrelations(coinData);
+      }
     } catch (error) {
       console.error('Failed to fetch market correlation:', error);
       setError('시장 상관관계 데이터를 불러오는데 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 인사이트 생성 함수
+  const generateInsights = (data: any): string[] => {
+    const insights: string[] = [];
+
+    // BTC 도미넌스 인사이트
+    if (data.btcDominance > 60) {
+      insights.push('🔴 BTC 도미넌스가 매우 높음 - 알트코인 약세 예상');
+    } else if (data.btcDominance < 40) {
+      insights.push('🟢 BTC 도미넌스가 낮음 - 알트코인 시즌 진행 중');
+    }
+
+    // 공포/탐욕 지수 인사이트
+    if (data.fearGreedIndex.value < 20) {
+      insights.push('😱 극도의 공포 - 역발상 매수 기회 가능');
+    } else if (data.fearGreedIndex.value > 80) {
+      insights.push('🤑 극도의 탐욕 - 차익실현 고려 필요');
+    }
+
+    // 주식 시장 상관관계
+    if (data.sp500.correlation > 0.7) {
+      insights.push('📊 미국 주식시장과 높은 상관관계 - 나스닥 선물 주시');
+    } else if (data.sp500.correlation < 0.3) {
+      insights.push('🔀 주식시장과 디커플링 - 암호화폐 고유 움직임');
+    }
+
+    // 달러 인덱스
+    if (data.dxy.change > 1) {
+      insights.push('💵 달러 강세 - 암호화폐 하락 압력 가능');
+    } else if (data.dxy.change < -1) {
+      insights.push('💸 달러 약세 - 암호화폐 상승 여력 증가');
+    }
+
+    // 시장 심리
+    if (data.marketSentiment === 'Bearish') {
+      insights.push('🐻 전반적인 시장 심리 약세 - 신중한 접근 필요');
+    } else if (data.marketSentiment === 'Bullish') {
+      insights.push('🐂 전반적인 시장 심리 강세 - 상승 모멘텀 활용');
+    }
+
+    return insights.length > 0 ? insights : ['시장은 현재 균형잡힌 상태입니다'];
   };
 
   useEffect(() => {

@@ -8,6 +8,7 @@ import { coreConceptsContents } from './docContents_coreConsepts';
 import { interfaceContents } from './docContents_interface';
 import { tradingStrategyContents } from './docContents_tradingStrategy';
 import { advancedStrategiesContents } from './docContents_advancedStrategies';
+import { allFeaturesContents } from './docContents_allFeatures';
 
 // 기존 파일에서 추가로 필요한 섹션들 (간소화된 버전)
 const additionalContents = {
@@ -981,6 +982,7 @@ export const allDocContents = {
   ...interfaceContents,
   ...tradingStrategyContents,
   ...advancedStrategiesContents,
+  ...allFeaturesContents,
   ...additionalContents
 };
 
@@ -1092,6 +1094,12 @@ export const documentSections = {
     items: [
       'reference.glossary',
       'reference.faq'
+    ]
+  },
+  'all-features': {
+    title: '전체 기능 가이드',
+    items: [
+      'all-features.overview'
     ]
   }
 };

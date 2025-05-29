@@ -54,6 +54,7 @@ const sectionIcons: Record<string, React.ReactElement> = {
   'core-concepts': <School />,
   'interface': <Computer />,
   'trading-strategy': <TrendingUp />,
+  'advanced-strategies': <AutoAwesome />,
   'coin-settings': <CurrencyBitcoin />,
   'auto-trading': <SmartToy />,
   'calculations': <Calculate />,
@@ -61,10 +62,11 @@ const sectionIcons: Record<string, React.ReactElement> = {
   'ai-learning': <Brain />,
   'backtest': <Timeline />,
   'risk-management': <Warning />,
-  'notifications': <Notifications />,
+  'news-analysis': <AutoAwesome />,
+  'notification': <Notifications />,
   'troubleshooting': <Build />,
-  'advanced': <AutoAwesome />,
   'reference': <MenuBook />,
+  'all-features': <MenuBook />,
 };
 
 const DocSidebar: React.FC<DocSidebarProps> = ({
@@ -77,14 +79,20 @@ const DocSidebar: React.FC<DocSidebarProps> = ({
   const [expandedSections, setExpandedSections] = React.useState<string[]>([selectedSection]);
 
   const handleSectionClick = (sectionId: string) => {
-    if (sections.find(s => s.id === sectionId)?.subsections) {
+    const section = sections.find(s => s.id === sectionId);
+    if (section?.subsections && section.subsections.length > 0) {
       setExpandedSections(prev =>
         prev.includes(sectionId)
           ? prev.filter(id => id !== sectionId)
           : [...prev, sectionId]
       );
+      // 하위 항목이 하나뿐이면 바로 선택
+      if (section.subsections.length === 1) {
+        onSectionSelect(sectionId, section.subsections[0]);
+      }
+    } else {
+      onSectionSelect(sectionId);
     }
-    onSectionSelect(sectionId);
   };
 
   return (
