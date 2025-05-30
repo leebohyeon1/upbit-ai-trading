@@ -47,6 +47,10 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
   React.useEffect(() => {
     console.log('[TradingSettings] Config updated:', config);
   }, [config]);
+  
+  // 간소화 모드가 활성화되어 있는지 확인
+  const isSimplifiedMode = config.simplifiedConfig?.enabled ?? true;
+  
   const handleChange = (field: keyof TradingConfig | string, value: any) => {
     console.log(`[TradingSettings] Changing ${field} to:`, value);
     
@@ -397,274 +401,6 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
         </Card>
       </Grid>
 
-      {/* 간소화 거래 모드 설정 */}
-      <Grid item xs={12}>
-        <Card>
-          <CardContent>
-            <Box display="flex" alignItems="center" gap={2} mb={3}>
-              <Speed color="primary" />
-              <Typography variant="h6" fontWeight="bold">
-                간소화 거래 모드
-              </Typography>
-              <FormControlLabel
-                sx={{ ml: 'auto' }}
-                control={
-                  <Switch
-                    checked={config.simplifiedConfig?.enabled ?? true}
-                    onChange={(e) => handleChange('simplifiedConfig.enabled', e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label="간소화 모드 사용"
-              />
-            </Box>
-
-            {config.simplifiedConfig?.enabled && (
-              <>
-                <Divider sx={{ my: 2 }} />
-                
-                {/* 사용할 지표 선택 */}
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  사용할 지표 선택
-                </Typography>
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                  <Grid item xs={12} md={6} lg={4}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.simplifiedConfig?.useIndicators?.movingAverage ?? true}
-                          onChange={(e) => handleChange('simplifiedConfig.useIndicators.movingAverage', e.target.checked)}
-                        />
-                      }
-                      label="이동평균선 (MA)"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6} lg={4}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.simplifiedConfig?.useIndicators?.rsi ?? true}
-                          onChange={(e) => handleChange('simplifiedConfig.useIndicators.rsi', e.target.checked)}
-                        />
-                      }
-                      label="RSI"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6} lg={4}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.simplifiedConfig?.useIndicators?.macd ?? true}
-                          onChange={(e) => handleChange('simplifiedConfig.useIndicators.macd', e.target.checked)}
-                        />
-                      }
-                      label="MACD"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6} lg={4}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.simplifiedConfig?.useIndicators?.bollingerBands ?? true}
-                          onChange={(e) => handleChange('simplifiedConfig.useIndicators.bollingerBands', e.target.checked)}
-                        />
-                      }
-                      label="볼린저 밴드"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6} lg={4}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.simplifiedConfig?.useIndicators?.stochastic ?? true}
-                          onChange={(e) => handleChange('simplifiedConfig.useIndicators.stochastic', e.target.checked)}
-                        />
-                      }
-                      label="스토캐스틱"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6} lg={4}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.simplifiedConfig?.useIndicators?.volume ?? true}
-                          onChange={(e) => handleChange('simplifiedConfig.useIndicators.volume', e.target.checked)}
-                        />
-                      }
-                      label="거래량"
-                    />
-                  </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* 매매 임계값 설정 */}
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  매매 임계값 설정
-                </Typography>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="매수 임계값"
-                      type="number"
-                      value={config.simplifiedConfig?.tradingThresholds?.buyThreshold ?? 0.15}
-                      onChange={(e) => handleChange('simplifiedConfig.tradingThresholds.buyThreshold', parseFloat(e.target.value))}
-                      InputProps={{
-                        inputProps: { min: -1, max: 1, step: 0.05 },
-                        startAdornment: <InputAdornment position="start">+</InputAdornment>
-                      }}
-                      helperText="이 값 이상일 때 매수 신호 (기본: 0.15)"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="매도 임계값"
-                      type="number"
-                      value={config.simplifiedConfig?.tradingThresholds?.sellThreshold ?? -0.2}
-                      onChange={(e) => handleChange('simplifiedConfig.tradingThresholds.sellThreshold', parseFloat(e.target.value))}
-                      InputProps={{
-                        inputProps: { min: -1, max: 1, step: 0.05 }
-                      }}
-                      helperText="이 값 이하일 때 매도 신호 (기본: -0.2)"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="RSI 과매수 수준"
-                      type="number"
-                      value={config.simplifiedConfig?.tradingThresholds?.rsiOverbought ?? 70}
-                      onChange={(e) => handleChange('simplifiedConfig.tradingThresholds.rsiOverbought', parseInt(e.target.value))}
-                      InputProps={{
-                        inputProps: { min: 60, max: 90, step: 5 }
-                      }}
-                      helperText="RSI가 이 값 이상이면 과매수 (기본: 70)"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="RSI 과매도 수준"
-                      type="number"
-                      value={config.simplifiedConfig?.tradingThresholds?.rsiOversold ?? 30}
-                      onChange={(e) => handleChange('simplifiedConfig.tradingThresholds.rsiOversold', parseInt(e.target.value))}
-                      InputProps={{
-                        inputProps: { min: 10, max: 40, step: 5 }
-                      }}
-                      helperText="RSI가 이 값 이하면 과매도 (기본: 30)"
-                    />
-                  </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* 투자 설정 */}
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  투자 설정
-                </Typography>
-                <Grid container spacing={3} sx={{ mb: 3 }}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="투자 비율"
-                      type="number"
-                      value={(config.simplifiedConfig?.investmentSettings?.investmentRatio ?? 0.2) * 100}
-                      onChange={(e) => handleChange('simplifiedConfig.investmentSettings.investmentRatio', parseFloat(e.target.value) / 100)}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                        inputProps: { min: 5, max: 50, step: 5 }
-                      }}
-                      helperText="총 자산 대비 투자 비율 (기본: 20%)"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="최대 투자 금액"
-                      type="number"
-                      value={config.simplifiedConfig?.investmentSettings?.maxPositionSize ?? 1000000}
-                      onChange={(e) => handleChange('simplifiedConfig.investmentSettings.maxPositionSize', parseInt(e.target.value))}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start">₩</InputAdornment>,
-                        inputProps: { min: 50000, max: 10000000, step: 50000 }
-                      }}
-                      helperText="최대 투자 금액 (기본: 100만원)"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="손절 비율"
-                      type="number"
-                      value={config.simplifiedConfig?.investmentSettings?.stopLossPercent ?? 5}
-                      onChange={(e) => handleChange('simplifiedConfig.investmentSettings.stopLossPercent', parseFloat(e.target.value))}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                        inputProps: { min: 2, max: 15, step: 0.5 }
-                      }}
-                      helperText="손절 기준 하락률 (기본: 5%)"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="익절 비율"
-                      type="number"
-                      value={config.simplifiedConfig?.investmentSettings?.takeProfitPercent ?? 10}
-                      onChange={(e) => handleChange('simplifiedConfig.investmentSettings.takeProfitPercent', parseFloat(e.target.value))}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                        inputProps: { min: 3, max: 30, step: 0.5 }
-                      }}
-                      helperText="익절 기준 상승률 (기본: 10%)"
-                    />
-                  </Grid>
-                </Grid>
-
-                {/* 쿨다운 설정 */}
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  쿨다운 설정
-                </Typography>
-                <Grid container spacing={3} sx={{ mb: 2 }}>
-                  <Grid item xs={12} md={6}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.simplifiedConfig?.cooldownSettings?.enabled ?? true}
-                          onChange={(e) => handleChange('simplifiedConfig.cooldownSettings.enabled', e.target.checked)}
-                        />
-                      }
-                      label="쿨다운 사용"
-                    />
-                  </Grid>
-                  {config.simplifiedConfig?.cooldownSettings?.enabled && (
-                    <Grid item xs={12} md={6}>
-                      <TextField
-                        fullWidth
-                        label="거래 후 대기 시간"
-                        type="number"
-                        value={config.simplifiedConfig?.cooldownSettings?.tradeCooldown ?? 60}
-                        onChange={(e) => handleChange('simplifiedConfig.cooldownSettings.tradeCooldown', parseInt(e.target.value))}
-                        InputProps={{
-                          endAdornment: <InputAdornment position="end">분</InputAdornment>,
-                          inputProps: { min: 10, max: 240, step: 10 }
-                        }}
-                        helperText="거래 후 다음 거래까지 대기 시간 (기본: 60분)"
-                      />
-                    </Grid>
-                  )}
-                </Grid>
-                
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  간소화 모드는 이전 프로젝트와 유사한 방식으로 작동합니다. 여러 지표의 신호를 종합하여 매매 결정을 내립니다.
-                </Alert>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </Grid>
 
         {/* AI 설정 */}
         <Grid item xs={12} lg={6}>
@@ -684,6 +420,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                     <Switch
                       checked={config.useAI}
                       onChange={(e) => handleChange('useAI', e.target.checked)}
+                      disabled={isSimplifiedMode}
                     />
                   }
                   label="AI 분석 사용"
@@ -698,6 +435,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                       value={config.aiProvider}
                       onChange={(e) => handleChange('aiProvider', e.target.value)}
                       label="AI 모델"
+                      disabled={isSimplifiedMode}
                     >
                       <MenuItem value="claude">Claude (Anthropic)</MenuItem>
                       <MenuItem value="gpt" disabled>GPT (OpenAI) - 준비중</MenuItem>
@@ -739,6 +477,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                       { value: 5, label: '매우 높음' }
                     ]}
                     valueLabelDisplay="auto"
+                    disabled={isSimplifiedMode}
                   />
                 </Box>
               </Grid>
@@ -749,6 +488,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                     <Switch
                       checked={config.dynamicConfidence}
                       onChange={(e) => handleChange('dynamicConfidence', e.target.checked)}
+                      disabled={isSimplifiedMode}
                     />
                   }
                   label="동적 신뢰도 조정"
@@ -761,6 +501,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                     <Switch
                       checked={config.useKellyCriterion}
                       onChange={(e) => handleChange('useKellyCriterion', e.target.checked)}
+                      disabled={isSimplifiedMode}
                     />
                   }
                   label="Kelly Criterion 사용"
@@ -776,6 +517,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                       type="number"
                       value={(config.maxKellyFraction || 0.25) * 100}
                       onChange={(e) => handleChange('maxKellyFraction', parseFloat(e.target.value) / 100)}
+                      disabled={isSimplifiedMode}
                       InputProps={{ 
                         inputProps: { min: 5, max: 50, step: 5 },
                         endAdornment: <InputAdornment position="end">%</InputAdornment>
@@ -798,6 +540,12 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               최소 신뢰도 설정
             </Typography>
+            
+            {isSimplifiedMode && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                간소화 모드에서는 신뢰도 제한이 적용되지 않습니다.
+              </Alert>
+            )}
 
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
@@ -807,6 +555,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                   type="number"
                   value={config.minConfidenceForBuy}
                   onChange={(e) => handleChange('minConfidenceForBuy', parseInt(e.target.value))}
+                  disabled={isSimplifiedMode}
                   InputProps={{ 
                     inputProps: { min: 30, max: 95, step: 5 },
                     endAdornment: <InputAdornment position="end">%</InputAdornment>
@@ -822,6 +571,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                   type="number"
                   value={config.minConfidenceForSell}
                   onChange={(e) => handleChange('minConfidenceForSell', parseInt(e.target.value))}
+                  disabled={isSimplifiedMode}
                   InputProps={{ 
                     inputProps: { min: 30, max: 95, step: 5 },
                     endAdornment: <InputAdornment position="end">%</InputAdornment>
@@ -841,6 +591,12 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
             <Typography variant="h6" fontWeight="bold" gutterBottom>
               쿨다운 설정
             </Typography>
+            
+            {isSimplifiedMode && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                간소화 모드에서는 자체 쿨다운 설정을 사용합니다.
+              </Alert>
+            )}
 
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
@@ -850,6 +606,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                   type="number"
                   value={config.buyingCooldown || 30}
                   onChange={(e) => handleChange('buyingCooldown', parseInt(e.target.value) || 0)}
+                  disabled={isSimplifiedMode}
                   InputProps={{ 
                     inputProps: { min: 0, max: 180, step: 5 },
                     endAdornment: <InputAdornment position="end">분</InputAdornment>
@@ -865,6 +622,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                   type="number"
                   value={config.sellingCooldown || 20}
                   onChange={(e) => handleChange('sellingCooldown', parseInt(e.target.value) || 0)}
+                  disabled={isSimplifiedMode}
                   InputProps={{ 
                     inputProps: { min: 0, max: 180, step: 5 },
                     endAdornment: <InputAdornment position="end">분</InputAdornment>
@@ -902,6 +660,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                       checked={(config as any).enableSmartOrder ?? true}
                       onChange={(e) => handleChange('enableSmartOrder' as any, e.target.checked)}
                       color="primary"
+                      disabled={isSimplifiedMode}
                     />
                   }
                   label={
@@ -938,6 +697,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                       checked={(config as any).enableTrailingStop ?? false}
                       onChange={(e) => handleChange('enableTrailingStop' as any, e.target.checked)}
                       color="primary"
+                      disabled={isSimplifiedMode}
                     />
                   }
                   label={
@@ -960,6 +720,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                       type="number"
                       value={(config as any).trailingStartPercent ?? 5}
                       onChange={(e) => handleChange('trailingStartPercent' as any, parseFloat(e.target.value) || 5)}
+                      disabled={isSimplifiedMode}
                       InputProps={{
                         endAdornment: <InputAdornment position="end">%</InputAdornment>,
                         inputProps: { min: 1, max: 20, step: 0.5 }
@@ -975,6 +736,7 @@ export const TradingSettings: React.FC<TradingSettingsProps> = ({
                       type="number"
                       value={(config as any).trailingStopPercent ?? 2}
                       onChange={(e) => handleChange('trailingStopPercent' as any, parseFloat(e.target.value) || 2)}
+                      disabled={isSimplifiedMode}
                       InputProps={{
                         endAdornment: <InputAdornment position="end">%</InputAdornment>,
                         inputProps: { min: 0.5, max: 10, step: 0.5 }

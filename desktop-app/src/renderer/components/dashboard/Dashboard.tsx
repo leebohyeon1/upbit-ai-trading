@@ -60,6 +60,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     portfolioChartData
   } = useTradingContext();
   
+  // 간소화 모드 사용 여부
+  const useSimplifiedMode = tradingConfig?.simplifiedConfig?.enabled ?? true;
+  
   const [tradeStats, setTradeStats] = useState<{
     totalTrades: number;
     winRate: number;
@@ -243,14 +246,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
             color="info"
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={3}>
-          <StatCard
-            icon={<Psychology />}
-            title="AI 상태"
-            value={tradingConfig.useAI ? '활성' : '비활성'}
-            color={tradingConfig.useAI ? 'primary' : 'grey'}
-          />
-        </Grid>
+        {!useSimplifiedMode && (
+          <Grid item xs={12} sm={6} lg={3}>
+            <StatCard
+              icon={<Psychology />}
+              title="AI 상태"
+              value={tradingConfig.useAI ? '활성' : '비활성'}
+              color={tradingConfig.useAI ? 'primary' : 'grey'}
+            />
+          </Grid>
+        )}
       </Grid>
 
       {/* Recent Analyses */}
@@ -478,48 +483,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </Grid>
       </Box>
 
-      {/* 리스크 관리 섹션 */}
-      <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', mb: 4 }}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
-          리스크 관리
-        </Typography>
-        <RiskManagementPanel />
-      </Box>
+      {/* 리스크 관리 섹션 - 간소화 모드에서는 숨김 */}
+      {!useSimplifiedMode && (
+        <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', mb: 4 }}>
+          <Typography variant="h6" fontWeight="bold" mb={2}>
+            리스크 관리
+          </Typography>
+          <RiskManagementPanel />
+        </Box>
+      )}
 
-      {/* 패턴 인식 섹션 */}
-      <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', mb: 4 }}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
-          패턴 분석
-        </Typography>
-        <Grid container spacing={3}>
-          {analyses && analyses.length > 0 ? (
-            analyses
-              .filter(analysis => analysis.ticker && analysis.patterns && 
-                      (analysis.patterns.candlePatterns.length > 0 || analysis.patterns.chartPatterns.length > 0))
-              .slice(0, 3) // 상위 3개만 표시
-              .map((analysis, index) => (
-                <Grid item xs={12} md={4} key={analysis.ticker}>
-                  <AnimatedCard delay={index * 0.1}>
-                    <PatternRecognitionPanel 
-                      patterns={analysis.patterns} 
-                      currentPrice={analysis.currentPrice}
-                    />
-                  </AnimatedCard>
-                </Grid>
-              ))
-          ) : (
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" align="center">
-                    패턴 분석 데이터가 없습니다
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
-        </Grid>
-      </Box>
+      {/* 패턴 인식 섹션 - 간소화 모드에서는 숨김 */}
+      {!useSimplifiedMode && (
+        <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', mb: 4 }}>
+          <Typography variant="h6" fontWeight="bold" mb={2}>
+            패턴 분석
+          </Typography>
+          <Grid container spacing={3}>
+            {analyses && analyses.length > 0 ? (
+              analyses
+                .filter(analysis => analysis.ticker && analysis.patterns && 
+                        (analysis.patterns.candlePatterns.length > 0 || analysis.patterns.chartPatterns.length > 0))
+                .slice(0, 3) // 상위 3개만 표시
+                .map((analysis, index) => (
+                  <Grid item xs={12} md={4} key={analysis.ticker}>
+                    <AnimatedCard delay={index * 0.1}>
+                      <PatternRecognitionPanel 
+                        patterns={analysis.patterns} 
+                        currentPrice={analysis.currentPrice}
+                      />
+                    </AnimatedCard>
+                  </Grid>
+                ))
+            ) : (
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" align="center">
+                      패턴 분석 데이터가 없습니다
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+          </Grid>
+        </Box>
+      )}
     </Box>
   );
 };

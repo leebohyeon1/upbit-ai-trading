@@ -69,6 +69,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     console.log('[MainLayout] Enable real trading:', tradingConfig?.enableRealTrading);
   }, [tradingState, tradingConfig]);
 
+  // 간소화 모드 사용 여부
+  const useSimplifiedMode = tradingConfig?.simplifiedConfig?.enabled ?? true;
+  
   // 시뮬레이션 탭 표시 조건
   const showSimulationTab = tradingState?.isRunning && !tradingConfig?.enableRealTrading;
   console.log('[MainLayout] Show simulation tab?', showSimulationTab, {
@@ -79,11 +82,17 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const menuItems = [
     { text: '대시보드', icon: <Dashboard />, value: TAB_INDEX.OVERVIEW },
     { text: '포트폴리오', icon: <AccountBalance />, value: TAB_INDEX.PORTFOLIO },
-    { text: '분석 설정', icon: <BarChart />, value: TAB_INDEX.ANALYSIS },
-    { text: '고급 분석', icon: <Analytics />, value: TAB_INDEX.ADVANCED_ANALYSIS },
+    // 간소화 모드에서는 분석 설정 숨김 (기본 설정만 사용)
+    ...(!useSimplifiedMode ? [
+      { text: '분석 설정', icon: <BarChart />, value: TAB_INDEX.ANALYSIS },
+      { text: '고급 분석', icon: <Analytics />, value: TAB_INDEX.ADVANCED_ANALYSIS },
+    ] : []),
     { text: '거래 설정', icon: <Settings />, value: TAB_INDEX.SETTINGS },
-    { text: '학습 상태', icon: <School />, value: TAB_INDEX.LEARNING },
-    { text: '백테스트', icon: <ShowChart />, value: TAB_INDEX.BACKTEST },
+    // 간소화 모드에서는 학습 상태와 백테스트 숨김
+    ...(!useSimplifiedMode ? [
+      { text: '학습 상태', icon: <School />, value: TAB_INDEX.LEARNING },
+      { text: '백테스트', icon: <ShowChart />, value: TAB_INDEX.BACKTEST },
+    ] : []),
     ...(showSimulationTab ? 
       [{ text: '시뮬레이션 성과', icon: <Speed />, value: TAB_INDEX.SIMULATION }] : []
     ),
@@ -181,8 +190,37 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             )}
           </Box>
 
-          {/* AI Status */}
-          {drawerOpen && (
+          {/* 간소화 모드 상태 표시 */}
+          {drawerOpen && useSimplifiedMode && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: 1.5,
+                borderRadius: 2,
+                bgcolor: alpha(theme.palette.success.main, 0.1)
+              }}
+            >
+              <Speed color="success" />
+              <Box flex={1}>
+                <Typography variant="body2" fontWeight="medium">
+                  간소화 모드
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  6개 핵심 지표만 사용
+                </Typography>
+              </Box>
+              <Chip
+                label="활성"
+                size="small"
+                color="success"
+              />
+            </Box>
+          )}
+
+          {/* AI Status - 간소화 모드에서는 숨김 */}
+          {drawerOpen && !useSimplifiedMode && (
             <Box
               sx={{
                 display: 'flex',

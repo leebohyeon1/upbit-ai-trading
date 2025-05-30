@@ -101,6 +101,18 @@ const AppContent: React.FC = () => {
 
   const renderContent = () => {
     const renderPage = () => {
+      // 간소화 모드 사용 여부
+      const useSimplifiedMode = context.tradingConfig?.simplifiedConfig?.enabled ?? true;
+      
+      // 간소화 모드에서 숨겨진 탭 접근 시 대시보드로 리다이렉트
+      if (useSimplifiedMode) {
+        const hiddenTabs = [TAB_INDEX.ANALYSIS, TAB_INDEX.ADVANCED_ANALYSIS, TAB_INDEX.LEARNING, TAB_INDEX.BACKTEST];
+        if (hiddenTabs.includes(activeTab)) {
+          setActiveTab(TAB_INDEX.OVERVIEW);
+          return null;
+        }
+      }
+      
       switch (activeTab) {
         case TAB_INDEX.OVERVIEW:
           return (
