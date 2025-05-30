@@ -1,6 +1,7 @@
 import UpbitService from './upbit-service';
 import * as fs from 'fs';
 import * as path from 'path';
+import { app } from 'electron';
 
 export interface GridConfig {
   symbol: string;
@@ -67,7 +68,7 @@ export class GridTradingService {
   constructor() {
     this.upbitService = UpbitService;
     
-    const dataDir = path.join(process.cwd(), 'data');
+    const dataDir = path.join(app.getPath('userData'), 'data');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }

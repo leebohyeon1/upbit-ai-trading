@@ -46,6 +46,11 @@ class TradingApp {
     // 개발 모드에서는 Single instance lock 비활성화
     const isDev = process.env.ELECTRON_DEV_MODE === 'true';
     
+    // 개발 모드에서 창 제목에 (Dev) 추가
+    if (isDev) {
+      app.name = 'Upbit AI Trading (Dev)';
+    }
+    
     if (!isDev) {
       // Single instance lock
       const gotTheLock = app.requestSingleInstanceLock();

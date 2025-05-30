@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { app } from 'electron';
 import upbitService from './upbit-service';
 import tradingEngine from './trading-engine';
 import notificationService from './notification-service';
@@ -196,7 +197,7 @@ class KillSwitchService extends EventEmitter {
       const fs = require('fs').promises;
       const path = require('path');
       const filename = `portfolio_snapshot_${Date.now()}.json`;
-      const filepath = path.join(process.cwd(), 'data', 'emergency', filename);
+      const filepath = path.join(app.getPath('userData'), 'data', 'emergency', filename);
       
       await fs.mkdir(path.dirname(filepath), { recursive: true });
       await fs.writeFile(filepath, JSON.stringify(snapshot, null, 2));
@@ -263,7 +264,7 @@ class KillSwitchService extends EventEmitter {
     
     // 설정 파일에 잠금 상태 저장
     const fs = require('fs').promises;
-    const lockFile = require('path').join(process.cwd(), 'data', '.system.lock');
+    const lockFile = require('path').join(app.getPath('userData'), 'data', '.system.lock');
     await fs.writeFile(lockFile, JSON.stringify({
       locked: true,
       timestamp: Date.now(),
@@ -278,7 +279,7 @@ class KillSwitchService extends EventEmitter {
     
     // 잠금 파일 삭제
     const fs = require('fs').promises;
-    const lockFile = require('path').join(process.cwd(), 'data', '.system.lock');
+    const lockFile = require('path').join(app.getPath('userData'), 'data', '.system.lock');
     try {
       await fs.unlink(lockFile);
     } catch (error) {
@@ -482,7 +483,7 @@ class KillSwitchService extends EventEmitter {
   private async saveConfig(): Promise<void> {
     const fs = require('fs').promises;
     const path = require('path');
-    const configPath = path.join(process.cwd(), 'data', 'config', 'kill-switch.json');
+    const configPath = path.join(app.getPath('userData'), 'data', 'config', 'kill-switch.json');
     
     await fs.mkdir(path.dirname(configPath), { recursive: true });
     await fs.writeFile(configPath, JSON.stringify(this.config, null, 2));
@@ -492,7 +493,7 @@ class KillSwitchService extends EventEmitter {
     try {
       const fs = require('fs').promises;
       const path = require('path');
-      const configPath = path.join(process.cwd(), 'data', 'config', 'kill-switch.json');
+      const configPath = path.join(app.getPath('userData'), 'data', 'config', 'kill-switch.json');
       
       const data = await fs.readFile(configPath, 'utf8');
       return JSON.parse(data);

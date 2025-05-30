@@ -17,10 +17,26 @@ export class TwoFactorAuthService {
   };
 
   constructor() {
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    // Electron의 userData 디렉토리 사용 (사용자별 앱 데이터 저장소)
+    const { app } = require('electron');
+    const dataDir = path.join(app.getPath('userData'), 'data');
+    
+    try {
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+    } catch (error) {
+      console.error('데이터 디렉토리 생성 실패:', error);
+      // 대체 경로 사용 (임시 디렉토리)
+      const tempDir = path.join(app.getPath('temp'), 'upbit-ai-trading', 'data');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      this.configPath = path.join(tempDir, '2fa-config.json');
+      this.loadConfig();
+      return;
     }
+    
     this.configPath = path.join(dataDir, '2fa-config.json');
     this.loadConfig();
   }

@@ -1,6 +1,7 @@
 import UpbitService from './upbit-service';
 import * as fs from 'fs';
 import * as path from 'path';
+import { app } from 'electron';
 
 export interface MomentumConfig {
   symbol: string;
@@ -95,7 +96,7 @@ export class MomentumTradingService {
   constructor() {
     this.upbitService = UpbitService;
     
-    const dataDir = path.join(process.cwd(), 'data');
+    const dataDir = path.join(app.getPath('userData'), 'data');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
