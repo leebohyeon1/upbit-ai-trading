@@ -60,6 +60,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
     portfolioChartData
   } = useTradingContext();
   
+  const [tradeStats, setTradeStats] = useState<{
+    totalTrades: number;
+    winRate: number;
+    totalProfit: number;
+    todayProfit: number;
+  }>({
+    totalTrades: 0,
+    winRate: 0,
+    totalProfit: 0,
+    todayProfit: 0
+  });
+  
   // 디버깅용 로그
   useEffect(() => {
     console.log('[Dashboard] profitHistory:', profitHistory);
@@ -68,6 +80,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [profitHistory, portfolioChartData]);
   
   const [cooldowns, setCooldowns] = useState<CooldownInfo>({});
+  
+  // 거래 통계 가져오기
+  useEffect(() => {
+    const fetchTradeStats = async () => {
+      try {
+        // 전체 통계 가져오기
+        const stats = await window.electronAPI.getPerformanceStats(30); // 30일 통계
+        
+        // 오늘 통계 가져오기 (1일)
+        const todayStats = await window.electronAPI.getPerformanceStats(1);
+        
+        setTradeStats({
+          totalTrades: stats.totalTrades,
+          winRate: stats.winRate,
+          totalProfit: stats.totalProfit,
+          todayProfit: todayStats.totalProfit
+        });
+      } catch (error) {
+        console.error('Failed to fetch trade statistics:', error);
+      }
+    };
+    
+    fetchTradeStats();
+    // 30초마다 업데이트
+    const interval = setInterval(fetchTradeStats, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
   
   // 컴포넌트 마운트 시 스크롤 위치 초기화
   useEffect(() => {
@@ -115,13 +155,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // 계산된 통계
   const krwBalance = accounts.find(acc => acc.currency === 'KRW')?.balance || '0';
-  const totalAssets = accounts.reduce((sum, acc) => {
-    if (acc.currency === 'KRW') {
-      return sum + parseFloat(acc.balance);
-    }
-    // TODO: 다른 자산의 KRW 환산 가치 계산
-    return sum;
-  }, 0);
+  
+  // 총 자산 계산 (KRW + 코인 평가액)
+  const totalAssets = useMemo(() => {
+    let total = 0;
+    
+    accounts.forEach(acc => {
+      if (acc.currency === 'KRW') {
+        total += parseFloat(acc.balance);
+      } else {
+        // 코인의 현재가로 평가
+        const market = `KRW-${acc.currency}`;
+        const ticker = Object.values(tickers).find(t => t.market === market);
+        if (ticker && parseFloat(acc.balance) > 0) {
+          total += parseFloat(acc.balance) * ticker.trade_price;
+        }
+      }
+    });
+    
+    return total;
+  }, [accounts, tickers]);
   
   const activeCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(c => c.enabled).length : 0;
   const recentAnalyses = analyses.slice(0, 6);
@@ -151,6 +204,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             AI 기반 자동매매 시스템 현황을 한눈에 확인하세요
           </Typography>
         </Box>
+        <Box textAlign="right">
+          <Typography variant="caption" color="text.secondary">
+            총 자산
+          </Typography>
+          <Typography variant="h6" fontWeight="bold">
+            {formatCurrency(totalAssets)}
+          </Typography>
+        </Box>
       </Box>
 
       {/* Stats Grid */}
@@ -158,9 +219,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Grid item xs={12} sm={6} lg={3}>
           <StatCard
             icon={<AttachMoney />}
-            title="KRW 잔액"
-            value={formatCurrency(krwBalance)}
-            color="primary"
+            title="총 수익"
+            value={formatCurrency(tradeStats.totalProfit)}
+            subtitle={`오늘: ${formatCurrency(tradeStats.todayProfit)}`}
+            color={tradeStats.totalProfit >= 0 ? 'success' : 'error'}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <StatCard
+            icon={<ShowChart />}
+            title="승률"
+            value={`${(tradeStats.winRate * 100).toFixed(1)}%`}
+            subtitle={`총 ${tradeStats.totalTrades}건`}
+            color={tradeStats.winRate >= 0.5 ? 'success' : 'warning'}
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
@@ -169,14 +240,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             title="활성 코인"
             value={activeCoins}
             subtitle={`총 ${portfolio.length}개 중`}
-            color="success"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} lg={3}>
-          <StatCard
-            icon={<Timeline />}
-            title="분석 완료"
-            value={analyses.length}
             color="info"
           />
         </Grid>
@@ -263,7 +326,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 const hasHoldings = account && parseFloat(account.balance) > 0;
                 const market = `KRW-${coin.symbol}`;
                 const cooldownInfo = cooldowns[market];
-                const ticker = tickers.find(t => t.market === market);
+                const ticker = Object.values(tickers).find(t => t.market === market);
                 
                 // 수익률 계산
                 let profitRate = 0;
@@ -431,28 +494,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Grid container spacing={3}>
           {analyses && analyses.length > 0 ? (
             analyses
-              .filter(analysis => analysis.ticker && analysis.confidence > 70)
+              .filter(analysis => analysis.ticker && analysis.patterns && 
+                      (analysis.patterns.candlePatterns.length > 0 || analysis.patterns.chartPatterns.length > 0))
               .slice(0, 3) // 상위 3개만 표시
               .map((analysis, index) => (
                 <Grid item xs={12} md={4} key={analysis.ticker}>
                   <AnimatedCard delay={index * 0.1}>
-                    <Box sx={{ position: 'relative' }}>
-                      <Box sx={{ 
-                        position: 'absolute', 
-                        top: 16, 
-                        right: 16, 
-                        zIndex: 1,
-                        backgroundColor: 'background.paper',
-                        borderRadius: 1,
-                        px: 1,
-                        py: 0.5
-                      }}>
-                        <Typography variant="caption" fontWeight="bold">
-                          {analysis.ticker.split('-')[1]}
-                        </Typography>
-                      </Box>
-                      <AnalysisCard analysis={analysis} onClick={() => {}} />
-                    </Box>
+                    <PatternRecognitionPanel 
+                      patterns={analysis.patterns} 
+                      currentPrice={analysis.currentPrice}
+                    />
                   </AnimatedCard>
                 </Grid>
               ))

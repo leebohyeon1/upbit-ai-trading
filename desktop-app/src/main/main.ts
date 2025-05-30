@@ -12,6 +12,7 @@ import { TwoFactorAuthService } from './two-factor-auth-service';
 import multiTimeframeService from './multi-timeframe-service';
 import supportResistanceService from './support-resistance-service';
 import advancedIndicatorsService from './advanced-indicators-service';
+import tradeHistoryService from './trade-history-service';
 
 // Load environment variables
 dotenv.config();
@@ -1276,9 +1277,9 @@ class TradingApp {
     });
 
     // Trade History methods
-    ipcMain.handle('get-trade-history', async () => {
+    ipcMain.handle('get-trade-history', async (event, options?: any) => {
       try {
-        return tradingEngine.getTradeHistory();
+        return tradeHistoryService.getTrades(options);
       } catch (error) {
         console.error('Failed to get trade history:', error);
         return [];
@@ -1291,6 +1292,71 @@ class TradingApp {
       } catch (error) {
         console.error('Failed to get profit history:', error);
         return [];
+      }
+    });
+
+    // 거래 내역 추가
+    ipcMain.handle('add-trade', async (event, trade: any) => {
+      try {
+        return tradeHistoryService.addTrade(trade);
+      } catch (error) {
+        console.error('Failed to add trade:', error);
+        return null;
+      }
+    });
+
+    // 거래 통계 조회
+    ipcMain.handle('get-trade-statistics', async (event, period?: any) => {
+      try {
+        return tradeHistoryService.getTradeStatistics(period);
+      } catch (error) {
+        console.error('Failed to get trade statistics:', error);
+        return null;
+      }
+    });
+
+    // 일별 성과 조회
+    ipcMain.handle('get-daily-performance', async (event, days: number = 30) => {
+      try {
+        return tradeHistoryService.getDailyPerformance(days);
+      } catch (error) {
+        console.error('Failed to get daily performance:', error);
+        return [];
+      }
+    });
+
+    // 수익률 차트 데이터 조회
+    ipcMain.handle('get-profit-chart-data', async (event, days: number = 30) => {
+      try {
+        return tradeHistoryService.getProfitChartData(days);
+      } catch (error) {
+        console.error('Failed to get profit chart data:', error);
+        return null;
+      }
+    });
+
+    // 성과 통계 조회 (getTradeStatistics와 동일)
+    ipcMain.handle('get-performance-stats', async (event, days: number = 30) => {
+      try {
+        // 기간 계산
+        const endDate = Date.now();
+        const startDate = endDate - (days * 24 * 60 * 60 * 1000);
+        const period = { start: startDate, end: endDate };
+        
+        return tradeHistoryService.getTradeStatistics(period);
+      } catch (error) {
+        console.error('Failed to get performance stats:', error);
+        return {
+          totalTrades: 0,
+          totalProfit: 0,
+          totalProfitRate: 0,
+          winRate: 0,
+          avgProfit: 0,
+          maxProfit: 0,
+          maxLoss: 0,
+          profitableDays: 0,
+          totalDays: 0
+        };
       }
     });
 
@@ -2084,6 +2150,38 @@ class TradingApp {
       } catch (error) {
         console.error('Failed to analyze advanced indicators:', error);
         throw error;
+      }
+    });
+    
+    // News API 핸들러
+    ipcMain.handle('set-news-api-keys', async (event, keys) => {
+      try {
+        const newsApiService = require('./news-api-service').default;
+        newsApiService.setApiKeys(keys.newsApiKey, keys.cryptoPanicApiKey);
+        return true;
+      } catch (error) {
+        console.error('Failed to set news API keys:', error);
+        return false;
+      }
+    });
+    
+    ipcMain.handle('get-crypto-news', async (event, symbol, limit) => {
+      try {
+        const newsApiService = require('./news-api-service').default;
+        return await newsApiService.getCryptoNews(symbol, limit);
+      } catch (error) {
+        console.error('Failed to get crypto news:', error);
+        return [];
+      }
+    });
+    
+    ipcMain.handle('analyze-market-news', async (event, market) => {
+      try {
+        const newsApiService = require('./news-api-service').default;
+        return await newsApiService.analyzeMarketNews(market);
+      } catch (error) {
+        console.error('Failed to analyze market news:', error);
+        return null;
       }
     });
     

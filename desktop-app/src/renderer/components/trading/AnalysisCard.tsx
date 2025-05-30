@@ -85,15 +85,31 @@ const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
                 </Tooltip>
               )}
             </Box>
-            <Tooltip title="상세 정보">
-              <InfoIcon 
-                fontSize="small" 
-                sx={{ 
-                  color: 'action.disabled',
-                  cursor: 'pointer'
-                }} 
-              />
-            </Tooltip>
+            <Box display="flex" alignItems="center" gap={0.5}>
+              {analysis.patterns && (analysis.patterns.candlePatterns.length > 0 || analysis.patterns.chartPatterns.length > 0) && (
+                <Tooltip title="패턴 감지됨">
+                  <Chip
+                    label={`패턴 ${analysis.patterns.candlePatterns.length + analysis.patterns.chartPatterns.length}개`}
+                    size="small"
+                    sx={{ 
+                      height: 20,
+                      fontSize: '0.7rem',
+                      backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                      color: 'warning.main'
+                    }}
+                  />
+                </Tooltip>
+              )}
+              <Tooltip title="상세 정보">
+                <InfoIcon 
+                  fontSize="small" 
+                  sx={{ 
+                    color: 'action.disabled',
+                    cursor: 'pointer'
+                  }} 
+                />
+              </Tooltip>
+            </Box>
           </Box>
 
           <Box mb={2}>

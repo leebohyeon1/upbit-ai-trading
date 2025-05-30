@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
+import tradeHistoryService from './trade-history-service';
 
 interface TradeResult {
   market: string;
@@ -146,6 +147,28 @@ export class LearningService extends EventEmitter {
     this.tradeHistory.push(result);
     this.updateWeights(result);
     this.emit('trade-recorded', result);
+    
+    // 코인별 가중치 업데이트
+    this.updateCoinWeights(result.market, result);
+    
+    // trade-history-service와 동기화 (매도 결과만 기록)
+    if (result.profitRate !== 0) {
+      const tradeRecord = {
+        market: result.market,
+        timestamp: result.timestamp,  // timestamp 추가
+        type: 'SELL' as const,
+        price: result.exitPrice,
+        volume: 0, // 수량 정보가 없으므로 0으로 설정
+        totalAmount: 0,
+        fee: 0,
+        profit: result.profit,
+        profitRate: result.profitRate,
+        reason: `학습 기록 - 시장 상황: ${result.market_conditions.trend}`,
+        indicators: result.indicators
+      };
+      
+      tradeHistoryService.addTrade(tradeRecord);
+    }
     
     // 즉시 저장
     this.saveData();
@@ -405,11 +428,96 @@ export class LearningService extends EventEmitter {
     max_consecutive_wins: number;
     max_consecutive_losses: number;
   } {
+    // trade-history-service에서 실제 거래 데이터 가져오기
+    const endDate = Date.now();
+    const startDate = endDate - days * 24 * 60 * 60 * 1000;
+    
+    const realTrades = tradeHistoryService.getTrades({
+      market,
+      startDate,
+      endDate,
+      type: 'SELL' // 매도 거래만 (수익률 계산 가능)
+    });
+    
+    // 실거래 데이터를 학습 데이터 형식으로 변환
+    const learningTrades = realTrades
+      .filter(t => t.profitRate !== undefined)
+      .map(t => ({
+        market: t.market,
+        timestamp: t.timestamp,
+        entryPrice: 0,
+        exitPrice: t.price,
+        profit: t.profit || 0,
+        profitRate: t.profitRate || 0,
+        holding_period: 0,
+        indicators: t.indicators || {
+          rsi: 50,
+          macd: 0,
+          bb_position: 0,
+          volume_ratio: 1,
+          stochastic_rsi: 50,
+          atr: 0,
+          obv_trend: 0,
+          adx: 0
+        },
+        market_conditions: {
+          trend: 'sideways' as const,
+          volatility: 'medium' as const,
+          volume: 'medium' as const
+        },
+        news_sentiment: 0,
+        whale_activity: false
+      }));
+    
+    // 기존 학습 데이터와 병합
     const cutoffDate = Date.now() - days * 24 * 60 * 60 * 1000;
-    const relevantTrades = this.tradeHistory.filter(trade => 
+    const historicalTrades = this.tradeHistory.filter(trade => 
       trade.timestamp > cutoffDate && 
       (!market || trade.market === market)
     );
+    
+    // 실거래와 학습 데이터 병합 (중복 제거)
+    const tradeMap = new Map<string, TradeResult>();
+    
+    // 학습 데이터 추가
+    historicalTrades.forEach(t => {
+      const key = `${t.market}_${t.timestamp}`;
+      tradeMap.set(key, t);
+    });
+    
+    // 실거래 데이터 추가 (중복 제거)
+    learningTrades.forEach(t => {
+      const key = `${t.market}_${t.timestamp}`;
+      if (!tradeMap.has(key)) {
+        // indicators 타입 보정 - 필요한 필드만 유지
+        const normalizedIndicators: {
+          rsi: number;
+          macd: number;
+          bb_position: number;
+          volume_ratio: number;
+          stochastic_rsi: number;
+          atr: number;
+          obv_trend: number;
+          adx: number;
+        } = {
+          rsi: (t.indicators as any).rsi || 0,
+          macd: (t.indicators as any).macd || 0,
+          bb_position: (t.indicators as any).bb_position || 0,
+          volume_ratio: (t.indicators as any).volume_ratio || 0,
+          stochastic_rsi: (t.indicators as any).stochastic_rsi || 0,
+          atr: (t.indicators as any).atr || 0,
+          obv_trend: (t.indicators as any).obv_trend || 0,
+          adx: (t.indicators as any).adx || 0
+        };
+        
+        tradeMap.set(key, {
+          ...t,
+          indicators: normalizedIndicators
+        });
+      }
+    });
+    
+    const relevantTrades = Array.from(tradeMap.values());
 
     if (relevantTrades.length === 0) {
       return {

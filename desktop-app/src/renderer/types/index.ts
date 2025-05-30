@@ -50,6 +50,23 @@ export interface Analysis {
   timestamp: string;
   reason?: string;
   tradeAttempt?: TradeAttempt;
+  patterns?: {
+    candlePatterns: Array<{
+      pattern: string;
+      type: 'bullish' | 'bearish' | 'neutral';
+      confidence: number;
+      description: string;
+    }>;
+    chartPatterns: Array<{
+      pattern: string;
+      type: 'bullish' | 'bearish' | 'continuation';
+      confidence: number;
+      targetPrice?: number;
+    }>;
+    patternSignal: 'BUY' | 'SELL' | 'HOLD';
+    patternConfidence: number;
+  };
+  currentPrice?: number;
 }
 
 export interface TradeAttempt {

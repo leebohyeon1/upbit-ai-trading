@@ -786,6 +786,12 @@ class AnalysisService {
       const candlePatterns = this.patternService.detectCandlePatterns(candleData);
       const chartPatterns = this.patternService.detectChartPatterns(candleData);
       
+      console.log(`[${candles[0].market}] 패턴 인식 결과:`, {
+        candlePatterns: candlePatterns.length,
+        chartPatterns: chartPatterns.length,
+        candleData: candleData.slice(0, 3) // 첫 3개 캔들 데이터 확인
+      });
+      
       // 패턴 신호 변환
       const patternSignalResult = this.patternService.convertToSignal(candlePatterns, chartPatterns);
       
@@ -805,6 +811,8 @@ class AnalysisService {
         patternSignal: patternSignalResult.signal,
         patternConfidence: patternSignalResult.confidence
       };
+      
+      console.log(`[${candles[0].market}] 최종 패턴 객체:`, patterns);
       
       // 패턴 신호를 전체 신호에 반영 (가중치 적용)
       const patternWeight = 0.15; // 패턴 분석의 가중치 15%

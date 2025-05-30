@@ -139,5 +139,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   analyzeSupportResistance: (params) => ipcRenderer.invoke('analyze-support-resistance', params),
   
   // Advanced indicators analysis methods
-  analyzeAdvancedIndicators: (params) => ipcRenderer.invoke('analyze-advanced-indicators', params)
+  analyzeAdvancedIndicators: (params) => ipcRenderer.invoke('analyze-advanced-indicators', params),
+  
+  // Trade history methods
+  addTrade: (trade) => ipcRenderer.invoke('add-trade', trade),
+  getTradeHistory: (options) => ipcRenderer.invoke('get-trade-history', options),
+  getTradeStatistics: (period) => ipcRenderer.invoke('get-trade-statistics', period),
+  getDailyPerformance: (days) => ipcRenderer.invoke('get-daily-performance', days),
+  getProfitChartData: (days) => ipcRenderer.invoke('get-profit-chart-data', days),
+  getPerformanceStats: (days) => ipcRenderer.invoke('get-performance-stats', days),
+  
+  // News API methods
+  setNewsApiKeys: (keys) => ipcRenderer.invoke('set-news-api-keys', keys),
+  getCryptoNews: (symbol, limit) => ipcRenderer.invoke('get-crypto-news', symbol, limit),
+  analyzeMarketNews: (market) => ipcRenderer.invoke('analyze-market-news', market)
 });

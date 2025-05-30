@@ -197,13 +197,21 @@ class UpbitService {
       }
       
       const response = await axios.get(url);
+      
+      // 응답 데이터 검증
+      if (!response.data || !Array.isArray(response.data)) {
+        console.error(`Invalid response data for ${market} ${interval}`);
+        return [];
+      }
+      
+      console.log(`Fetched ${response.data.length} candles for ${market} ${interval}`);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to get candles by timeframe:', error);
+      console.error(`Failed to get candles for ${market} ${interval}:`, error.message);
       
       // 429 에러(Too Many Requests) 처리
       if (error.response?.status === 429) {
-        console.warn(`Rate limit exceeded for ${market} ${interval}. Returning empty array.`);
+        console.warn(`Rate limit exceeded for ${market} ${interval}. Waiting before retry...`);
         return [];
       }
       

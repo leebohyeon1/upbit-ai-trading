@@ -91,6 +91,12 @@ declare global {
       // Trade History methods
       getTradeHistory: () => Promise<any[]>;
       getProfitHistory: (days?: number) => Promise<Array<{ time: string; profitRate: number; totalValue: number }>>;
+      getPerformanceStats: (days: number) => Promise<{
+        totalProfit: number;
+        totalTrades: number;
+        winRate: number;
+        avgProfit: number;
+      }>;
       
       // VaR and Risk Management methods
       generateRiskReport: () => Promise<{

@@ -80,12 +80,22 @@ export class MultiTimeframeService {
     try {
       // 각 타임프레임별 데이터 수집 및 분석
       for (const config of configs) {
-        const data = await this.analyzeTimeframe(symbol, config);
-        if (data) {
-          timeframeData.push(data);
+        try {
+          const data = await this.analyzeTimeframe(symbol, config);
+          if (data) {
+            timeframeData.push(data);
+          }
+        } catch (error) {
+          console.warn(`Skipping timeframe ${config.interval} due to error:`, error);
+          // 개별 타임프레임 실패는 무시하고 계속 진행
         }
       }
 
+      // 최소한 하나의 타임프레임 데이터가 있어야 함
+      if (timeframeData.length === 0) {
+        throw new Error('모든 타임프레임 분석이 실패했습니다.');
+      }
+      
       // 전체 신호 통합
       const overallAnalysis = this.combineTimeframeSignals(timeframeData, configs);
       
@@ -135,7 +145,9 @@ export class MultiTimeframeService {
    * 기술적 지표 계산
    */
   private calculateIndicators(candles: any[]): TimeframeData['indicators'] {
-    if (!candles || candles.length < 50) {
+    // 최소 필요한 캔들 수를 20개로 줄임 (RSI 계산에 필요한 최소값)
+    if (!candles || candles.length < 20) {
+      console.warn(`캔들 데이터 부족: ${candles?.length || 0}개. 최소 20개 필요.`);
       throw new Error('충분한 캔들 데이터가 없습니다.');
     }
 
@@ -155,7 +167,8 @@ export class MultiTimeframeService {
 
     // 이동평균선 계산
     const sma20 = this.calculateSMA(closes, 20);
-    const sma50 = this.calculateSMA(closes, 50);
+    // SMA50은 데이터가 충분할 때만 계산
+    const sma50 = closes.length >= 50 ? this.calculateSMA(closes, 50) : sma20;
     const ema12 = this.calculateEMA(closes, 12);
     const ema26 = this.calculateEMA(closes, 26);
 

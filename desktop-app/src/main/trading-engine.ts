@@ -8,6 +8,7 @@ import { ApiClient } from './api-client';
 import kellyService from './kelly-criterion-service';
 import notificationService from './notification-service';
 import riskManagementService, { VaRResult, PortfolioPosition } from './risk-management-service';
+import tradeHistoryService from './trade-history-service';
 
 export interface TradingConfig {
   enableRealTrading: boolean;
@@ -678,7 +679,9 @@ class TradingEngine extends EventEmitter {
             confidence: confidenceValue,
             reason: aiAnalysis || null,  // AI 분석이 없으면 null
             timestamp: new Date().toISOString(),
-            tradeAttempt: tradeAttempt
+            tradeAttempt: tradeAttempt,
+            patterns: technicalAnalysis.patterns,  // 패턴 데이터 추가
+            currentPrice: currentPrice
           };
           
           this.emit('singleAnalysisCompleted', frontendAnalysis);
@@ -699,7 +702,9 @@ class TradingEngine extends EventEmitter {
           confidence: confidenceValue,
           reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
           timestamp: new Date(analysis.lastUpdated).toISOString(),
-          tradeAttempt: analysis.tradeAttempt
+          tradeAttempt: analysis.tradeAttempt,
+          patterns: analysis.analysis.patterns,  // 패턴 데이터 추가
+          currentPrice: analysis.currentPrice
         };
       });
       
@@ -1010,8 +1015,8 @@ class TradingEngine extends EventEmitter {
             timestamp: Date.now() 
           });
           
-          // 거래 기록 저장
-          const trade = {
+          // 거래 기록 저장 (내부 기록)
+          const trade: TradeHistory = {
             market,
             type: 'BUY' as const,
             price: analysis.currentPrice,
@@ -1020,6 +1025,27 @@ class TradingEngine extends EventEmitter {
             timestamp: Date.now()
           };
           this.recordTrade(trade);
+          
+          // trade-history-service에 거래 기록 저장
+          if (this.config.enableRealTrading) {
+            tradeHistoryService.addTrade({
+              market,
+              timestamp: Date.now(),
+              type: 'BUY',
+              price: smartOrder.limitPrice || analysis.currentPrice,
+              volume: parseFloat(buyAmountStr) / analysis.currentPrice, // 코인 수량
+              totalAmount: parseFloat(buyAmountStr), // KRW 금액
+              fee: parseFloat(buyAmountStr) * 0.0005, // 0.05% 수수료
+              reason: `신뢰도: ${(technical.confidence * 100).toFixed(1)}%`,
+              indicators: {
+                rsi: technical.rsi,
+                macd: technical.macd.histogram,
+                bollingerBands: technical.bollinger,
+                volume: technical.volumeRatio
+              },
+              aiAnalysis: (technical as any).aiAnalysis
+            });
+          }
           
           // 알림 발송
           notificationService.notifyTradeExecuted({
@@ -1166,6 +1192,27 @@ class TradingEngine extends EventEmitter {
             profit
           };
           this.recordTrade(trade);
+          
+          // trade-history-service에 거래 기록 저장
+          if (this.config.enableRealTrading) {
+            tradeHistoryService.addTrade({
+              market,
+              timestamp: Date.now(),
+              type: 'SELL',
+              price: smartOrder.limitPrice || analysis.currentPrice,
+              volume: sellAmount, // 코인 수량
+              totalAmount: sellValue, // KRW 금액
+              fee: sellValue * 0.0005, // 0.05% 수수료
+              reason: `신뢰도: ${(technical.confidence * 100).toFixed(1)}%`,
+              indicators: {
+                rsi: technical.rsi,
+                macd: technical.macd.histogram,
+                bollingerBands: technical.bollinger,
+                volume: technical.volumeRatio
+              },
+              aiAnalysis: (technical as any).aiAnalysis
+            });
+          }
           
           // 알림 발송
           notificationService.notifyTradeExecuted({
@@ -1696,7 +1743,7 @@ class TradingEngine extends EventEmitter {
       holding_period: (Date.now() - entry.timestamp) / (1000 * 60), // 분 단위
       indicators: entry.indicators,
       market_conditions: entry.conditions,
-      news_sentiment: analysis.aiAnalysis ? this.extractSentimentScore(analysis.aiAnalysis) : 0,
+      news_sentiment: (analysis.aiAnalysis as string | null) ? this.extractSentimentScore(analysis.aiAnalysis as string) : 0,
       whale_activity: technical.whaleActivity || false
     });
 

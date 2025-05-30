@@ -50,7 +50,8 @@
       "Bash(/home/leebohyeon/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 50 \"초기 자산 계산\" main.ts)",
       "mcp__filesystem__search_files",
       "Bash(timeout 60s npm run build)",
-      "WebFetch(domain:docs.upbit.com)"
+      "WebFetch(domain:docs.upbit.com)",
+      "Bash(npm run lint:*)"
     ],
     "deny": []
   },

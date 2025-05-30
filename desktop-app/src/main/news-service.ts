@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Parser from 'rss-parser';
+import newsApiService from './news-api-service';
 
 export interface NewsItem {
   title: string;
@@ -132,54 +133,87 @@ class NewsService {
       return cached.data;
     }
 
-    const newsItems: NewsItem[] = [];
-    
-    // 여러 소스에서 뉴스 수집
     try {
-      // 1. Google News RSS (영문)
-      const googleNews = await this.fetchGoogleNews(coinSymbol);
-      newsItems.push(...googleNews);
+      // news-api-service를 사용하여 실제 API 데이터 가져오기
+      const apiAnalysis = await newsApiService.analyzeMarketNews(`KRW-${coinSymbol}`);
+      
+      // API 데이터를 NewsAnalysis 형식으로 변환
+      const newsItems: NewsItem[] = apiAnalysis.articles.map(article => ({
+        title: article.title,
+        link: article.url,
+        pubDate: article.publishedAt,
+        source: article.source,
+        sentiment: article.sentiment || 'neutral',
+        summary: article.description,
+        influenceScore: article.relevanceScore ? article.relevanceScore * 100 : 50,
+        isKorean: article.source === '블록미디어'
+      }));
+
+      // 기존 소스에서 추가 뉴스 수집
+      try {
+        const googleNews = await this.fetchGoogleNews(coinSymbol);
+        newsItems.push(...googleNews.filter(item => 
+          !newsItems.some(existing => existing.title === item.title)
+        ));
+      } catch (error) {
+        console.error('Google News fetch error:', error);
+      }
+
+      try {
+        const redditPosts = await this.fetchRedditPosts(coinSymbol);
+        newsItems.push(...redditPosts);
+      } catch (error) {
+        console.error('Reddit fetch error:', error);
+      }
+
+      // 최신순으로 정렬
+      newsItems.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+
+      // 감정 분석 결과 통합
+      const analysis = this.analyzeNewsSentiment(newsItems);
+      
+      // API 분석 결과 추가
+      analysis.sentimentScore = apiAnalysis.sentimentScore * 100; // -100 to 100 로 변환
+      analysis.majorEvents = apiAnalysis.keyTopics;
+      
+      // 캐시 저장
+      this.newsCache.set(coinSymbol, { data: analysis, timestamp: Date.now() });
+      
+      return analysis;
     } catch (error) {
-      console.error('Google News fetch error:', error);
+      console.error('News API error, falling back to RSS:', error);
+      
+      // API 오류 시 기존 방식으로 폴백
+      const newsItems: NewsItem[] = [];
+      
+      try {
+        const googleNews = await this.fetchGoogleNews(coinSymbol);
+        newsItems.push(...googleNews);
+      } catch (error) {
+        console.error('Google News fetch error:', error);
+      }
+
+      try {
+        const koreanNews = await this.fetchKoreanNews(coinSymbol);
+        newsItems.push(...koreanNews);
+      } catch (error) {
+        console.error('Korean news fetch error:', error);
+      }
+
+      try {
+        const redditPosts = await this.fetchRedditPosts(coinSymbol);
+        newsItems.push(...redditPosts);
+      } catch (error) {
+        console.error('Reddit fetch error:', error);
+      }
+
+      this.calculateInfluenceScores(newsItems);
+      newsItems.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+      const analysis = this.analyzeNewsSentiment(newsItems);
+      this.newsCache.set(coinSymbol, { data: analysis, timestamp: Date.now() });
+      
+      return analysis;
     }
-
-    try {
-      // 2. 한국 뉴스 (네이버 검색 시뮬레이션)
-      const koreanNews = await this.fetchKoreanNews(coinSymbol);
-      newsItems.push(...koreanNews);
-    } catch (error) {
-      console.error('Korean news fetch error:', error);
-    }
-
-    try {
-      // 3. CoinGecko 뉴스 (API 키 없이 공개 엔드포인트 사용)
-      const coinGeckoNews = await this.fetchCoinGeckoNews(coinSymbol);
-      newsItems.push(...coinGeckoNews);
-    } catch (error) {
-      console.error('CoinGecko news fetch error:', error);
-    }
-
-    try {
-      // 4. Reddit 포스트 (암호화폐 관련 서브레딧)
-      const redditPosts = await this.fetchRedditPosts(coinSymbol);
-      newsItems.push(...redditPosts);
-    } catch (error) {
-      console.error('Reddit fetch error:', error);
-    }
-
-    // 영향력 점수 계산
-    this.calculateInfluenceScores(newsItems);
-
-    // 최신순으로 정렬
-    newsItems.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
-
-    // 감정 분석 (FUD 지수 포함)
-    const analysis = this.analyzeNewsSentiment(newsItems);
-    
-    // 캐시 저장
-    this.newsCache.set(coinSymbol, { data: analysis, timestamp: Date.now() });
-    
-    return analysis;
   }
 
   private async fetchGoogleNews(coinSymbol: string): Promise<NewsItem[]> {

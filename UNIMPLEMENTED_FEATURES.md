@@ -62,14 +62,6 @@
 - [ ] DCA 성과 분석 도구
 - [ ] 파일 위치: `src/main/dca-strategy-service.ts`
 
-## 🔔 알림 시스템
-
-### 이메일 알림
-- [ ] SMTP 서버 설정 UI
-- [ ] 이메일 템플릿 시스템
-- [ ] 이메일 발송 로직 구현
-- [ ] 파일 위치: `src/main/notification-service.ts`
-
 ## 🛡️ 보안 기능
 
 ### 2FA (이중 인증)
@@ -80,8 +72,6 @@
 
 ### API 키 관리
 - [ ] API 키 권한 검증
-- [ ] API 키 만료 알림
-- [ ] API 키 사용 로그
 - [ ] 파일 위치: `src/main/main.ts`
 
 ## 📈 차트 및 시각화
