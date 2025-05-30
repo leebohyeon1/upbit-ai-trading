@@ -633,7 +633,9 @@ export default class PatternRecognitionService {
     } else if (bullishRatio < 0.35) {
       return { signal: 'SELL', confidence, reasons };
     } else {
-      return { signal: 'HOLD', confidence: confidence * 0.5, reasons };
+      // HOLD일 때도 bullishRatio에 따라 동적으로 신뢰도 계산
+      const holdConfidence = confidence * (0.3 + 0.4 * Math.abs(0.5 - bullishRatio) * 2);
+      return { signal: 'HOLD', confidence: holdConfidence, reasons: ['매수/매도 신호 균형'] };
     }
   }
 }

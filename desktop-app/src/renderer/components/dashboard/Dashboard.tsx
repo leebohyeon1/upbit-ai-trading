@@ -229,9 +229,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <StatCard
             icon={<ShowChart />}
             title="승률"
-            value={`${(tradeStats.winRate * 100).toFixed(1)}%`}
+            value={`${tradeStats.winRate.toFixed(1)}%`}
             subtitle={`총 ${tradeStats.totalTrades}건`}
-            color={tradeStats.winRate >= 0.5 ? 'success' : 'warning'}
+            color={tradeStats.winRate >= 50 ? 'success' : 'warning'}
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>

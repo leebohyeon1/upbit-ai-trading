@@ -9,6 +9,7 @@ import kellyService from './kelly-criterion-service';
 import notificationService from './notification-service';
 import riskManagementService, { VaRResult, PortfolioPosition } from './risk-management-service';
 import tradeHistoryService from './trade-history-service';
+import newsService from './news-service';
 
 export interface TradingConfig {
   enableRealTrading: boolean;
@@ -1055,8 +1056,10 @@ class TradingEngine extends EventEmitter {
             amount: parseFloat(buyAmountStr)
           });
           
-          // 학습 시스템에 매수 진입점 기록
-          this.recordEntryForLearning(market, technical, analysis);
+          // 학습 시스템에 매수 진입점 기록 (비동기로 실행)
+          void this.recordEntryForLearning(market, technical, analysis).catch((error: Error) => {
+            console.error(`[학습] ${market} 진입점 기록 실패:`, error);
+          });
           
           // 매수 시에도 거래 횟수 증가를 위해 임시 기록 (매도 시점에 승/패 결정)
           // performanceMetrics는 wins, losses, totalProfit만 추적
@@ -1225,7 +1228,7 @@ class TradingEngine extends EventEmitter {
           });
           
           // 학습 시스템에 거래 결과 기록
-          this.recordTradeResultForLearning(market, profit, technical, analysis);
+          this.recordTradeResultForLearning(market, avgBuyPrice, analysis.currentPrice, profit);
           
           this.emit('tradeExecuted', {
             type: 'SELL',
@@ -1689,101 +1692,7 @@ class TradingEngine extends EventEmitter {
     return isInCooldown;
   }
 
-  // 학습 시스템 관련 메서드들
-  private entryPoints: Map<string, { price: number; indicators: any; conditions: any; timestamp: number }> = new Map();
-
-  private recordEntryForLearning(market: string, technical: TechnicalAnalysis, analysis: CoinAnalysis): void {
-    console.log(`[학습] ${market} 매수 진입점 기록: 가격 ${analysis.currentPrice}`);
-    // 매수 진입점 기록
-    this.entryPoints.set(market, {
-      price: analysis.currentPrice,
-      indicators: {
-        rsi: technical.rsi,
-        macd: technical.macd.histogram,
-        bb_position: technical.bollinger.position,
-        volume_ratio: technical.volumeRatio,
-        stochastic_rsi: technical.stochasticRSI ? technical.stochasticRSI.k : 0,
-        atr: technical.atr || 0,
-        obv_trend: technical.obvTrend || 0,
-        adx: technical.adx ? technical.adx.adx : 0
-      },
-      conditions: {
-        trend: this.determineMarketCondition(technical),
-        volatility: this.categorizeVolatility(technical.atr, technical.bollinger.middle),
-        volume: this.categorizeVolume(technical.volumeRatio)
-      },
-      timestamp: Date.now()
-    });
-  }
-
-  private recordTradeResultForLearning(market: string, profitRate: number, technical: TechnicalAnalysis, analysis: CoinAnalysis): void {
-    const entry = this.entryPoints.get(market);
-    if (!entry) {
-      console.log(`[학습] ${market} 진입점 기록이 없어 학습 건너뜀`);
-      return;
-    }
-    
-    // 학습이 활성화되어 있는지 확인
-    const ticker = market.split('-')[1]; // KRW-BTC -> BTC
-    if (!this.learningService.isLearningEnabled(ticker)) {
-      console.log(`[학습] ${ticker} 학습이 비활성화되어 있어 건너뜀`);
-      return;
-    }
-    
-    console.log(`[학습] ${market} 거래 결과 기록: 수익률 ${profitRate.toFixed(2)}%`);
-
-    // 거래 결과를 학습 시스템에 기록
-    this.learningService.recordTrade({
-      market,
-      timestamp: Date.now(),
-      entryPrice: entry.price,
-      exitPrice: analysis.currentPrice,
-      profit: (analysis.currentPrice - entry.price) / entry.price * 100,
-      profitRate,
-      holding_period: (Date.now() - entry.timestamp) / (1000 * 60), // 분 단위
-      indicators: entry.indicators,
-      market_conditions: entry.conditions,
-      news_sentiment: (analysis.aiAnalysis as string | null) ? this.extractSentimentScore(analysis.aiAnalysis as string) : 0,
-      whale_activity: technical.whaleActivity || false
-    });
-
-    // 진입점 기록 삭제
-    this.entryPoints.delete(market);
-
-    // 성능 메트릭 업데이트
-    this.updatePerformanceMetrics(market, profitRate);
-  }
-
-  private categorizeVolatility(atr?: number, price?: number): 'low' | 'medium' | 'high' {
-    if (!atr || !price) return 'medium';
-    const volatility = atr / price;
-    if (volatility < 0.02) return 'low';
-    if (volatility > 0.05) return 'high';
-    return 'medium';
-  }
-
-  private categorizeVolume(volumeRatio: number): 'low' | 'medium' | 'high' {
-    if (volumeRatio < 0.8) return 'low';
-    if (volumeRatio > 1.5) return 'high';
-    return 'medium';
-  }
-
-  private extractSentimentScore(aiAnalysis: string): number {
-    // AI 분석에서 감정 점수 추출 (간단한 키워드 기반)
-    const positiveKeywords = ['긍정', '상승', '강세', '매수', '좋', '유리'];
-    const negativeKeywords = ['부정', '하락', '약세', '매도', '나쁘', '불리'];
-    
-    let score = 0;
-    positiveKeywords.forEach(keyword => {
-      if (aiAnalysis.includes(keyword)) score += 0.2;
-    });
-    negativeKeywords.forEach(keyword => {
-      if (aiAnalysis.includes(keyword)) score -= 0.2;
-    });
-    
-    return Math.max(-1, Math.min(1, score));
-  }
-
+  // 학습 시스템 관련 메서드들 (기존 메서드 제거 - 아래에 새로운 버전 있음)
   private updatePerformanceMetrics(market: string, profitRate: number): void {
     const metrics = this.performanceMetrics.get(market) || { wins: 0, losses: 0, totalProfit: 0 };
     
@@ -1814,8 +1723,8 @@ class TradingEngine extends EventEmitter {
       adx: technical.adx ? technical.adx.adx : 0
     }, {
       trend: this.determineMarketCondition(technical),
-      volatility: this.categorizeVolatility(technical.atr, technical.bollinger.middle),
-      volume: this.categorizeVolume(technical.volumeRatio)
+      volatility: this.determineVolatilityLevel(technical.atr || 0, technical.bollinger.middle),
+      volume: this.determineVolumeLevel(technical.volumeRatio)
     });
 
     // 기존 신뢰도와 학습 예측을 결합
@@ -2094,6 +2003,11 @@ class TradingEngine extends EventEmitter {
     const totalValue = this.calculateTotalPortfolioValue();
     const totalProfitRate = ((totalValue - 10000000) / 10000000) * 100;
     console.log(`  - 총 자산: ₩${totalValue.toLocaleString()} (${totalProfitRate >= 0 ? '+' : ''}${totalProfitRate.toFixed(2)}%)`);
+    
+    // 학습 시스템에 거래 결과 기록 (비동기로 실행)
+    this.recordTradeResultForLearning(market, portfolio.avgBuyPrice, price, profitRate).catch(error => {
+      console.error(`[학습] ${market} 거래 결과 기록 실패:`, error);
+    });
   }
   
   private calculateTotalPortfolioValue(): number {
@@ -2680,6 +2594,139 @@ class TradingEngine extends EventEmitter {
    */
   public async executeManualRebalancing(): Promise<void> {
     await this.checkAndRebalance();
+  }
+
+  // 매수 진입점 기록 (학습용)
+  private entryPointsForLearning: Map<string, {
+    entryPrice: number;
+    entryTime: number;
+    indicators: any;
+    market_conditions: any;
+    news_sentiment?: number;
+    whale_activity?: boolean;
+  }> = new Map();
+
+  // 매수 시 학습을 위한 진입점 기록
+  private async recordEntryForLearning(market: string, technical: any, analysis: CoinAnalysis): Promise<void> {
+    // 현재 분석 정보 수집
+    const indicators = {
+      rsi: technical.rsi,
+      macd: technical.macd?.histogram || 0,
+      bb_position: technical.bollinger ? 
+        (analysis.currentPrice - technical.bollinger.lower) / 
+        (technical.bollinger.upper - technical.bollinger.lower) : 0.5,
+      volume_ratio: technical.volume?.ratio || 1,
+      stochastic_rsi: technical.stochasticRSI?.k || 50,
+      atr: technical.atr || 0,
+      obv_trend: technical.obv?.trend === 'UP' ? 1 : technical.obv?.trend === 'DOWN' ? -1 : 0,
+      adx: technical.adx?.adx || 0
+    };
+
+    // 시장 상황 판단
+    const market_conditions = {
+      trend: this.determineMarketCondition(technical),
+      volatility: this.determineVolatilityLevel(technical.atr, analysis.currentPrice),
+      volume: this.determineVolumeLevel(technical.volume?.ratio || 1)
+    };
+
+    // 뉴스 감성 점수 가져오기
+    let news_sentiment = 0;
+    try {
+      const coinSymbol = market.split('-')[1];
+      const newsAnalysis = await newsService.getCoinNews(coinSymbol);
+      // -100 ~ +100 범위를 -1 ~ +1로 정규화
+      news_sentiment = newsAnalysis.sentimentScore / 100;
+      console.log(`[학습] ${market} 뉴스 분석 결과:
+        - 감성 점수: ${news_sentiment.toFixed(2)} (원본: ${newsAnalysis.sentimentScore})
+        - 뉴스 수: ${newsAnalysis.totalNews}개 (긍정: ${newsAnalysis.positiveCount}, 부정: ${newsAnalysis.negativeCount}, 중립: ${newsAnalysis.neutralCount})
+        - FUD 지수: ${newsAnalysis.fudIndex || 0}/100
+        - 평균 영향력: ${newsAnalysis.averageInfluence || 50}/100`);
+    } catch (error) {
+      console.error(`[학습] ${market} 뉴스 분석 실패:`, error);
+      // 뉴스 분석 실패 시에도 0값으로 학습 진행
+      news_sentiment = 0;
+    }
+
+    // 고래 활동 감지
+    const whale_activity = technical.trades?.whaleDetected || false;
+
+    this.entryPointsForLearning.set(market, {
+      entryPrice: analysis.currentPrice,
+      entryTime: Date.now(),
+      indicators,
+      market_conditions,
+      news_sentiment,
+      whale_activity
+    });
+  }
+
+  // 매도 시 학습 시스템에 거래 결과 기록
+  private async recordTradeResultForLearning(
+    market: string, 
+    entryPrice: number, 
+    exitPrice: number, 
+    profitRate: number
+  ): Promise<void> {
+    const entryData = this.entryPointsForLearning.get(market);
+    if (!entryData) {
+      console.log(`[학습] ${market} 진입 데이터가 없어 학습 기록을 생략합니다.`);
+      return;
+    }
+
+    const holding_period = (Date.now() - entryData.entryTime) / (1000 * 60); // 분 단위
+
+    // 매도 시점의 뉴스 감성도 다시 확인 (변화 추적)
+    let exit_news_sentiment = 0;
+    try {
+      const coinSymbol = market.split('-')[1];
+      const newsAnalysis = await newsService.getCoinNews(coinSymbol);
+      exit_news_sentiment = newsAnalysis.sentimentScore / 100;
+      console.log(`[학습] ${market} 매도 시점 뉴스 감성:
+        - 현재: ${exit_news_sentiment.toFixed(2)} (원본: ${newsAnalysis.sentimentScore})
+        - 진입: ${entryData.news_sentiment?.toFixed(2) || 0}
+        - 변화: ${(exit_news_sentiment - (entryData.news_sentiment || 0)).toFixed(2)}`);
+    } catch (error) {
+      console.error(`[학습] ${market} 매도 시점 뉴스 분석 실패:`, error);
+      exit_news_sentiment = 0;
+    }
+
+    const tradeResult = {
+      market,
+      timestamp: Date.now(),
+      entryPrice,
+      exitPrice,
+      profit: exitPrice - entryPrice,
+      profitRate,
+      holding_period,
+      indicators: entryData.indicators,
+      market_conditions: entryData.market_conditions,
+      news_sentiment: entryData.news_sentiment || 0,  // 진입 시점 뉴스
+      whale_activity: entryData.whale_activity || false
+    };
+
+    // 학습 서비스에 기록
+    this.learningService.recordTrade(tradeResult);
+
+    // 진입 데이터 삭제
+    this.entryPointsForLearning.delete(market);
+
+    console.log(`[학습] ${market} 거래 결과 기록 완료: ${profitRate.toFixed(2)}% (뉴스 변화: ${(exit_news_sentiment - (entryData.news_sentiment || 0)).toFixed(2)})`);
+  }
+
+
+  // 변동성 수준 판단
+  private determineVolatilityLevel(atr: number, price: number): 'low' | 'medium' | 'high' {
+    const atrRatio = atr / price;
+    if (atrRatio < 0.02) return 'low';
+    if (atrRatio < 0.05) return 'medium';
+    return 'high';
+  }
+
+  // 거래량 수준 판단
+  private determineVolumeLevel(volumeRatio: number): 'low' | 'medium' | 'high' {
+    if (volumeRatio < 0.8) return 'low';
+    if (volumeRatio < 1.5) return 'medium';
+    return 'high';
   }
 
   getProfitHistory(days: number = 7): Array<{ time: string; profitRate: number; totalValue: number }> {

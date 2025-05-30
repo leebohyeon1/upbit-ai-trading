@@ -1408,7 +1408,7 @@ class TradingApp {
           ticker,
           isRunning: learningService.isLearningEnabled(ticker),
           totalTrades: stats.total_trades,
-          winRate: stats.win_rate * 100,
+          winRate: stats.win_rate,
           averageProfit: stats.average_profit,
           bestTrade: stats.best_trade,
           worstTrade: stats.worst_trade,

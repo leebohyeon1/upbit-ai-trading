@@ -670,18 +670,47 @@ class AnalysisService {
       return score * (indicatorWeights[indicatorType] || 1.0);
     };
 
-    // 가중치를 적용한 점수 계산 (단순화)
+    // 가중치를 적용한 점수 계산
     let buyScore = 0;
     let sellScore = 0;
 
-    // 단순히 모든 신호의 가중치를 합산
-    buyScore = buySignalsWithWeight
-      .filter(s => s.condition)
-      .reduce((sum, s) => sum + s.weight, 0);
+    // 뉴스 영향도 가중치 적용
+    const newsWeight = indicatorWeights.newsImpact || 1.0;
     
-    sellScore = sellSignalsWithWeight
-      .filter(s => s.condition)
-      .reduce((sum, s) => sum + s.weight, 0);
+    // 조건별로 가중치 적용
+    buySignalsWithWeight.forEach(signal => {
+      if (signal.condition) {
+        let weight = signal.weight;
+        
+        // 뉴스 관련 신호에 가중치 적용
+        if (newsAnalysis && (
+          signal.condition === (newsAnalysis.sentimentScore < -50) ||
+          signal.condition === (newsAnalysis.sentimentScore < -20) ||
+          (signal.condition === (newsAnalysis.majorEvents.length > 0 && newsAnalysis.sentimentScore > 20))
+        )) {
+          weight *= newsWeight;
+        }
+        
+        buyScore += weight;
+      }
+    });
+    
+    sellSignalsWithWeight.forEach(signal => {
+      if (signal.condition) {
+        let weight = signal.weight;
+        
+        // 뉴스 관련 신호에 가중치 적용
+        if (newsAnalysis && (
+          signal.condition === (newsAnalysis.sentimentScore > 50) ||
+          signal.condition === (newsAnalysis.sentimentScore > 20) ||
+          (signal.condition === (newsAnalysis.majorEvents.length > 0 && newsAnalysis.sentimentScore < -20))
+        )) {
+          weight *= newsWeight;
+        }
+        
+        sellScore += weight;
+      }
+    });
 
     // 최대 가능 점수 (모든 조건이 true일 때)
     const maxBuyScore = buySignalsWithWeight.reduce((sum, signal) => sum + signal.weight, 0);

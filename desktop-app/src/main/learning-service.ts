@@ -192,7 +192,8 @@ export class LearningService extends EventEmitter {
       result.market_conditions.volatility === 'high' ? 1 : 0);
 
     // Update news and whale weights
-    if (result.news_sentiment !== 0) {
+    // news_sentiment가 0이어도 학습에 포함 (0은 중립적인 뉴스를 의미)
+    if (result.news_sentiment !== undefined) {
       this.updateSingleWeight('news_sentiment', success, profitMagnitude, 
         result.news_sentiment);
     }
@@ -211,7 +212,10 @@ export class LearningService extends EventEmitter {
     signalStrength: number
   ): void {
     const weight = this.signalWeights.get(indicator);
-    if (!weight) return;
+    if (!weight) {
+      console.warn(`[학습] 가중치 업데이트 실패 - ${indicator} 지표를 찾을 수 없습니다.`);
+      return;
+    }
 
     // Update success rate
     weight.sample_size++;
@@ -223,8 +227,19 @@ export class LearningService extends EventEmitter {
     const adjustment = (targetWeight - weight.weight) * this.learningConfig.weight_adjustment_rate;
     
     // Apply adjustment with bounds
+    const oldWeight = weight.weight;
     weight.weight = Math.max(0.1, Math.min(2.0, weight.weight + adjustment));
     weight.last_updated = Date.now();
+
+    // 뉴스 관련 지표는 상세 로깅
+    if (indicator === 'news_sentiment') {
+      console.log(`[학습] ${indicator} 가중치 업데이트:`);
+      console.log(`  - 신호 강도: ${signalStrength.toFixed(3)}`);
+      console.log(`  - 성공 여부: ${success} (수익률: ${profitMagnitude.toFixed(2)}%)`);
+      console.log(`  - 샘플 수: ${weight.sample_size}`);
+      console.log(`  - 성공률: ${(weight.success_rate * 100).toFixed(1)}%`);
+      console.log(`  - 가중치: ${oldWeight.toFixed(3)} → ${weight.weight.toFixed(3)} (변화: ${(weight.weight - oldWeight).toFixed(3)})`);
+    }
 
     this.signalWeights.set(indicator, weight);
   }
@@ -242,7 +257,7 @@ export class LearningService extends EventEmitter {
     weights['obv'] = weights['obv_trend'] || 0.8;
     weights['trendStrength'] = weights['market_trend'] || 1.0;
     weights['aiAnalysis'] = weights['news_sentiment'] || 1.2;
-    weights['newsImpact'] = weights['news_sentiment'] || 1.2;
+    weights['newsImpact'] = weights['news_sentiment'] || 1.2;  // newsImpact와 news_sentiment 동일하게 매핑
     weights['whaleActivity'] = weights['whale_activity'] || 1.1;
     
     return weights;
@@ -567,10 +582,10 @@ export class LearningService extends EventEmitter {
 
     return {
       total_trades: relevantTrades.length,
-      win_rate: wins.length / relevantTrades.length,
+      win_rate: relevantTrades.length > 0 ? (wins.length / relevantTrades.length) * 100 : 0,
       average_profit: avgProfit,
-      best_trade: Math.max(...profits),
-      worst_trade: Math.min(...profits),
+      best_trade: profits.length > 0 ? Math.max(...profits) : 0,
+      worst_trade: profits.length > 0 ? Math.min(...profits) : 0,
       sharpe_ratio: sharpeRatio,
       profit_factor: profitFactor,
       max_consecutive_wins: maxWins,
