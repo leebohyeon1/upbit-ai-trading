@@ -57,7 +57,37 @@ export const DEFAULT_CONFIG = {
   KIMCHI_PREMIUM_THRESHOLD: 5,
   WHALE_MULTIPLIER: 10,
   ATR_MULTIPLIER: 2,
-  ANALYSIS_INTERVAL_SECONDS: 60
+  ANALYSIS_INTERVAL_SECONDS: 60,
+  // 간소화된 설정 추가
+  simplifiedConfig: {
+    enabled: true,  // 기본적으로 간소화 모드 활성화
+    timeframe: 'minute60',
+    analysisInterval: 60,
+    useIndicators: {
+      movingAverage: true,
+      rsi: true,
+      macd: true,
+      bollingerBands: true,
+      stochastic: true,
+      volume: true
+    },
+    tradingThresholds: {
+      buyThreshold: 0.15,
+      sellThreshold: -0.2,
+      rsiOverbought: 70,
+      rsiOversold: 30
+    },
+    investmentSettings: {
+      investmentRatio: 0.2,  // 20% 투자
+      maxPositionSize: 1000000,  // 100만원
+      stopLossPercent: 5,
+      takeProfitPercent: 10
+    },
+    cooldownSettings: {
+      enabled: true,
+      tradeCooldown: 60  // 60분 쿨다운
+    }
+  }
 };
 
 // 탭 인덱스

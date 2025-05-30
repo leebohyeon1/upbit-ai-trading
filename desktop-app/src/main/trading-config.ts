@@ -1,13 +1,56 @@
+// 간소화된 거래 전략 설정
+export interface SimplifiedTradingConfig {
+  // 타임프레임 설정 (가장 중요!)
+  timeframe: 'minute1' | 'minute3' | 'minute5' | 'minute10' | 'minute15' | 'minute30' | 'minute60' | 'minute240' | 'day' | 'week' | 'month';
+  analysisInterval: number; // 분석 주기 (분 단위)
+  
+  // 핵심 지표만 사용 (이전 프로젝트처럼)
+  useIndicators: {
+    movingAverage: boolean;    // MA 골든/데드크로스
+    rsi: boolean;              // RSI 과매수/과매도
+    macd: boolean;             // MACD 크로스
+    bollingerBands: boolean;   // 볼린저 밴드
+    stochastic: boolean;       // 스토캐스틱
+    volume: boolean;           // 거래량
+  };
+  
+  // 단순화된 매매 임계값 (이전 프로젝트 방식)
+  tradingThresholds: {
+    buyThreshold: number;      // 매수 임계값 (기본: 0.15)
+    sellThreshold: number;     // 매도 임계값 (기본: -0.2)
+    
+    // RSI 설정
+    rsiOverbought: number;     // RSI 과매수 (기본: 70)
+    rsiOversold: number;       // RSI 과매도 (기본: 30)
+  };
+  
+  // 투자 설정 (단순화)
+  investmentSettings: {
+    investmentRatio: number;   // 투자 비율 (0.1 = 10%)
+    maxPositionSize: number;   // 최대 투자 금액
+    
+    // 손익 관리
+    stopLossPercent: number;   // 손절 %
+    takeProfitPercent: number; // 익절 %
+  };
+  
+  // 쿨다운 설정 (선택사항)
+  cooldownSettings?: {
+    enabled: boolean;
+    tradeCooldown: number;     // 거래 후 대기 시간(분)
+  };
+}
+
 // 코인별 개별 거래 전략 설정
 export interface CoinSpecificConfig {
   // 기술적 지표 임계값
   rsiOverbought: number;
   rsiOversold: number;
   
-  // 최소 거래량 (KRW)
+  // 최소 거래량 (KRW) - 사용 안 함
   minVolume: number;
   
-  // 신뢰도 임계값
+  // 신뢰도 임계값 - 사용 안 함
   minConfidenceForBuy: number;
   minConfidenceForSell: number;
   
@@ -29,6 +72,10 @@ export interface CoinSpecificConfig {
   volatilityAdjustment?: boolean; // 변동성에 따른 조정
   newsImpactMultiplier?: number; // 뉴스 영향 배수 (1.0 = 기본)
   preferredTradingHours?: number[]; // 선호 거래 시간대 (0-23)
+  
+  // 간소화된 설정 사용
+  useSimplifiedConfig?: boolean;
+  simplifiedConfig?: SimplifiedTradingConfig;
 }
 
 // 시장 상황별 조정 계수
@@ -71,9 +118,9 @@ export class TradingConfigHelper {
     return {
       rsiOverbought: 70,
       rsiOversold: 30,
-      minVolume: 0,
-      minConfidenceForBuy: 50,
-      minConfidenceForSell: 50,
+      minVolume: 0,  // 사용 안 함
+      minConfidenceForBuy: 0,  // 사용 안 함 (0으로 설정)
+      minConfidenceForSell: 0, // 사용 안 함 (0으로 설정)
       maxPositionSize: 0,
       defaultBuyRatio: 0.1,
       defaultSellRatio: 0.5,
@@ -84,7 +131,36 @@ export class TradingConfigHelper {
       useKellyOptimization: false,
       volatilityAdjustment: false,
       newsImpactMultiplier: 1.0,
-      preferredTradingHours: []
+      preferredTradingHours: [],
+      useSimplifiedConfig: true,  // 기본적으로 간소화 설정 사용
+      simplifiedConfig: {
+        timeframe: 'minute60',  // 기본 60분봉 (이전 프로젝트처럼)
+        analysisInterval: 60,   // 60분마다 분석
+        useIndicators: {
+          movingAverage: true,
+          rsi: true,
+          macd: true,
+          bollingerBands: true,
+          stochastic: true,
+          volume: true
+        },
+        tradingThresholds: {
+          buyThreshold: 0.15,    // 이전 프로젝트와 동일
+          sellThreshold: -0.2,   // 이전 프로젝트와 동일
+          rsiOverbought: 70,
+          rsiOversold: 30
+        },
+        investmentSettings: {
+          investmentRatio: 0.2,  // 20% 투자
+          maxPositionSize: 1000000,  // 100만원
+          stopLossPercent: 5,
+          takeProfitPercent: 10
+        },
+        cooldownSettings: {
+          enabled: true,
+          tradeCooldown: 60  // 60분 쿨다운
+        }
+      }
     };
   }
 
@@ -106,8 +182,8 @@ export class TradingConfigHelper {
       ...config,
       rsiOverbought: Math.round(config.rsiOverbought * multipliers.rsiOverbought),
       rsiOversold: Math.round(config.rsiOversold * multipliers.rsiOversold),
-      minConfidenceForBuy: Math.round(config.minConfidenceForBuy * multipliers.minConfidence),
-      minConfidenceForSell: Math.round(config.minConfidenceForSell * multipliers.minConfidence),
+      minConfidenceForBuy: 0,  // 신뢰도 체크 제거
+      minConfidenceForSell: 0, // 신뢰도 체크 제거
       maxPositionSize: Math.round(config.maxPositionSize * multipliers.positionSize)
     };
   }

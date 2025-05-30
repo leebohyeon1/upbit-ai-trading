@@ -20,9 +20,15 @@ export interface TradingConfig {
   rsiOversold: number;
   buyingCooldown: number; // 매수 쿨타임 (분)
   sellingCooldown: number; // 매도 쿨타임 (분)
-  minConfidenceForTrade: number; // 거래 최소 신뢰도
+  minConfidenceForTrade: number; // 거래 최소 신뢰도 (사용 안 함)
   sellRatio: number; // 매도 비율 (0.1 = 10%, 1.0 = 100%)
   buyRatio: number; // 매수 비율 (0.1 = 10%, 1.0 = 100%)
+  // 간소화된 설정
+  simplifiedConfig?: {
+    enabled: boolean;
+    timeframe: string;
+    analysisInterval: number;
+  }
   // 동적 파라미터 조정 설정
   dynamicRSI: boolean; // RSI 임계값 동적 조정 활성화
   dynamicConfidence: boolean; // 신뢰도 임계값 동적 조정 활성화
@@ -124,14 +130,20 @@ class TradingEngine extends EventEmitter {
     rsiOversold: 30,
     buyingCooldown: 30,    // 기본 30분
     sellingCooldown: 20,   // 기본 20분
-    minConfidenceForTrade: 50,
+    minConfidenceForTrade: 0,  // 사용 안 함
     sellRatio: 0.5,
     buyRatio: 0.1,
     // 동적 파라미터 조정 설정
     dynamicRSI: false,
     dynamicConfidence: false,
     useKellyCriterion: false,
-    maxKellyFraction: 0.25
+    maxKellyFraction: 0.25,
+    // 간소화된 설정 (기본값)
+    simplifiedConfig: {
+      enabled: true,          // 간소화 모드 활성화
+      timeframe: 'minute60',  // 기본 60분봉
+      analysisInterval: 60    // 60분마다 분석
+    }
   };
   
   private analysisResults: Map<string, CoinAnalysis> = new Map();
@@ -570,8 +582,50 @@ class TradingEngine extends EventEmitter {
       
       for (const market of this.activeMarkets) {
         try {
-          // 캔들 데이터 가져오기
-          const candles = await upbitService.getCandles(market, 200);
+          // 간소화 모드 사용 여부 확인
+          const useSimplifiedMode = this.config.simplifiedConfig?.enabled ?? true;
+          
+          if (!useSimplifiedMode) {
+            // 기존 복잡한 분석 모드
+            console.log(`[${market}] Using complex analysis mode`);
+          } else {
+            // 간소화 모드
+            console.log(`[${market}] Using simplified analysis mode`);
+          }
+          
+          // 타임프레임 설정 가져오기 (간소화 모드일 때만)
+          const timeframeConfig = useSimplifiedMode ? 
+            (this.config.simplifiedConfig?.timeframe || 'minute60') : 
+            'minute5'; // 기존 모드는 5분봉 고정
+          analysisService.setTimeframe(timeframeConfig);
+          
+          // 캔들 데이터 가져오기 (타임프레임 적용)
+          const timeframeMap: { [key: string]: { unit: string; minutes: number } } = {
+            'minute1': { unit: 'minutes', minutes: 1 },
+            'minute3': { unit: 'minutes', minutes: 3 },
+            'minute5': { unit: 'minutes', minutes: 5 },
+            'minute10': { unit: 'minutes', minutes: 10 },
+            'minute15': { unit: 'minutes', minutes: 15 },
+            'minute30': { unit: 'minutes', minutes: 30 },
+            'minute60': { unit: 'minutes', minutes: 60 },
+            'minute240': { unit: 'minutes', minutes: 240 },
+            'day': { unit: 'days', minutes: 1 },
+            'week': { unit: 'weeks', minutes: 1 },
+            'month': { unit: 'months', minutes: 1 }
+          };
+          
+          const tf = timeframeMap[timeframeConfig] || timeframeMap['minute60'];
+          console.log(`[${market}] Using timeframe: ${timeframeConfig} -> ${tf.minutes} minutes`);
+          
+          // getCandlesByTimeframe 메서드가 없으면 getCandles 사용 (기본 5분봉)
+          let candles: any[];
+          if (tf.minutes === 5) {
+            candles = await upbitService.getCandles(market, 200);
+          } else {
+            // TODO: 다양한 타임프레임 지원을 위해 upbitService 개선 필요
+            console.log(`[${market}] WARNING: Using default 5m timeframe instead of ${tf.minutes}m`);
+            candles = await upbitService.getCandles(market, 200);
+          }
           if (candles.length === 0) {
             console.log(`No candle data available for ${market}, skipping...`);
             continue;
@@ -815,51 +869,59 @@ class TradingEngine extends EventEmitter {
         }
       }
       
-      // 최소 거래량 체크
-      if (coinConfig.minVolume > 0 && technical.signal !== 'HOLD') {
-        const currentVolume = (analysis.analysis.volume?.current || 0) * analysis.currentPrice;
-        console.log(`[${market}] 거래량 체크: 현재 ${currentVolume.toLocaleString()}원, 최소 ${coinConfig.minVolume.toLocaleString()}원`);
-        
-        if (currentVolume < coinConfig.minVolume) {
-          return {
-            attempted: true,
-            success: false,
-            failureReason: 'VOLUME_TOO_LOW',
-            details: `현재 거래량 ₩${currentVolume.toLocaleString()}이 최소 거래량 ₩${coinConfig.minVolume.toLocaleString()}보다 적습니다.`
-          };
+      // 간소화 모드 사용 여부 확인
+      const useSimplifiedMode = this.config.simplifiedConfig?.enabled ?? true;
+      
+      // 최소 거래량 체크 (간소화 모드일 때만 비활성화)
+      if (!useSimplifiedMode) {
+        // 기존 모드: 거래량 체크
+        const tickers = await upbitService.getTickers([market]);
+        const ticker = tickers[0];
+        if (ticker) {
+          const volume24h = ticker.acc_trade_price_24h; // 24시간 누적 거래대금(KRW)
+          if (coinConfig.minVolume && volume24h < coinConfig.minVolume) {
+            console.log(`${market}: 24h volume ${volume24h.toFixed(0)} is below minimum ${coinConfig.minVolume}`);
+            return {
+              attempted: true,
+              success: false,
+              failureReason: 'VOLUME_TOO_LOW',
+              details: `24시간 거래량(${volume24h.toLocaleString()} KRW)이 최소 거래량(${coinConfig.minVolume.toLocaleString()} KRW)보다 적습니다.`
+            };
+          }
         }
+      } else {
+        console.log(`[${market}] 거래량 체크 비활성화 (간소화 모드)`);
       }
       
       // 동적 파라미터 계산
       const dynamicParams = this.calculateDynamicParameters(market, technical);
       
-      // 이미 위에서 coinConfig에 UI 설정이 병합되었으므로 직접 사용
-      const minConfidenceForTrade = technical.signal === 'BUY' ? 
-        coinConfig.minConfidenceForBuy : 
-        coinConfig.minConfidenceForSell;
-      
-      const minConfidence = this.config.dynamicConfidence ? 
-        Math.max(dynamicParams.adjustedMinConfidence, minConfidenceForTrade) : 
-        minConfidenceForTrade;
-      
-      console.log(`[${market}] 신뢰도 체크:`, {
-        signal: technical.signal,
-        confidence: technical.confidence,
-        minConfidence,
-        coinMinConfidenceForBuy: coinConfig.minConfidenceForBuy,
-        coinMinConfidenceForSell: coinConfig.minConfidenceForSell,
-        dynamicConfidence: this.config.dynamicConfidence
-      });
-      
-      if (technical.confidence < minConfidence) {
-        console.log(`${market} confidence ${technical.confidence.toFixed(1)}% below threshold ${minConfidence}%`);
-        return {
-          attempted: true,
-          success: false,
-          failureReason: 'LOW_CONFIDENCE',
-          details: `신뢰도 ${technical.confidence.toFixed(1)}%가 임계값 ${minConfidence}%보다 낮습니다.`
-        };
+      // 최소 신뢰도 체크 (간소화 모드일 때만 비활성화)
+      if (!useSimplifiedMode) {
+        // 기존 모드: 신뢰도 체크
+        const minConfidence = technical.signal === 'BUY' ? 
+          coinConfig.minConfidenceForBuy : 
+          coinConfig.minConfidenceForSell;
+        
+        if (technical.confidence < minConfidence) {
+          console.log(`${market}: Confidence ${technical.confidence.toFixed(1)}% is below minimum ${minConfidence}%`);
+          return {
+            attempted: true,
+            success: false,
+            failureReason: 'LOW_CONFIDENCE',
+            details: `신뢰도(${technical.confidence.toFixed(1)}%)가 최소 임계값(${minConfidence}%)보다 낮습니다.`
+          };
+        }
+      } else {
+        console.log(`[${market}] 신뢰도: ${technical.confidence.toFixed(1)}% (신뢰도 체크 비활성화 - 간소화 모드)`);
       }
+      
+      // 동적 파라미터는 계속 계산 (로깅용)
+      console.log(`[${market}] 동적 파라미터:`, {
+        adjustedRSIOverbought: dynamicParams.adjustedRSIOverbought,
+        adjustedRSIOversold: dynamicParams.adjustedRSIOversold,
+        currentVolatility: dynamicParams.currentVolatility
+      });
 
       // 계좌 정보 확인 (시뮬레이션 모드에서는 가상 계좌 사용)
       let krwAccount, coinAccount;

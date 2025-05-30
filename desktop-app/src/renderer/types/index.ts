@@ -287,6 +287,36 @@ export interface TradingConfig {
   stopLoss?: number;
   takeProfit?: number;
   weights?: IndicatorWeights;
+  // 간소화된 거래 설정
+  simplifiedConfig?: {
+    enabled?: boolean;  // 간소화 모드 활성화 여부
+    timeframe: string;
+    analysisInterval: number;
+    useIndicators: {
+      movingAverage: boolean;
+      rsi: boolean;
+      macd: boolean;
+      bollingerBands: boolean;
+      stochastic: boolean;
+      volume: boolean;
+    };
+    tradingThresholds: {
+      buyThreshold: number;
+      sellThreshold: number;
+      rsiOverbought: number;
+      rsiOversold: number;
+    };
+    investmentSettings?: {
+      investmentRatio: number;   // 투자 비율 (0.1 = 10%)
+      maxPositionSize: number;   // 최대 투자 금액
+      stopLossPercent: number;   // 손절 %
+      takeProfitPercent: number; // 익절 %
+    };
+    cooldownSettings?: {
+      enabled: boolean;
+      tradeCooldown: number;     // 거래 후 대기 시간(분)
+    };
+  };
 }
 
 export interface BacktestTrade {

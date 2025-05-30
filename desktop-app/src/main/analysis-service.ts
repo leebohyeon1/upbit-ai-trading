@@ -100,9 +100,21 @@ export interface TechnicalAnalysis {
 
 class AnalysisService {
   private patternService: PatternRecognitionService;
+  private defaultTimeframe: string = 'minute60'; // 기본 60분봉
 
   constructor() {
     this.patternService = new PatternRecognitionService();
+  }
+  
+  // 타임프레임 설정
+  setTimeframe(timeframe: string): void {
+    this.defaultTimeframe = timeframe;
+    console.log(`Analysis timeframe set to: ${timeframe}`);
+  }
+  
+  // 현재 타임프레임 가져오기
+  getTimeframe(): string {
+    return this.defaultTimeframe;
   }
 
   // RSI 계산
@@ -411,22 +423,52 @@ class AnalysisService {
     const currentPrice = prices[prices.length - 1];
     const currentVolume = volumes[volumes.length - 1];
 
-    // 기본 기술적 지표 계산 (사용자 설정 적용)
+    // 간소화 모드 사용 여부 확인
+    const useSimplifiedMode = config?.useSimplifiedMode ?? true;
+    
+    // 핵심 지표만 계산 (간소화 모드일 때는 6개 지표)
+    const useIndicators = useSimplifiedMode ? 
+      (config?.useIndicators || {
+        movingAverage: true,
+        rsi: true,
+        macd: true,
+        bollingerBands: true,
+        stochastic: true,
+        volume: true
+      }) : 
+      // 기존 모드: 모든 지표 사용
+      {
+        movingAverage: true,
+        rsi: true,
+        macd: true,
+        bollingerBands: true,
+        stochastic: true,
+        volume: true,
+        atr: true,
+        obv: true,
+        adx: true
+      };
+    
     const rsiPeriod = config?.rsiPeriod || 14;
     const bbPeriod = config?.bbPeriod || 20;
     const bbStdDev = config?.bbStdDev || 2;
     
-    const rsi = this.calculateRSI(prices, rsiPeriod);
-    const stochasticRSI = this.calculateStochasticRSI(prices, rsiPeriod);
-    const macd = this.calculateMACD(prices);
-    const bollinger = this.calculateBollingerBands(prices, bbPeriod, bbStdDev);
-    const sma20 = this.calculateSMA(prices, 20);
-    const sma50 = this.calculateSMA(prices, 50);
+    // 조건부 계산 (사용 설정된 것만)
+    const rsi = useIndicators.rsi ? this.calculateRSI(prices, rsiPeriod) : 50;
+    const macd = useIndicators.macd ? this.calculateMACD(prices) : { macd: 0, signal: 0, histogram: 0 };
+    const bollinger = useIndicators.bollingerBands ? 
+      this.calculateBollingerBands(prices, bbPeriod, bbStdDev) : 
+      { upper: 0, middle: 0, lower: 0, position: 0 };
+    const sma20 = useIndicators.movingAverage ? this.calculateSMA(prices, 20) : 0;
+    const sma50 = useIndicators.movingAverage ? this.calculateSMA(prices, 50) : 0;
+    const stochasticRSI = useIndicators.stochastic ? 
+      this.calculateStochasticRSI(prices, rsiPeriod) : 
+      { k: 50, d: 50 };
     
-    // 추가 지표 계산
-    const atr = this.calculateATR(candles);
-    const obv = this.calculateOBV(candles);
-    const adx = this.calculateADX(candles);
+    // 추가 지표는 간소화 모드일 때만 비활성화
+    const atr = useIndicators.atr ? this.calculateATR(candles, 14) : 0;
+    const obv = useIndicators.obv ? this.calculateOBV(candles) : undefined;
+    const adx = useIndicators.adx ? this.calculateADX(candles, 14) : undefined;
 
     // 거래량 분석
     const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
@@ -560,15 +602,16 @@ class AnalysisService {
       // 거래량 및 OBV
       { condition: volumeRatio > (config?.volumeThreshold || 2.0), weight: 2.0 }, // 거래량 급증 (사용자 설정)
       { condition: volumeRatio > ((config?.volumeThreshold || 2.0) * 0.75), weight: 1.0 }, // 거래량 증가
-      { condition: obv && obv.trend === 'UP', weight: 2.5 }, // OBV 상승 추세
-      { condition: obv && obv.value > obv.signal * 1.05, weight: 2.0 }, // OBV 시그널 돌파
+      // OBV와 ADX는 간소화를 위해 비활성화
+      // { condition: obv && obv.trend === 'UP', weight: 2.5 }, // OBV 상승 추세
+      // { condition: obv && obv.value > obv.signal * 1.05, weight: 2.0 }, // OBV 시그널 돌파
       
-      // 추세 강도 (ADX)
-      { condition: adx && adx.trend === 'STRONG' && adx.plusDI > adx.minusDI, weight: 3.0 }, // 강한 상승 추세
-      { condition: adx && adx.adx > 25 && adx.plusDI > adx.minusDI, weight: 2.0 }, // 약한 상승 추세
+      // 추세 강도 (ADX) - 비활성화
+      // { condition: adx && adx.trend === 'STRONG' && adx.plusDI > adx.minusDI, weight: 3.0 }, // 강한 상승 추세
+      // { condition: adx && adx.adx > 25 && adx.plusDI > adx.minusDI, weight: 2.0 }, // 약한 상승 추세
       
-      // 변동성 (ATR)
-      { condition: atr && atr > 0 && currentPrice < (currentPrice - atr), weight: 2.0 }, // 변동성 대비 하락
+      // 변동성 (ATR) - 비활성화
+      // { condition: atr && atr > 0 && currentPrice < (currentPrice - atr), weight: 2.0 }, // 변동성 대비 하락
       
       // 호가 및 체결 분석
       { condition: orderbookData && orderbookData.bidAskRatio > 1.5, weight: 2.0 }, // 강한 매수세
@@ -614,15 +657,16 @@ class AnalysisService {
       
       // 거래량 및 OBV
       { condition: volumeRatio > 2.0 && priceChange.changeRate24h > 0, weight: 2.0 }, // 상승 중 거래량 급증 (차익실현)
-      { condition: obv && obv.trend === 'DOWN', weight: 2.5 }, // OBV 하락 추세
-      { condition: obv && obv.value < obv.signal * 0.95, weight: 2.0 }, // OBV 시그널 하향 돌파
+      // OBV와 ADX는 간소화를 위해 비활성화
+      // { condition: obv && obv.trend === 'DOWN', weight: 2.5 }, // OBV 하락 추세
+      // { condition: obv && obv.value < obv.signal * 0.95, weight: 2.0 }, // OBV 시그널 하향 돌파
       
-      // 추세 강도 (ADX)
-      { condition: adx && adx.trend === 'STRONG' && adx.minusDI > adx.plusDI, weight: 3.0 }, // 강한 하락 추세
-      { condition: adx && adx.adx > 25 && adx.minusDI > adx.plusDI, weight: 2.0 }, // 약한 하락 추세
+      // 추세 강도 (ADX) - 비활성화
+      // { condition: adx && adx.trend === 'STRONG' && adx.minusDI > adx.plusDI, weight: 3.0 }, // 강한 하락 추세
+      // { condition: adx && adx.adx > 25 && adx.minusDI > adx.plusDI, weight: 2.0 }, // 약한 하락 추세
       
-      // 변동성 (ATR)
-      { condition: atr && atr > 0 && currentPrice > (currentPrice + atr), weight: 2.0 }, // 변동성 대비 상승
+      // 변동성 (ATR) - 비활성화
+      // { condition: atr && atr > 0 && currentPrice > (currentPrice + atr), weight: 2.0 }, // 변동성 대비 상승
       
       // 호가 및 체결 분석
       { condition: orderbookData && orderbookData.bidAskRatio < 0.7, weight: 2.0 }, // 강한 매도세
@@ -771,13 +815,13 @@ class AnalysisService {
       if (currentPrice < bollinger.lower && volumeRatio > 2 && orderbookData && orderbookData.bidAskRatio > 1.5) {
         confidence = Math.min(confidence + 5, 95);
       }
-      // Stochastic RSI + OBV + ADX 트리플 매수 신호
-      if (stochasticRSI && stochasticRSI.k < 20 && obv && obv.trend === 'UP' && adx && adx.plusDI > adx.minusDI) {
-        confidence = Math.min(confidence + 8, 95);
+      // Stochastic RSI 매수 신호만 사용 (OBV와 ADX는 간소화를 위해 제거)
+      if (stochasticRSI && stochasticRSI.k < 20) {
+        confidence = Math.min(confidence + 5, 95);
       }
-      // 고래 매수 감지 + 강한 트렌드
-      if (tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume && adx && adx.trend === 'STRONG') {
-        confidence = Math.min(confidence + 12, 95);
+      // 고래 매수 감지
+      if (tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume) {
+        confidence = Math.min(confidence + 10, 95);
       }
     } else if (signal === 'SELL') {
       // 극도의 탐욕 + 높은 김프 + RSI 과매수 = 강력한 매도 신호
@@ -788,13 +832,13 @@ class AnalysisService {
       if (currentPrice > bollinger.upper && volumeRatio > 2 && orderbookData && orderbookData.bidAskRatio < 0.7) {
         confidence = Math.min(confidence + 5, 95);
       }
-      // Stochastic RSI + OBV + ADX 트리플 매도 신호
-      if (stochasticRSI && stochasticRSI.k > 80 && obv && obv.trend === 'DOWN' && adx && adx.minusDI > adx.plusDI) {
-        confidence = Math.min(confidence + 8, 95);
+      // Stochastic RSI 매도 신호만 사용 (OBV와 ADX는 간소화를 위해 제거)
+      if (stochasticRSI && stochasticRSI.k > 80) {
+        confidence = Math.min(confidence + 5, 95);
       }
-      // 고래 매도 감지 + 강한 트렌드
-      if (tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume && adx && adx.trend === 'STRONG') {
-        confidence = Math.min(confidence + 12, 95);
+      // 고래 매도 감지
+      if (tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume) {
+        confidence = Math.min(confidence + 10, 95);
       }
     }
 
@@ -880,8 +924,7 @@ class AnalysisService {
           else if (sig.condition === (fearGreedIndex < 20)) activeSignals.push('극도의 공포');
           else if (sig.condition === (volumeRatio > 2.0)) activeSignals.push('거래량 급증');
           else if (sig.condition === (priceChange.changeRate24h < -0.1)) activeSignals.push('24시간 10% 이상 하락');
-          else if (sig.condition === (obv && obv.trend === 'UP')) activeSignals.push('OBV 상승 추세');
-          else if (sig.condition === (adx && adx.trend === 'STRONG' && adx.plusDI > adx.minusDI)) activeSignals.push('ADX 강한 상승 추세');
+          // OBV와 ADX 신호는 간소화를 위해 제거
           else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume)) activeSignals.push('매수 고래 감지');
         }
       });
@@ -895,8 +938,7 @@ class AnalysisService {
           else if (sig.condition === (fearGreedIndex > 85)) activeSignals.push('극도의 탐욕');
           else if (sig.condition === (volumeRatio > 2.0 && priceChange.changeRate24h > 0)) activeSignals.push('상승 중 거래량 급증');
           else if (sig.condition === (priceChange.changeRate24h > 0.15)) activeSignals.push('24시간 15% 이상 급등');
-          else if (sig.condition === (obv && obv.trend === 'DOWN')) activeSignals.push('OBV 하락 추세');
-          else if (sig.condition === (adx && adx.trend === 'STRONG' && adx.minusDI > adx.plusDI)) activeSignals.push('ADX 강한 하락 추세');
+          // OBV와 ADX 신호는 간소화를 위해 제거
           else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume)) activeSignals.push('매도 고래 감지');
         }
       });
@@ -934,7 +976,7 @@ class AnalysisService {
       patterns,
       // Additional properties for compatibility
       volumeRatio,
-      obvTrend: obv ? (obv.trend === 'UP' ? 1 : obv.trend === 'DOWN' ? -1 : 0) : 0,
+      obvTrend: 0, // OBV는 간소화를 위해 비활성화
       whaleActivity: tradesData?.whaleDetected || false
     };
   }
