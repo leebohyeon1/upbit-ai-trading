@@ -14,7 +14,7 @@ import {
   Bar,
   Cell
 } from 'recharts';
-import { Box, Card, CardContent, Typography, useTheme, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Box, Card, CardContent, Typography, useTheme, ToggleButton, ToggleButtonGroup, CircularProgress } from '@mui/material';
 import { formatPercent, formatCurrency } from '../../utils/formatters';
 import { useTradingContext } from '../../contexts/TradingContext';
 
@@ -30,18 +30,49 @@ interface ProfitChartProps {
 
 const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data: propData, title = '수익률 추이', days = 30 }) => {
   const theme = useTheme();
-  const { profitHistory } = useTradingContext();
+  const { profitHistory, fetchProfitHistory } = useTradingContext();
   const [chartData, setChartData] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'cumulative' | 'daily'>('cumulative');
   const [period, setPeriod] = useState(days);
   const [loading, setLoading] = useState(false);
 
-  // profitHistory 또는 propData 사용
+  // 기간 변경 시 새로운 데이터 가져오기
   useEffect(() => {
-    if (profitHistory && profitHistory.length > 0) {
-      setChartData(profitHistory);
-    } else if (propData && propData.length > 0) {
-      setChartData(propData);
+    const loadProfitData = async () => {
+      setLoading(true);
+      try {
+        const history = await window.electronAPI.getProfitHistory(period);
+        if (history && history.length > 0) {
+          setChartData(history);
+        }
+      } catch (error) {
+        console.error('Failed to load profit history:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProfitData();
+  }, [period]);
+
+  // profitHistory 또는 propData 사용 및 일별 데이터 계산
+  useEffect(() => {
+    let data = profitHistory && profitHistory.length > 0 ? profitHistory : propData || [];
+    
+    if (data.length > 0) {
+      // 일별 수익 계산
+      const processedData = data.map((item, index) => {
+        let dailyProfit = 0;
+        if (index > 0) {
+          // 이전 날 대비 수익
+          dailyProfit = item.totalValue - data[index - 1].totalValue;
+        }
+        return {
+          ...item,
+          dailyProfit
+        };
+      });
+      setChartData(processedData);
     }
   }, [profitHistory, propData]);
   
@@ -68,8 +99,8 @@ const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data: propData, titl
     return null;
   };
 
-  // 데이터가 없는 경우 처리
-  if (chartData.length === 0) {
+  // 로딩 중이거나 데이터가 없는 경우 처리
+  if (loading || chartData.length === 0) {
     return (
       <Card>
         <CardContent>
@@ -84,9 +115,13 @@ const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data: propData, titl
             justifyContent: 'center',
             backgroundColor: theme.palette.grey[50]
           }}>
-            <Typography variant="body2" color="text.secondary">
-              수익률 데이터가 없습니다
-            </Typography>
+            {loading ? (
+              <CircularProgress size={40} />
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                수익률 데이터가 없습니다
+              </Typography>
+            )}
           </Box>
         </CardContent>
       </Card>
