@@ -114,8 +114,8 @@ const defaultTradingConfig: TradingConfig = {
   minConfidenceForBuy: DEFAULT_CONFIG.MIN_CONFIDENCE_BUY,
   minConfidenceForSell: DEFAULT_CONFIG.MIN_CONFIDENCE_SELL,
   confidenceWindowSize: 15,  // 더 긴 신뢰도 관찰 기간
-  buyingCooldown: DEFAULT_CONFIG.BUY_COOLDOWN / 60,  // 분 단위로 변환
-  sellingCooldown: DEFAULT_CONFIG.SELL_COOLDOWN / 60,  // 분 단위로 변환
+  buyingCooldown: DEFAULT_CONFIG.BUY_COOLDOWN_MINUTES,  // 이미 분 단위
+  sellingCooldown: DEFAULT_CONFIG.SELL_COOLDOWN_MINUTES,  // 이미 분 단위
   decisionThresholds: {
     buyThreshold: 0.15,
     sellThreshold: -0.2

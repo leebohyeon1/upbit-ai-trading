@@ -38,15 +38,28 @@ export const AVAILABLE_COINS = [
 
 // 기본 설정값 (보수적인 전략)
 export const DEFAULT_CONFIG = {
+  // 거래 비율 (0-1 사이의 값)
   BUY_RATIO: 0.1,  // 10%만 투자 (리스크 최소화)
   SELL_RATIO: 0.3,  // 30%만 매도 (분할 매도로 추가 상승 기회 확보)
-  MAX_INVESTMENT_PER_COIN: 50000,  // 코인당 최대 5만원 (분산 투자)
+  
+  // 금액 설정 (원화)
+  MAX_INVESTMENT_PER_COIN: 100000,  // 코인당 최대 10만원 (분산 투자)
+  
+  // 신뢰도 임계값 (%)
   MIN_CONFIDENCE_BUY: 65,  // 높은 확신이 있을 때만 매수
   MIN_CONFIDENCE_SELL: 45,  // 조금이라도 위험 신호가 있으면 매도
+  
+  // 손익 설정 (%)
   STOP_LOSS: 3,  // 3% 손실에서 손절 (빠른 손절)
   TAKE_PROFIT: 8,  // 8% 수익에서 일부 익절
-  BUY_COOLDOWN: 600,  // 10분 매수 쿨타임 (신중한 진입)
-  SELL_COOLDOWN: 60,   // 1분 매도 쿨타임 (빠른 탈출 가능)
+  
+  // 쿨타임 설정 (분 단위로 통일)
+  BUY_COOLDOWN_MINUTES: 10,  // 10분 매수 쿨타임
+  SELL_COOLDOWN_MINUTES: 1,   // 1분 매도 쿨타임
+  
+  // 기존 초 단위 값 (하위 호환성)
+  BUY_COOLDOWN: 600,  // @deprecated - BUY_COOLDOWN_MINUTES 사용
+  SELL_COOLDOWN: 60,   // @deprecated - SELL_COOLDOWN_MINUTES 사용
   RSI_PERIOD: 14,
   RSI_OVERBOUGHT: 70,
   RSI_OVERSOLD: 30,
@@ -57,7 +70,7 @@ export const DEFAULT_CONFIG = {
   KIMCHI_PREMIUM_THRESHOLD: 5,
   WHALE_MULTIPLIER: 10,
   ATR_MULTIPLIER: 2,
-  ANALYSIS_INTERVAL_SECONDS: 60,
+  ANALYSIS_INTERVAL_SECONDS: 60,  // 60초 = 1분마다 분석
   // 간소화된 설정 추가
   simplifiedConfig: {
     enabled: true,  // 기본적으로 간소화 모드 활성화

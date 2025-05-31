@@ -86,3 +86,20 @@ export const getDecisionText = (decision: string): string => {
     default: return '대기';
   }
 };
+
+// 안전한 숫자 변환 함수들
+export const safeParseFloat = (value: string | number | undefined, defaultValue: number = 0): number => {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+  const parsed = typeof value === 'string' ? parseFloat(value) : value;
+  return isNaN(parsed) ? defaultValue : parsed;
+};
+
+export const safeParseInt = (value: string | number | undefined, defaultValue: number = 0): number => {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+  const parsed = typeof value === 'string' ? parseInt(value, 10) : Math.floor(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+};

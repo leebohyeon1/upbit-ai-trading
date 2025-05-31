@@ -127,15 +127,15 @@ class TradingEngine extends EventEmitter {
   private profitUpdateInterval: NodeJS.Timeout | null = null;
   private config: TradingConfig = {
     enableRealTrading: false,
-    maxInvestmentPerCoin: 0,
-    stopLossPercent: 5,
-    takeProfitPercent: 10,
+    maxInvestmentPerCoin: 100000,  // 기본 10만원
+    stopLossPercent: 3,
+    takeProfitPercent: 8,
     rsiOverbought: 70,
     rsiOversold: 30,
-    buyingCooldown: 30,    // 기본 30분
-    sellingCooldown: 20,   // 기본 20분
+    buyingCooldown: 10,    // 기본 10분 (분 단위)
+    sellingCooldown: 1,    // 기본 1분 (분 단위)
     minConfidenceForTrade: 0,  // 사용 안 함
-    sellRatio: 0.5,
+    sellRatio: 0.3,
     buyRatio: 0.1,
     // 동적 파라미터 조정 설정
     dynamicRSI: false,
@@ -210,6 +210,9 @@ class TradingEngine extends EventEmitter {
       console.log('[TradingEngine] 시뮬레이션 거래 기록 삭제 중...');
       tradeHistoryService.clearSimulationTrades();
     }
+    
+    // 쿨타임 데이터는 초기화하지 않음 (실거래 쿨타임 유지)
+    console.log('[TradingEngine] 쿨타임 데이터는 유지됩니다.');
     
     console.log('[TradingEngine] 시뮬레이션이 초기화되었습니다. 초기 자본: ₩10,000,000');
     
@@ -880,6 +883,7 @@ class TradingEngine extends EventEmitter {
       let coinConfig: CoinSpecificConfig = {
         minConfidenceForBuy: analysisConfig.minConfidenceForBuy ?? analysisConfig.buyConfidenceThreshold ?? 50,
         minConfidenceForSell: analysisConfig.minConfidenceForSell ?? analysisConfig.sellConfidenceThreshold ?? 50,
+        // 쿨타임 설정 (모두 분 단위로 통일)
         buyingCooldown: analysisConfig.buyCooldown ?? analysisConfig.buyingCooldown ?? this.config.buyingCooldown,
         sellingCooldown: analysisConfig.sellCooldown ?? analysisConfig.sellingCooldown ?? this.config.sellingCooldown,
         defaultBuyRatio: analysisConfig.defaultBuyRatio ?? this.config.buyRatio,
@@ -1006,9 +1010,13 @@ class TradingEngine extends EventEmitter {
         const skipCooldown = analysisConfig?.skipCooldownOnHighConfidence && 
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
-        console.log(`[${market}] 쿨타임 체크 - buyingCooldown: ${coinConfig.buyingCooldown}분, skipCooldown: ${skipCooldown}`);
-        if (!skipCooldown && this.isInCooldownWithConfig(market, 'buy', coinConfig.buyingCooldown)) {
-          console.log(`[${market}] 매수 쿨타임 중 (설정: ${coinConfig.buyingCooldown}분)`);
+        // 쿨타임 설정값 검증
+        const buyCooldownMinutes = coinConfig.buyingCooldown || 30; // 기본값 30분
+        console.log(`[${market}] 매수 쿨타임 설정: ${buyCooldownMinutes}분 (analysisConfig에서: ${analysisConfig?.buyCooldown}분, 기본값: ${this.config.buyingCooldown}분)`);
+        console.log(`[${market}] 쿨타임 체크 - skipCooldown: ${skipCooldown}, confidence: ${technical.confidence.toFixed(1)}%`);
+        
+        if (!skipCooldown && this.isInCooldownWithConfig(market, 'buy', buyCooldownMinutes)) {
+          console.log(`[${market}] 매수 쿨타임 중 (설정: ${buyCooldownMinutes}분)`);
           const cooldownInfo = this.getCooldownInfo(market);
           return {
             attempted: true,
@@ -1269,8 +1277,12 @@ class TradingEngine extends EventEmitter {
                            technical.confidence >= (analysisConfig?.skipCooldownThreshold || 85);
         
         console.log(`[${market}] 매도 쿨타임 체크 - sellingCooldown: ${coinConfig.sellingCooldown}분, skipCooldown: ${skipCooldown}`);
-        if (!skipCooldown && this.isInCooldownWithConfig(market, 'sell', coinConfig.sellingCooldown)) {
-          console.log(`[${market}] 매도 쿨타임 중 (설정: ${coinConfig.sellingCooldown}분)`);
+        // 쿨타임 설정값 검증
+        const sellCooldownMinutes = coinConfig.sellingCooldown || 20; // 기본값 20분
+        console.log(`[${market}] 매도 쿨타임 설정: ${sellCooldownMinutes}분 (analysisConfig에서: ${analysisConfig?.sellCooldown}분, 기본값: ${this.config.sellingCooldown}분)`);
+        
+        if (!skipCooldown && this.isInCooldownWithConfig(market, 'sell', sellCooldownMinutes)) {
+          console.log(`[${market}] 매도 쿨타임 중 (설정: ${sellCooldownMinutes}분)`);
           const cooldownInfo = this.getCooldownInfo(market);
           return {
             attempted: true,
@@ -1616,17 +1628,19 @@ class TradingEngine extends EventEmitter {
         this.lastTradeTime.set(market, times as { buy?: number; sell?: number });
       });
       
-      console.log('쿨타임 데이터 로드 완료:', this.lastTradeTime.size, '개 코인');
+      console.log('[TradingEngine] 쿨타임 데이터 로드 완료:', this.lastTradeTime.size, '개 코인');
       
       // 현재 쿨타임 상태 출력
       this.lastTradeTime.forEach((times, market) => {
         if (times.buy) {
           const buyElapsed = Math.floor((Date.now() - times.buy) / 60000);
-          console.log(`[${market}] 마지막 매수 후 ${buyElapsed}분 경과`);
+          const lastBuyTime = new Date(times.buy).toLocaleString('ko-KR');
+          console.log(`[${market}] 마지막 매수: ${lastBuyTime} (${buyElapsed}분 전)`);
         }
         if (times.sell) {
           const sellElapsed = Math.floor((Date.now() - times.sell) / 60000);
-          console.log(`[${market}] 마지막 매도 후 ${sellElapsed}분 경과`);
+          const lastSellTime = new Date(times.sell).toLocaleString('ko-KR');
+          console.log(`[${market}] 마지막 매도: ${lastSellTime} (${sellElapsed}분 전)`);
         }
       });
     } catch (error) {
