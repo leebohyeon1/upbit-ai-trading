@@ -719,10 +719,10 @@ class TradingApp {
   }
   
   // 수익률 업데이트 이벤트 발송
-  public sendProfitUpdate() {
+  public async sendProfitUpdate() {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       // 최신 수익률 데이터 가져오기
-      const profitHistory = tradingEngine.getProfitHistory(30);
+      const profitHistory = await tradingEngine.getProfitHistory(30);
       this.mainWindow.webContents.send('profit-update', profitHistory);
     }
   }
@@ -1368,9 +1368,9 @@ class TradingApp {
       }
     });
 
-    ipcMain.handle('get-profit-history', async (event, days: number = 7) => {
+    ipcMain.handle('get-profit-history', async (event, days: number = 30) => {
       try {
-        return tradingEngine.getProfitHistory(days);
+        return await tradingEngine.getProfitHistory(days);
       } catch (error) {
         console.error('Failed to get profit history:', error);
         return [];

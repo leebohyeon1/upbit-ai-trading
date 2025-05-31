@@ -124,6 +124,7 @@ class TradingEngine extends EventEmitter {
   private _isRunning = false;
   private aiEnabled = false;
   private activeMarkets: string[] = [];
+  private profitUpdateInterval: NodeJS.Timeout | null = null;
   private config: TradingConfig = {
     enableRealTrading: false,
     maxInvestmentPerCoin: 0,
@@ -506,6 +507,18 @@ class TradingEngine extends EventEmitter {
       this.statusInterval = setInterval(() => {
         this.emitStatus();
       }, 5000);
+      
+      // 수익률 업데이트 (1분마다)
+      this.profitUpdateInterval = setInterval(async () => {
+        try {
+          const mainInstance = require('./main').default;
+          if (mainInstance) {
+            await mainInstance.sendProfitUpdate();
+          }
+        } catch (error) {
+          console.error('Failed to send profit update:', error);
+        }
+      }, 60000);
 
       this.emit('tradingStarted');
       console.log('Trading engine started');
@@ -548,6 +561,11 @@ class TradingEngine extends EventEmitter {
     if (this.statusInterval) {
       clearInterval(this.statusInterval);
       this.statusInterval = null;
+    }
+    
+    if (this.profitUpdateInterval) {
+      clearInterval(this.profitUpdateInterval);
+      this.profitUpdateInterval = null;
     }
 
     // 리밸런싱 중지
@@ -751,19 +769,22 @@ class TradingEngine extends EventEmitter {
       }
 
       // 분석 완료 이벤트 발송 (프론트엔드 형식으로 변환)
-      const frontendAnalyses = Array.from(this.analysisResults.values()).map(analysis => {
-        const confidenceValue = isNaN(analysis.analysis.confidence) ? 0.4 : analysis.analysis.confidence / 100;
-        return {
-          ticker: analysis.market,
-          decision: analysis.analysis.signal.toLowerCase(),
-          confidence: confidenceValue,
-          reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
-          timestamp: new Date(analysis.lastUpdated).toISOString(),
-          tradeAttempt: analysis.tradeAttempt,
-          patterns: analysis.analysis.patterns,  // 패턴 데이터 추가
-          currentPrice: analysis.currentPrice
-        };
-      });
+      // activeMarkets에 있는 코인만 필터링
+      const frontendAnalyses = Array.from(this.analysisResults.values())
+        .filter(analysis => this.activeMarkets.includes(analysis.market))
+        .map(analysis => {
+          const confidenceValue = isNaN(analysis.analysis.confidence) ? 0.4 : analysis.analysis.confidence / 100;
+          return {
+            ticker: analysis.market,
+            decision: analysis.analysis.signal.toLowerCase(),
+            confidence: confidenceValue,
+            reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
+            timestamp: new Date(analysis.lastUpdated).toISOString(),
+            tradeAttempt: analysis.tradeAttempt,
+            patterns: analysis.analysis.patterns,  // 패턴 데이터 추가
+            currentPrice: analysis.currentPrice
+          };
+        });
       
       this.emit('analysisCompleted', frontendAnalyses);
       
@@ -1408,7 +1429,9 @@ class TradingEngine extends EventEmitter {
   }
 
   getAnalysisResults(): CoinAnalysis[] {
-    return Array.from(this.analysisResults.values());
+    // activeMarkets에 있는 코인의 분석 결과만 반환
+    return Array.from(this.analysisResults.values())
+      .filter(analysis => this.activeMarkets.includes(analysis.market));
   }
 
   getAnalysisForMarket(market: string): CoinAnalysis | undefined {
@@ -1781,13 +1804,23 @@ class TradingEngine extends EventEmitter {
   setAnalysisConfigs(configs: any[]): void {
     this.analysisConfigs = configs;
     // 활성 시장 업데이트 - 이미 KRW-가 포함되어 있는지 확인
-    this.activeMarkets = configs.map(config => {
+    const newActiveMarkets = configs.map(config => {
       const ticker = config.ticker;
       // 이미 KRW-로 시작하면 그대로 사용, 아니면 KRW- 추가
       return ticker.startsWith('KRW-') ? ticker : `KRW-${ticker}`;
     });
+    
+    // 기존 활성 시장과 비교하여 제거된 코인의 분석 결과 삭제
+    const removedMarkets = this.activeMarkets.filter(market => !newActiveMarkets.includes(market));
+    removedMarkets.forEach(market => {
+      console.log(`[${market}] Removing analysis results - no longer in active markets`);
+      this.analysisResults.delete(market);
+    });
+    
+    this.activeMarkets = newActiveMarkets;
     console.log('Analysis configs updated:', configs.length, 'coins');
     console.log('Active markets:', this.activeMarkets);
+    console.log('Removed markets:', removedMarkets);
     
     // 디버깅: 첫 번째 설정의 쿨다운 확인
     if (configs.length > 0) {
@@ -1796,6 +1829,12 @@ class TradingEngine extends EventEmitter {
         buyCooldown: configs[0].buyCooldown,
         sellCooldown: configs[0].sellCooldown
       });
+    }
+    
+    // 새로운 설정을 UI에 즉시 반영
+    if (this._isRunning) {
+      // 분석 결과 업데이트 이벤트 발송
+      this.emit('analysisCompleted', Array.from(this.analysisResults.values()));
     }
   }
   
@@ -2907,34 +2946,105 @@ class TradingEngine extends EventEmitter {
     return 'high';
   }
 
-  getProfitHistory(days: number = 7): Array<{ time: string; profitRate: number; totalValue: number }> {
+  async getProfitHistory(days: number = 30): Promise<Array<{ time: string; profitRate: number; totalValue: number }>> {
     try {
-      // trade-history-service에서 일별 성과 데이터 가져오기
-      const dailyPerformance = tradeHistoryService.getDailyPerformance(days);
-      
-      if (dailyPerformance && dailyPerformance.length > 0) {
-        // 시작 자금
-        const initialCapital = this.config.enableRealTrading ? 10000000 : 10000000; // 1천만원
+      // 실거래 모드인지 확인
+      if (this.config.enableRealTrading) {
+        // 실거래 모드: 현재 포트폴리오 가치 기반으로 계산
+        const accounts = await upbitService.getAccounts();
+        const coinAccounts = accounts.filter(acc => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0);
+        const krwAccount = accounts.find(acc => acc.currency === 'KRW');
+        
+        // 현재 시세 가져오기
+        const markets = coinAccounts.map(acc => `KRW-${acc.currency}`);
+        const tickers = markets.length > 0 ? await upbitService.getTickers(markets) : [];
+        
+        // 현재 총 자산 계산
+        let currentTotalValue = krwAccount ? parseFloat(krwAccount.balance) : 0;
+        
+        for (const acc of coinAccounts) {
+          const ticker = tickers.find(t => t.market === `KRW-${acc.currency}`);
+          if (ticker) {
+            currentTotalValue += parseFloat(acc.balance) * ticker.trade_price;
+          }
+        }
+        
+        // 초기 자본금 (1천만원)
+        const initialCapital = 10000000;
+        const currentProfitRate = ((currentTotalValue - initialCapital) / initialCapital) * 100;
+        
+        // trade-history-service에서 과거 거래 데이터 가져오기
+        const dailyPerformance = tradeHistoryService.getDailyPerformance(days);
+        
+        // 최근 30일 데이터 생성
+        const history: Array<{ time: string; profitRate: number; totalValue: number }> = [];
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days + 1);
+        
         let cumulativeProfit = 0;
         
-        return dailyPerformance.map(day => {
-          cumulativeProfit += day.profit;
-          const totalValue = initialCapital + cumulativeProfit;
-          const profitRate = (cumulativeProfit / initialCapital) * 100;
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          const dayPerf = dailyPerformance.find(p => p.date === dateStr);
           
-          return {
-            time: new Date(day.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+          if (dayPerf) {
+            cumulativeProfit += dayPerf.profit;
+          }
+          
+          // 오늘이면 현재 포트폴리오 가치 사용
+          const isToday = d.toDateString() === new Date().toDateString();
+          const totalValue = isToday ? currentTotalValue : initialCapital + cumulativeProfit;
+          const profitRate = isToday ? currentProfitRate : (cumulativeProfit / initialCapital) * 100;
+          
+          history.push({
+            time: d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
             profitRate: profitRate,
             totalValue: totalValue
-          };
-        });
+          });
+        }
+        
+        return history;
+      } else {
+        // 시뮬레이션 모드: 기존 로직 유지
+        const initialCapital = 10000000;
+        const totalValue = this.calculateTotalPortfolioValue();
+        const profitRate = ((totalValue - initialCapital) / initialCapital) * 100;
+        
+        // 최근 30일 더미 데이터 생성 (시뮬레이션용)
+        const history: Array<{ time: string; profitRate: number; totalValue: number }> = [];
+        const endDate = new Date();
+        
+        for (let i = days - 1; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          
+          // 오늘이면 실제 값, 아니면 0
+          const isToday = i === 0;
+          
+          history.push({
+            time: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+            profitRate: isToday ? profitRate : 0,
+            totalValue: isToday ? totalValue : initialCapital
+          });
+        }
+        
+        return history;
       }
-      
-      // 거래 내역이 없는 경우 빈 배열 반환
-      return [];
     } catch (error) {
       console.error('Failed to get profit history:', error);
-      return [];
+      // 에러 시 빈 데이터 반환
+      const history: Array<{ time: string; profitRate: number; totalValue: number }> = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        history.push({
+          time: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+          profitRate: 0,
+          totalValue: 10000000
+        });
+      }
+      return history;
     }
   }
 
