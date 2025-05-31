@@ -429,19 +429,27 @@ class TradingApp {
 
   private checkForUpdates() {
     // 개발 모드에서는 업데이트 체크 안 함
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV_MODE === 'true') {
       console.log('Development mode: Skipping auto-updater');
       return;
     }
 
-    // 업데이트 서버 설정 (GitHub Releases 사용)
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: 'leebohyeon1',
-      repo: 'upbit-ai-trading',
-      private: true,
-      token: process.env.GH_TOKEN  // GitHub Personal Access Token
-    });
+    try {
+      // GitHub Token 확인
+      const ghToken = process.env.GH_TOKEN;
+      if (!ghToken) {
+        console.error('GH_TOKEN not found. Auto-updater will not work for private repository.');
+        return;
+      }
+
+      // 업데이트 서버 설정 (GitHub Releases 사용)
+      autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: 'leebohyeon1',
+        repo: 'upbit-ai-trading',
+        private: true,
+        token: ghToken
+      });
 
     // 자동 다운로드 설정
     autoUpdater.autoDownload = true;
@@ -499,8 +507,17 @@ class TradingApp {
       }
     });
 
-    // 업데이트 확인 시작
-    autoUpdater.checkForUpdatesAndNotify();
+      // 업데이트 확인 시작
+      autoUpdater.checkForUpdatesAndNotify()
+        .then(() => {
+          console.log('Update check initiated successfully');
+        })
+        .catch((error) => {
+          console.error('Failed to check for updates:', error);
+        });
+    } catch (error) {
+      console.error('Failed to initialize auto-updater:', error);
+    }
   }
 
   private updateTrayMenu() {
