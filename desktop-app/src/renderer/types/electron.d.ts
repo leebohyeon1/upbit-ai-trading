@@ -190,6 +190,7 @@ declare global {
       onTradingStateChanged: (callback: (state: TradingState) => void) => () => void;
       onLearningProgress: (callback: (states: LearningState[]) => void) => () => void;
       onLearningUpdated: (callback: (data: any) => void) => () => void;
+      onProfitUpdate: (callback: (profitHistory: Array<{ time: string; profitRate: number; totalValue: number }>) => void) => () => void;
     };
   }
 }

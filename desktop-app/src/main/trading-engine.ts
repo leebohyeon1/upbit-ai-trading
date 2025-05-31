@@ -1122,6 +1122,13 @@ class TradingEngine extends EventEmitter {
             amount: parseFloat(buyAmountStr)
           });
           
+          // 수익률 업데이트 이벤트 발송
+          const { app } = require('electron');
+          const mainInstance = require('./main').default;
+          if (mainInstance) {
+            mainInstance.sendProfitUpdate();
+          }
+          
           // 학습 시스템에 매수 진입점 기록 (비동기로 실행)
           void this.recordEntryForLearning(market, technical, analysis).catch((error: Error) => {
             console.error(`[학습] ${market} 진입점 기록 실패:`, error);
@@ -1292,6 +1299,12 @@ class TradingEngine extends EventEmitter {
             profit: sellValue * (profit / 100),
             profitRate: profit
           });
+          
+          // 수익률 업데이트 이벤트 발송
+          const mainInstance = require('./main').default;
+          if (mainInstance) {
+            mainInstance.sendProfitUpdate();
+          }
           
           // 학습 시스템에 거래 결과 기록
           this.recordTradeResultForLearning(market, avgBuyPrice, analysis.currentPrice, profit);

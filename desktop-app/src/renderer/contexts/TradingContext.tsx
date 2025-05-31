@@ -688,11 +688,20 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     calculatePortfolioData();
   }, [calculatePortfolioData]);
 
-  // 주기적으로 수익률 히스토리 업데이트
+  // 실시간 수익률 업데이트 리스너
   useEffect(() => {
+    // 초기 데이터 로드
     fetchProfitHistory();
-    const interval = setInterval(fetchProfitHistory, 300000); // 5분마다 업데이트 (너무 자주 호출하지 않도록)
-    return () => clearInterval(interval);
+    
+    // 실시간 업데이트 리스너 설정
+    const removeProfitListener = window.electronAPI.onProfitUpdate((profitHistory) => {
+      console.log('[TradingContext] Real-time profit update received:', profitHistory);
+      setProfitHistory(profitHistory);
+    });
+    
+    return () => {
+      removeProfitListener();
+    };
   }, [fetchProfitHistory]);
 
   // value 객체를 미리 생성 (Hook은 조건문 이전에 호출되어야 함)

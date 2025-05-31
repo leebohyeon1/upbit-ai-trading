@@ -118,6 +118,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeAllListeners('learning-updated');
   },
   
+  onProfitUpdate: (callback) => {
+    console.log('[Preload] Setting up profit-update listener');
+    const listener = (event, profitHistory) => {
+      console.log('[Preload] profit-update event received:', profitHistory);
+      callback(profitHistory);
+    };
+    ipcRenderer.on('profit-update', listener);
+    return () => {
+      console.log('[Preload] Removing profit-update listener');
+      ipcRenderer.removeListener('profit-update', listener);
+    };
+  },
+  
   // Kill Switch methods
   getKillSwitchStatus: () => ipcRenderer.invoke('get-kill-switch-status'),
   activateKillSwitch: (reason) => ipcRenderer.invoke('activate-kill-switch', reason),

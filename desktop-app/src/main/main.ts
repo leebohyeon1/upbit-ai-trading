@@ -700,6 +700,15 @@ class TradingApp {
   public sendAnalysisUpdate(analysis: any) {
     this.mainWindow?.webContents.send('analysis-update', analysis);
   }
+  
+  // 수익률 업데이트 이벤트 발송
+  public sendProfitUpdate() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      // 최신 수익률 데이터 가져오기
+      const profitHistory = tradingEngine.getProfitHistory(30);
+      this.mainWindow.webContents.send('profit-update', profitHistory);
+    }
+  }
 
   private async saveAnalysisConfigs(configs: any[]): Promise<boolean> {
     try {
@@ -2250,3 +2259,5 @@ const tradingApp = new TradingApp();
 export function getMainWindow(): BrowserWindow | null {
   return tradingApp.getMainWindow();
 }
+
+export default tradingApp;
