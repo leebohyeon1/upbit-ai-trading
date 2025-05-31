@@ -18,7 +18,8 @@ import {
   TrendingUp,
   ShowChart,
   Timer,
-  TimerOff
+  TimerOff,
+  RestartAlt
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
 import { StatCard } from '../common/StatCard';
@@ -207,6 +208,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             AI 기반 자동매매 시스템 현황을 한눈에 확인하세요
           </Typography>
         </Box>
+        {!tradingConfig?.enableRealTrading && (
+          <Button
+            variant="outlined"
+            startIcon={<RestartAlt />}
+            onClick={async () => {
+              if (window.confirm('시뮬레이션을 초기화하시겠습니까?\n모든 가상 거래 기록이 삭제되고 초기 자본 1천만원으로 리셋됩니다.')) {
+                const success = await window.electronAPI.resetSimulation();
+                if (success) {
+                  window.location.reload(); // 페이지 새로고침으로 상태 업데이트
+                }
+              }
+            }}
+            sx={{ ml: 2 }}
+          >
+            시뮬레이션 초기화
+          </Button>
+        )}
         <Box textAlign="right">
           <Typography variant="caption" color="text.secondary">
             총 자산

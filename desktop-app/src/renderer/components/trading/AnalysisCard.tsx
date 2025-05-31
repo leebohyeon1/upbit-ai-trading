@@ -71,7 +71,7 @@ const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
           <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
             <Box display="flex" alignItems="center" gap={1}>
               <Typography variant="h6" fontWeight="bold">
-                {analysis.ticker.replace('KRW-', '')}
+                {analysis.ticker?.replace('KRW-', '') || 'N/A'}
               </Typography>
               <Chip
                 icon={getDecisionIcon()}

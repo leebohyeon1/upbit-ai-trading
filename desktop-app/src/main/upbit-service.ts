@@ -359,8 +359,44 @@ class UpbitService {
         headers: { Authorization: authToken }
       });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to place buy order:', error);
+      
+      // API 오류 응답 상세 로깅
+      if (error.response) {
+        console.error('Buy order error status:', error.response.status);
+        console.error('Buy order error data:', JSON.stringify(error.response.data, null, 2));
+        
+        // 400 에러 - 잘못된 요청
+        if (error.response.status === 400) {
+          const errorMessage = error.response.data?.error?.message || '';
+          const errorName = error.response.data?.error?.name || '';
+          
+          if (errorMessage.includes('market does not exist') || errorName === 'MARKET_ORDER_NOT_SUPPORTED') {
+            throw new Error(`${market}은(는) 거래가 지원되지 않는 마켓입니다.`);
+          }
+          if (errorMessage.includes('insufficient') || errorName === 'INSUFFICIENT_BALANCE') {
+            throw new Error(`잔액이 부족합니다. 요청 금액: ${price}원`);
+          }
+          if (errorMessage.includes('minimum') || errorName === 'UNDER_MIN_TOTAL_ASK') {
+            throw new Error(`최소 주문 금액(5,000원) 이상이어야 합니다. 요청 금액: ${price}원`);
+          }
+          if (errorMessage.includes('volume') || errorName === 'INVALID_PARAMETER') {
+            throw new Error(`잘못된 수량입니다: ${volume}`);
+          }
+        }
+        
+        // 401 에러 - 인증 실패
+        if (error.response.status === 401) {
+          throw new Error('API 인증에 실패했습니다. API 키를 확인해주세요.');
+        }
+        
+        // 429 에러 - Rate Limit
+        if (error.response.status === 429) {
+          throw new Error('API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+        }
+      }
+      
       throw error;
     }
   }
@@ -386,8 +422,45 @@ class UpbitService {
         headers: { Authorization: authToken }
       });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to place sell order:', error);
+      
+      // API 오류 응답 상세 로깅
+      if (error.response) {
+        console.error('Sell order error status:', error.response.status);
+        console.error('Sell order error data:', JSON.stringify(error.response.data, null, 2));
+        
+        // 400 에러 - 잘못된 요청
+        if (error.response.status === 400) {
+          const errorMessage = error.response.data?.error?.message || '';
+          const errorName = error.response.data?.error?.name || '';
+          
+          if (errorMessage.includes('market does not exist') || errorName === 'MARKET_ORDER_NOT_SUPPORTED') {
+            throw new Error(`${market}은(는) 거래가 지원되지 않는 마켓입니다.`);
+          }
+          if (errorMessage.includes('insufficient') || errorName === 'INSUFFICIENT_COIN_BALANCE') {
+            throw new Error(`보유 코인이 부족합니다. 요청 수량: ${volume}`);
+          }
+          if (errorMessage.includes('minimum') || errorName === 'UNDER_MIN_TOTAL_BID') {
+            const estimatedValue = price ? parseFloat(price) * parseFloat(volume) : 'N/A';
+            throw new Error(`최소 주문 금액(5,000원) 이상이어야 합니다. 예상 금액: ${estimatedValue}원`);
+          }
+          if (errorMessage.includes('volume') || errorName === 'INVALID_PARAMETER') {
+            throw new Error(`잘못된 수량입니다: ${volume}`);
+          }
+        }
+        
+        // 401 에러 - 인증 실패
+        if (error.response.status === 401) {
+          throw new Error('API 인증에 실패했습니다. API 키를 확인해주세요.');
+        }
+        
+        // 429 에러 - Rate Limit
+        if (error.response.status === 429) {
+          throw new Error('API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+        }
+      }
+      
       throw error;
     }
   }

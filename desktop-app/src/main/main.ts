@@ -726,6 +726,19 @@ class TradingApp {
       this.mainWindow.webContents.send('profit-update', profitHistory);
     }
   }
+  
+  // 계좌 정보 업데이트 이벤트 발송
+  public async sendAccountUpdate() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      try {
+        const upbitService = require('./upbit-service').default;
+        const accounts = await upbitService.getAccounts();
+        this.mainWindow.webContents.send('accounts-updated', accounts);
+      } catch (error) {
+        console.error('Failed to send account update:', error);
+      }
+    }
+  }
 
   private async saveAnalysisConfigs(configs: any[]): Promise<boolean> {
     try {
@@ -870,6 +883,18 @@ class TradingApp {
     // 트레이로 최소화
     ipcMain.handle('minimize-to-tray', async () => {
       this.mainWindow?.hide();
+    });
+    
+    // 시뮬레이션 초기화
+    ipcMain.handle('reset-simulation', async () => {
+      try {
+        tradingEngine.resetSimulation();
+        console.log('[Main] Simulation reset successfully');
+        return true;
+      } catch (error) {
+        console.error('[Main] Failed to reset simulation:', error);
+        return false;
+      }
     });
 
     // API 키 저장
@@ -1081,6 +1106,11 @@ class TradingApp {
             profit: trade.profit
           });
         }
+        
+        // 거래 실행 후 계좌 정보 업데이트 (잠시 지연 후 실행)
+        setTimeout(() => {
+          this.sendAccountUpdate();
+        }, 1000);
       }
     });
 

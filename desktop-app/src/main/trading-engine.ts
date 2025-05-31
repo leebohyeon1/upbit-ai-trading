@@ -195,6 +195,25 @@ class TradingEngine extends EventEmitter {
     this.loadCooldownData();
   }
   
+  // 시뮬레이션 초기화 메서드
+  public resetSimulation(): void {
+    console.log('[TradingEngine] 시뮬레이션 초기화 중...');
+    this.virtualKRW = 10000000; // 1천만원으로 초기화
+    this.virtualPortfolio.clear();
+    this.virtualTradeHistory = [];
+    this.tradeHistory = [];
+    this.performanceMetrics.clear();
+    this.highestPrices.clear();
+    console.log('[TradingEngine] 시뮬레이션이 초기화되었습니다. 초기 자본: ₩10,000,000');
+    
+    // 수익률 업데이트 이벤트 발송
+    const { app } = require('electron');
+    const mainInstance = require('./main').default;
+    if (mainInstance) {
+      mainInstance.sendProfitUpdate();
+    }
+  }
+  
   // Kill Switch에서 사용할 시스템 잠금 메서드
   setLocked(locked: boolean): void {
     this.isLocked = locked;
@@ -1109,15 +1128,22 @@ class TradingEngine extends EventEmitter {
           // 실제 거래 실행 (테스트 모드에서는 시뮬레이션)
           console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
-            if (smartOrder.orderType === 'limit' && smartOrder.limitPrice) {
-              // 지정가 매수: 가격과 수량을 모두 지정
-              const volume = (buyAmount / smartOrder.limitPrice).toFixed(8);
-              console.log(`Executing REAL LIMIT BUY order for ${market}: ${volume} @ ₩${smartOrder.limitPrice.toLocaleString()}`);
-              await upbitService.buyOrder(market, smartOrder.limitPrice.toString(), volume);
-            } else {
-              // 시장가 매수: KRW 금액만 지정
-              console.log(`Executing REAL MARKET BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
-              await upbitService.buyOrder(market, buyAmountStr);
+            try {
+              if (smartOrder.orderType === 'limit' && smartOrder.limitPrice) {
+                // 지정가 매수: 가격과 수량을 모두 지정
+                const volume = (buyAmount / smartOrder.limitPrice).toFixed(8);
+                console.log(`Executing REAL LIMIT BUY order for ${market}: ${volume} @ ₩${smartOrder.limitPrice.toLocaleString()}`);
+                const result = await upbitService.buyOrder(market, smartOrder.limitPrice.toString(), volume);
+                console.log(`Buy order result for ${market}:`, result);
+              } else {
+                // 시장가 매수: KRW 금액만 지정
+                console.log(`Executing REAL MARKET BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
+                const result = await upbitService.buyOrder(market, buyAmountStr);
+                console.log(`Buy order result for ${market}:`, result);
+              }
+            } catch (orderError) {
+              console.error(`[${market}] Buy order failed:`, orderError);
+              throw orderError;
             }
           } else {
             console.log(`[시뮬레이션] ${smartOrder.orderType.toUpperCase()} BUY order for ${market}: ₩${buyAmount.toLocaleString()}`);
@@ -1179,6 +1205,8 @@ class TradingEngine extends EventEmitter {
           const mainInstance = require('./main').default;
           if (mainInstance) {
             mainInstance.sendProfitUpdate();
+            // 계좌 정보도 업데이트
+            mainInstance.sendAccountUpdate();
           }
           
           // 학습 시스템에 매수 진입점 기록 (비동기로 실행)
@@ -1285,14 +1313,21 @@ class TradingEngine extends EventEmitter {
           // 실제 거래 실행 (테스트 모드에서는 시뮬레이션)
           console.log(`Real trading enabled: ${this.config.enableRealTrading}`);
           if (this.config.enableRealTrading) {
-            if (smartOrder.orderType === 'limit' && smartOrder.limitPrice) {
-              // 지정가 매도: 가격과 수량을 모두 지정
-              console.log(`Executing REAL LIMIT SELL order for ${market}: ${sellAmountStr} @ ₩${smartOrder.limitPrice.toLocaleString()}`);
-              await upbitService.sellOrder(market, sellAmountStr, smartOrder.limitPrice.toString());
-            } else {
-              // 시장가 매도: 수량만 지정
-              console.log(`Executing REAL MARKET SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
-              await upbitService.sellOrder(market, sellAmountStr);
+            try {
+              if (smartOrder.orderType === 'limit' && smartOrder.limitPrice) {
+                // 지정가 매도: 가격과 수량을 모두 지정
+                console.log(`Executing REAL LIMIT SELL order for ${market}: ${sellAmountStr} @ ₩${smartOrder.limitPrice.toLocaleString()}`);
+                const result = await upbitService.sellOrder(market, sellAmountStr, smartOrder.limitPrice.toString());
+                console.log(`Sell order result for ${market}:`, result);
+              } else {
+                // 시장가 매도: 수량만 지정
+                console.log(`Executing REAL MARKET SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
+                const result = await upbitService.sellOrder(market, sellAmountStr);
+                console.log(`Sell order result for ${market}:`, result);
+              }
+            } catch (orderError) {
+              console.error(`[${market}] Sell order failed:`, orderError);
+              throw orderError;
             }
           } else {
             console.log(`[시뮬레이션] ${smartOrder.orderType.toUpperCase()} SELL order for ${market}: ${sellAmount} ${market.split('-')[1]} (₩${sellValue.toLocaleString()})`);
@@ -1356,6 +1391,8 @@ class TradingEngine extends EventEmitter {
           const mainInstance = require('./main').default;
           if (mainInstance) {
             mainInstance.sendProfitUpdate();
+            // 계좌 정보도 업데이트
+            mainInstance.sendAccountUpdate();
           }
           
           // 학습 시스템에 거래 결과 기록
@@ -1395,11 +1432,37 @@ class TradingEngine extends EventEmitter {
       }
     } catch (error) {
       console.error(`Failed to process trade signal for ${market}:`, error);
+      
+      // 에러 메시지 상세 분석
+      let failureReason = 'API_ERROR';
+      let details = error instanceof Error ? error.message : '알 수 없는 오류';
+      
+      if (error instanceof Error) {
+        // 마켓 관련 오류
+        if (error.message.includes('거래가 지원되지 않는 마켓')) {
+          failureReason = 'INVALID_MARKET';
+          console.error(`[${market}] 지원되지 않는 마켓입니다. 거래 가능한 마켓인지 확인해주세요.`);
+        }
+        // 잔액 부족
+        else if (error.message.includes('잔액이 부족')) {
+          failureReason = 'INSUFFICIENT_BALANCE';
+        }
+        // 최소 주문 금액
+        else if (error.message.includes('최소 주문 금액')) {
+          failureReason = 'MIN_ORDER_AMOUNT';
+        }
+        // 잘못된 수량
+        else if (error.message.includes('잘못된 수량')) {
+          failureReason = 'INVALID_VOLUME';
+          console.error(`[${market}] 잘못된 수량입니다. 소수점 자리수를 확인해주세요.`);
+        }
+      }
+      
       return {
         attempted: true,
         success: false,
-        failureReason: 'API_ERROR',
-        details: error instanceof Error ? error.message : '알 수 없는 오류'
+        failureReason,
+        details
       };
     }
   }

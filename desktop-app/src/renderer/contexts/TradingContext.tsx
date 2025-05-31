@@ -704,6 +704,18 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     };
   }, [fetchProfitHistory]);
 
+  // 계좌 정보 업데이트 리스너
+  useEffect(() => {
+    const removeAccountsListener = window.electronAPI.onAccountsUpdated((updatedAccounts: any[]) => {
+      console.log('[TradingContext] Accounts updated:', updatedAccounts);
+      setAccounts(updatedAccounts);
+    });
+    
+    return () => {
+      removeAccountsListener();
+    };
+  }, []);
+
   // value 객체를 미리 생성 (Hook은 조건문 이전에 호출되어야 함)
   const value: TradingContextType = useMemo(() => ({
     // States

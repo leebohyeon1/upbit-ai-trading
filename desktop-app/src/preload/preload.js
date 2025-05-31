@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProfitHistory: (days) => ipcRenderer.invoke('get-profit-history', days),
   getTradingHistory: () => ipcRenderer.invoke('get-trading-history'),
   
+  // Simulation methods
+  resetSimulation: () => ipcRenderer.invoke('reset-simulation'),
+  
   // VaR and Risk Management methods
   generateRiskReport: () => ipcRenderer.invoke('generate-risk-report'),
   
@@ -128,6 +131,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => {
       console.log('[Preload] Removing profit-update listener');
       ipcRenderer.removeListener('profit-update', listener);
+    };
+  },
+  
+  onAccountsUpdated: (callback) => {
+    console.log('[Preload] Setting up accounts-updated listener');
+    const listener = (event, accounts) => {
+      console.log('[Preload] accounts-updated event received:', accounts);
+      callback(accounts);
+    };
+    ipcRenderer.on('accounts-updated', listener);
+    return () => {
+      console.log('[Preload] Removing accounts-updated listener');
+      ipcRenderer.removeListener('accounts-updated', listener);
     };
   },
   
