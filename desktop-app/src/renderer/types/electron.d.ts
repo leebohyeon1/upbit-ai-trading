@@ -195,6 +195,7 @@ declare global {
       onLearningUpdated: (callback: (data: any) => void) => () => void;
       onProfitUpdate: (callback: (profitHistory: Array<{ time: string; profitRate: number; totalValue: number }>) => void) => () => void;
       onAccountsUpdated: (callback: (accounts: any[]) => void) => () => void;
+      onTickersUpdated: (callback: (tickers: any[]) => void) => () => void;
     };
   }
 }

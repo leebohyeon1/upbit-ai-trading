@@ -164,19 +164,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalAssets = useMemo(() => {
     let total = 0;
     
+    // 디버깅 로그
+    console.log('[Dashboard] Calculating totalAssets...');
+    console.log('[Dashboard] accounts:', accounts);
+    console.log('[Dashboard] tickers type:', Array.isArray(tickers) ? 'array' : typeof tickers);
+    console.log('[Dashboard] tickers:', tickers);
+    
     accounts.forEach(acc => {
       if (acc.currency === 'KRW') {
-        total += parseFloat(acc.balance);
+        const krwBalance = parseFloat(acc.balance);
+        total += krwBalance;
+        console.log(`[Dashboard] KRW balance: ${krwBalance}`);
       } else {
         // 코인의 현재가로 평가
         const market = `KRW-${acc.currency}`;
-        const ticker = Object.values(tickers).find(t => t.market === market);
+        // tickers가 배열인지 객체인지 확인하여 처리
+        const ticker = Array.isArray(tickers) 
+          ? tickers.find((t: any) => t.market === market)
+          : Object.values(tickers).find((t: any) => t.market === market);
+          
         if (ticker && parseFloat(acc.balance) > 0) {
-          total += parseFloat(acc.balance) * ticker.trade_price;
+          const coinValue = parseFloat(acc.balance) * (ticker as any).trade_price;
+          total += coinValue;
+          console.log(`[Dashboard] ${acc.currency}: balance=${acc.balance}, price=${(ticker as any).trade_price}, value=${coinValue}`);
+        } else {
+          console.log(`[Dashboard] No ticker found for ${market} or zero balance`);
         }
       }
     });
     
+    console.log(`[Dashboard] Total assets: ${total}`);
     return total;
   }, [accounts, tickers]);
   

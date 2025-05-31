@@ -582,6 +582,34 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       setSupportedCoins(coins);
     }).catch(console.error);
 
+    // 초기 계좌 정보 로드
+    window.electronAPI.fetchAccounts().then((accounts) => {
+      console.log('[TradingContext] Initial accounts loaded:', accounts);
+      setAccounts(accounts);
+    }).catch(console.error);
+
+    // 초기 시세 정보 로드 (활성화된 코인들)
+    const loadInitialTickers = async () => {
+      try {
+        const savedPortfolio = await window.electronAPI.getPortfolio();
+        if (savedPortfolio && savedPortfolio.length > 0) {
+          const enabledSymbols = savedPortfolio
+            .filter(p => p.enabled)
+            .map(p => p.symbol);
+          
+          if (enabledSymbols.length > 0) {
+            const tickers = await window.electronAPI.fetchTickers(enabledSymbols);
+            console.log('[TradingContext] Initial tickers loaded:', tickers);
+            setTickers(tickers);
+          }
+        }
+      } catch (error) {
+        console.error('[TradingContext] Failed to load initial tickers:', error);
+      }
+    };
+    
+    loadInitialTickers();
+
     return () => {
       removeApiKeyListener();
       removeAnalysisListener();
@@ -699,10 +727,29 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       setProfitHistory(profitHistory);
     });
     
+    // 활성화된 코인의 시세를 주기적으로 업데이트
+    const updateTickers = async () => {
+      const enabledCoins = portfolio.filter(p => p.enabled);
+      if (enabledCoins.length > 0) {
+        try {
+          const symbols = enabledCoins.map(p => p.symbol);
+          const updatedTickers = await window.electronAPI.fetchTickers(symbols);
+          console.log('[TradingContext] Periodic ticker update:', updatedTickers);
+          setTickers(updatedTickers);
+        } catch (error) {
+          console.error('[TradingContext] Failed to update tickers:', error);
+        }
+      }
+    };
+    
+    // 10초마다 시세 업데이트
+    const tickerInterval = setInterval(updateTickers, 10000);
+    
     return () => {
       removeProfitListener();
+      clearInterval(tickerInterval);
     };
-  }, [fetchProfitHistory]);
+  }, [fetchProfitHistory, portfolio]);
 
   // 계좌 정보 업데이트 리스너
   useEffect(() => {
@@ -711,8 +758,17 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       setAccounts(updatedAccounts);
     });
     
+    // 시세 정보 업데이트 리스너 추가
+    const removeTickersListener = window.electronAPI.onTickersUpdated?.((updatedTickers: any[]) => {
+      console.log('[TradingContext] Tickers updated:', updatedTickers);
+      setTickers(updatedTickers);
+    });
+    
     return () => {
       removeAccountsListener();
+      if (removeTickersListener) {
+        removeTickersListener();
+      }
     };
   }, []);
 

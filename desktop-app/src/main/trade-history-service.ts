@@ -221,10 +221,14 @@ class TradeHistoryService {
     totalDays: number;
   } {
     // 실제 거래만 필터링 (시뮬레이션 제외)
-    let trades = this.trades.filter(t => !t.isSimulation);
+    // isSimulation이 명시적으로 false인 경우만 실거래로 간주
+    let trades = this.trades.filter(t => t.isSimulation === false);
     
     console.log('[TradeHistoryService] getTradeStatistics called');
-    console.log('[TradeHistoryService] Total trades (real only):', trades.length);
+    console.log('[TradeHistoryService] All trades:', this.trades.length);
+    console.log('[TradeHistoryService] Simulation trades:', this.trades.filter(t => t.isSimulation === true).length);
+    console.log('[TradeHistoryService] Real trades:', trades.length);
+    console.log('[TradeHistoryService] Undefined isSimulation:', this.trades.filter(t => t.isSimulation === undefined).length);
     
     if (period) {
       trades = trades.filter(t => 
@@ -236,9 +240,16 @@ class TradeHistoryService {
     const sellTrades = trades.filter(t => t.type === 'SELL' && t.profit !== undefined);
     
     console.log('[TradeHistoryService] Sell trades with profit:', sellTrades.length);
-    sellTrades.forEach((trade, index) => {
-      console.log(`[TradeHistoryService] Trade ${index + 1}: ${trade.market}, Profit: ${trade.profit?.toFixed(0)}원, Rate: ${trade.profitRate?.toFixed(2)}%`);
-    });
+    if (sellTrades.length > 0 && sellTrades.length <= 10) {
+      sellTrades.forEach((trade, index) => {
+        console.log(`[TradeHistoryService] Trade ${index + 1}: ${trade.market}, Profit: ${trade.profit?.toFixed(0)}원, Rate: ${trade.profitRate?.toFixed(2)}%, isSimulation: ${trade.isSimulation}, Date: ${new Date(trade.timestamp).toLocaleDateString()}`);
+      });
+    } else if (sellTrades.length > 10) {
+      console.log('[TradeHistoryService] Too many trades to display. Showing summary.');
+      const totalProfitSum = sellTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
+      const avgProfitRate = sellTrades.reduce((sum, t) => sum + (t.profitRate || 0), 0) / sellTrades.length;
+      console.log(`[TradeHistoryService] Total profit: ${totalProfitSum.toFixed(0)}원, Average profit rate: ${avgProfitRate.toFixed(2)}%`);
+    }
     
     const totalProfit = sellTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
     const wins = sellTrades.filter(t => (t.profit || 0) > 0).length;
@@ -278,13 +289,45 @@ class TradeHistoryService {
     const beforeCount = this.trades.length;
     
     // 시뮬레이션 거래만 필터링하여 제거
-    this.trades = this.trades.filter(trade => !trade.isSimulation);
+    this.trades = this.trades.filter(trade => trade.isSimulation === false);
     
     const removedCount = beforeCount - this.trades.length;
     console.log(`[TradeHistoryService] Removed ${removedCount} simulation trades`);
     
     // 일일 성과도 재계산
     this.recalculateDailyPerformance();
+    
+    // 파일에 저장
+    this.saveTradeHistory();
+  }
+  
+  // 실거래 기록 삭제
+  clearRealTrades(): void {
+    console.log('[TradeHistoryService] Clearing real trades...');
+    const beforeCount = this.trades.length;
+    
+    // 실거래만 필터링하여 제거
+    this.trades = this.trades.filter(trade => trade.isSimulation === true);
+    
+    const removedCount = beforeCount - this.trades.length;
+    console.log(`[TradeHistoryService] Removed ${removedCount} real trades`);
+    
+    // 일일 성과도 재계산
+    this.recalculateDailyPerformance();
+    
+    // 파일에 저장
+    this.saveTradeHistory();
+  }
+  
+  // 모든 거래 기록 삭제
+  clearAllTrades(): void {
+    console.log('[TradeHistoryService] Clearing all trades...');
+    const beforeCount = this.trades.length;
+    
+    this.trades = [];
+    this.dailyPerformance.clear();
+    
+    console.log(`[TradeHistoryService] Removed ${beforeCount} trades`);
     
     // 파일에 저장
     this.saveTradeHistory();
