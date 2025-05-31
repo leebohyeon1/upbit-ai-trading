@@ -518,9 +518,7 @@ class TradingEngine extends EventEmitter {
       });
       
       // 자동 리밸런싱 시작
-      if (this.config.enableAutoRebalancing) {
-        this.startAutoRebalancing();
-      }
+      this.startAutoRebalancingSync();
       
       return true;
     } catch (error) {
@@ -941,7 +939,9 @@ class TradingEngine extends EventEmitter {
         coinAccount = portfolio ? { 
           currency: market.split('-')[1], 
           balance: portfolio.balance.toString(),
-          avg_buy_price: portfolio.avgBuyPrice.toString()
+          avg_buy_price: portfolio.avgBuyPrice.toString(),
+          // 시뮬레이션 모드에서도 포지션 계산을 위해 필요
+          locked: '0'
         } : null;
       }
 
@@ -1029,31 +1029,49 @@ class TradingEngine extends EventEmitter {
             }
           }
           
-          // 매수할 금액 계산 (최대 포지션 금액 기준)
-          // KRW 잔액이 충분한지는 나중에 체크
-          const buyAmount = maxPositionSize * adjustedBuyRatio;
+          // 현재 코인 보유 평가금액 확인
+          let currentPositionValue = 0;
+          if (coinAccount && parseFloat(coinAccount.balance) > 0) {
+            const currentBalance = parseFloat(coinAccount.balance);
+            currentPositionValue = currentBalance * analysis.currentPrice;
+            console.log(`[${market}] 현재 포지션: ${currentBalance} ${market.split('-')[1]} = ₩${currentPositionValue.toLocaleString()}`);
+          }
+          
+          // 남은 투자 가능 금액 계산
+          const remainingInvestmentCapacity = Math.max(0, maxPositionSize - currentPositionValue);
+          
+          if (remainingInvestmentCapacity <= 0) {
+            console.log(`[${market}] 최대 포지션 크기 도달: ₩${currentPositionValue.toLocaleString()} / ₩${maxPositionSize.toLocaleString()}`);
+            return {
+              attempted: true,
+              success: false,
+              failureReason: 'MAX_POSITION_REACHED',
+              details: `최대 포지션 크기(₩${maxPositionSize.toLocaleString()})에 도달했습니다. 현재: ₩${currentPositionValue.toLocaleString()}`
+            };
+          }
+          
+          // 매수할 금액 계산 (남은 투자 가능 금액 기준)
+          let buyAmount = Math.min(remainingInvestmentCapacity * adjustedBuyRatio, remainingInvestmentCapacity);
+          
+          console.log(`[${market}] 포지션 제한 적용: 최대 ₩${maxPositionSize.toLocaleString()}, 현재 ₩${currentPositionValue.toLocaleString()}, 남은 한도 ₩${remainingInvestmentCapacity.toLocaleString()}`);
+          console.log(`[${market}] 매수 금액 계산: 남은 한도의 ${(adjustedBuyRatio * 100).toFixed(1)}% = ₩${buyAmount.toLocaleString()}`);
+          
+          // KRW 잔액이 부족한 경우 남은 금액 전체를 사용
+          if (buyAmount > krwBalance) {
+            console.log(`[${market}] 매수 금액 조정: ₩${buyAmount.toLocaleString()} → ₩${krwBalance.toLocaleString()} (KRW 잔액 부족)`);
+            buyAmount = krwBalance;
+          }
           
           // 최소 주문 금액 확인 (기본 5,000원, UI 설정 사용 가능)
           const minOrderAmount = analysisConfig?.minOrderAmount ?? 5000;
           if (buyAmount < minOrderAmount) {
             console.log(`Buy amount ₩${buyAmount.toLocaleString()} is below minimum order amount ₩${minOrderAmount.toLocaleString()}`);
-            console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy ratio: ${adjustedBuyRatio}`);
+            console.log(`Max position size: ₩${maxPositionSize.toLocaleString()}, Buy ratio: ${adjustedBuyRatio}`);
             return {
               attempted: true,
               success: false,
               failureReason: 'MIN_ORDER_AMOUNT',
               details: `주문 금액 ₩${buyAmount.toLocaleString()}이 최소 금액 ₩${minOrderAmount.toLocaleString()}보다 적습니다. 투자 비율: ${(adjustedBuyRatio * 100).toFixed(1)}%`
-            };
-          }
-          
-          // KRW 잔액이 충분한지 확인
-          if (buyAmount > krwBalance) {
-            console.log(`[${market}] 매수 금액 ₩${buyAmount.toLocaleString()}이 KRW 잔액 ₩${krwBalance.toLocaleString()}보다 많음`);
-            return {
-              attempted: true,
-              success: false,
-              failureReason: 'INSUFFICIENT_BALANCE',
-              details: `매수 금액(₩${buyAmount.toLocaleString()})이 KRW 잔액(₩${krwBalance.toLocaleString()})을 초과합니다.`
             };
           }
           
@@ -2561,9 +2579,9 @@ class TradingEngine extends EventEmitter {
 
 
   /**
-   * 포트폴리오 자동 리밸런싱 시작
+   * 포트폴리오 자동 리밸런싱 시작 (동기 버전)
    */
-  private startAutoRebalancing(): void {
+  private startAutoRebalancingSync(): void {
     const intervalHours = this.config.rebalanceInterval || 24; // 기본 24시간
     const intervalMs = intervalHours * 60 * 60 * 1000;
     
@@ -2745,7 +2763,7 @@ class TradingEngine extends EventEmitter {
     }
     
     if (config.enabled && this._isRunning) {
-      this.startAutoRebalancing();
+      this.startAutoRebalancingSync();
     }
   }
 
@@ -2917,6 +2935,132 @@ class TradingEngine extends EventEmitter {
     } catch (error) {
       console.error('Failed to get profit history:', error);
       return [];
+    }
+  }
+
+  // 자동 리밸런싱 관련 메서드 (비동기 버전)
+  private async startAutoRebalancingAsync(): Promise<void> {
+    try {
+      // 리밸런싱 설정 가져오기
+      const fs = require('fs');
+      const path = require('path');
+      const { app } = require('electron');
+      const configPath = path.join(app.getPath('userData'), 'rebalancing-config.json');
+      
+      if (!fs.existsSync(configPath)) {
+        console.log('No rebalancing config found, skipping auto-rebalancing');
+        return;
+      }
+      
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      
+      if (!config.enabled) {
+        console.log('Auto-rebalancing is disabled');
+        return;
+      }
+      
+      console.log(`Auto-rebalancing enabled: checking every ${config.interval} hours`);
+      
+      // 초기 체크
+      await this.checkAndExecuteRebalancing(config);
+      
+      // 주기적 체크 설정
+      const intervalMs = config.interval * 60 * 60 * 1000; // 시간 -> 밀리초
+      this.rebalanceInterval = setInterval(async () => {
+        await this.checkAndExecuteRebalancing(config);
+      }, intervalMs);
+      
+    } catch (error) {
+      console.error('Failed to start auto-rebalancing:', error);
+    }
+  }
+  
+  private async checkAndExecuteRebalancing(config: any): Promise<void> {
+    try {
+      console.log('Checking if rebalancing is needed...');
+      
+      // 현재 포트폴리오 상태 확인
+      const accounts = await upbitService.getAccounts();
+      const tickers = await upbitService.getTickers(
+        accounts
+          .filter((acc: any) => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0)
+          .map((acc: any) => `KRW-${acc.currency}`)
+      );
+      
+      // 전체 자산 가치 계산
+      let totalValue = 0;
+      const positions: any[] = [];
+      
+      // KRW 잔액
+      const krwAccount = accounts.find((acc: any) => acc.currency === 'KRW');
+      if (krwAccount) {
+        totalValue += parseFloat(krwAccount.balance);
+      }
+      
+      // 코인 평가액
+      for (const account of accounts) {
+        if (account.currency !== 'KRW' && parseFloat(account.balance) > 0) {
+          const ticker = tickers.find((t: any) => t.market === `KRW-${account.currency}`);
+          if (ticker) {
+            const value = parseFloat(account.balance) * ticker.trade_price;
+            totalValue += value;
+            
+            positions.push({
+              symbol: account.currency,
+              value: value,
+              balance: parseFloat(account.balance),
+              price: ticker.trade_price
+            });
+          }
+        }
+      }
+      
+      // 현재 가중치 계산
+      positions.forEach(pos => {
+        pos.currentWeight = totalValue > 0 ? pos.value / totalValue : 0;
+        pos.targetWeight = config.targetWeights.find((t: any) => t.symbol === pos.symbol)?.weight || 0;
+        pos.difference = Math.abs(pos.targetWeight - pos.currentWeight);
+      });
+      
+      // 리밸런싱 필요 여부 확인
+      const needsRebalancing = positions.some(pos => pos.difference > config.threshold / 100);
+      
+      if (!needsRebalancing) {
+        console.log('Portfolio is balanced, no rebalancing needed');
+        return;
+      }
+      
+      console.log('Rebalancing needed, executing...');
+      
+      // 리밸런싱 실행
+      const { app: electronApp } = require('electron');
+      const mainInstance = require('./main').default;
+      
+      // main.ts의 execute-rebalancing 핸들러 호출
+      const result = await mainInstance.executeRebalancing();
+      
+      if (result.success) {
+        this.lastRebalanceTime = Date.now();
+        console.log('Auto-rebalancing completed successfully');
+        
+        // 알림 발송
+        notificationService.notify({
+          type: 'rebalancing',
+          title: '자동 리밸런싱 완료',
+          message: result.message,
+          priority: 'high'
+        });
+      } else {
+        console.error('Auto-rebalancing failed:', result.error);
+        
+        notificationService.notifyError({
+          title: '자동 리밸런싱 실패',
+          message: result.error || '리밸런싱 중 오류가 발생했습니다.'
+        });
+      }
+      
+    } catch (error) {
+      console.error('Failed to check/execute rebalancing:', error);
     }
   }
 }

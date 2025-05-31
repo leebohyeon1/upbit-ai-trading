@@ -4,9 +4,10 @@ import * as fs from 'fs';
 
 export interface NotificationOptions {
   title: string;
-  body: string;
-  type: 'trade' | 'system' | 'analysis' | 'error';
-  priority?: 'low' | 'normal' | 'critical';
+  body?: string;
+  message?: string;
+  type: 'trade' | 'system' | 'analysis' | 'error' | 'rebalancing';
+  priority?: 'low' | 'normal' | 'critical' | 'high';
   silent?: boolean;
   actions?: Array<{ text: string; action: string }>;
   data?: any;
@@ -83,10 +84,10 @@ class NotificationService {
     // 알림 생성
     const notification = new Notification({
       title: options.title,
-      body: options.body,
+      body: options.body || options.message || '',
       icon: this.iconPath,
       silent: !this.settings.soundEnabled || options.silent,
-      urgency: options.priority || 'normal',
+      urgency: options.priority === 'high' ? 'critical' : (options.priority || 'normal'),
       timeoutType: 'default',
     });
     
@@ -247,6 +248,11 @@ class NotificationService {
   // 알림 히스토리 초기화
   public clearHistory(): void {
     this.notificationHistory = [];
+  }
+  
+  // notify 메서드 추가 (showNotification의 별칭)
+  public notify(options: NotificationOptions): void {
+    this.showNotification(options);
   }
 }
 

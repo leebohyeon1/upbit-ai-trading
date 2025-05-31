@@ -1974,14 +1974,159 @@ class TradingApp {
     
     ipcMain.handle('execute-rebalancing', async () => {
       try {
-        // 실제 리밸런싱 실행
-        // TODO: 실제 거래 API 연동 필요
-        console.log('Executing portfolio rebalancing...');
+        console.log('Starting portfolio rebalancing...');
         
-        // 현재는 성공 메시지만 반환
+        // 리밸런싱 설정 가져오기
+        const configPath = path.join(app.getPath('userData'), 'rebalancing-config.json');
+        if (!fs.existsSync(configPath)) {
+          return { success: false, error: '리밸런싱 설정이 없습니다' };
+        }
+        
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        
+        // 현재 계정 정보 가져오기
+        const upbitService = require('./upbit-service').default;
+        const accounts = await upbitService.getAccounts();
+        const tickers = await upbitService.getTickers(
+          accounts
+            .filter((acc: any) => acc.currency !== 'KRW' && parseFloat(acc.balance) > 0)
+            .map((acc: any) => `KRW-${acc.currency}`)
+        );
+        
+        // 전체 자산 가치 계산
+        let totalValue = 0;
+        const positions: any[] = [];
+        
+        // KRW 잔액
+        const krwAccount = accounts.find((acc: any) => acc.currency === 'KRW');
+        if (krwAccount) {
+          totalValue += parseFloat(krwAccount.balance);
+        }
+        
+        // 코인 평가액
+        for (const account of accounts) {
+          if (account.currency !== 'KRW' && parseFloat(account.balance) > 0) {
+            const ticker = tickers.find((t: any) => t.market === `KRW-${account.currency}`);
+            if (ticker) {
+              const value = parseFloat(account.balance) * ticker.trade_price;
+              totalValue += value;
+              
+              positions.push({
+                symbol: account.currency,
+                value: value,
+                currentWeight: 0, // 나중에 계산
+                targetWeight: config.targetWeights.find((t: any) => t.symbol === account.currency)?.weight || 0,
+                balance: parseFloat(account.balance),
+                price: ticker.trade_price
+              });
+            }
+          }
+        }
+        
+        // 현재 가중치 계산
+        positions.forEach(pos => {
+          pos.currentWeight = totalValue > 0 ? pos.value / totalValue : 0;
+        });
+        
+        // 리밸런싱 주문 생성
+        const sellOrders: any[] = [];
+        const buyOrders: any[] = [];
+        
+        for (const position of positions) {
+          const difference = position.targetWeight - position.currentWeight;
+          
+          if (Math.abs(difference) > config.threshold / 100) {
+            const tradeValue = Math.abs(difference * totalValue);
+            
+            if (tradeValue > config.minTradeAmount) {
+              if (difference > 0) {
+                buyOrders.push({
+                  symbol: position.symbol,
+                  value: tradeValue,
+                  targetWeight: position.targetWeight * 100,
+                  currentWeight: position.currentWeight * 100
+                });
+              } else {
+                sellOrders.push({
+                  symbol: position.symbol,
+                  value: tradeValue,
+                  targetWeight: position.targetWeight * 100,
+                  currentWeight: position.currentWeight * 100,
+                  price: position.price
+                });
+              }
+            }
+          }
+        }
+
+        const executedOrders = [];
+        const failedOrders = [];
+        
+        // 1. 먼저 매도 주문 실행 (KRW 확보)
+        console.log(`Executing ${sellOrders.length} sell orders...`);
+        for (const order of sellOrders) {
+          try {
+            const market = `KRW-${order.symbol}`;
+            
+            // 매도할 수량 계산 (order.price가 이미 있음)
+            const sellAmount = (order.value / order.price).toFixed(8);
+            
+            console.log(`Selling ${sellAmount} ${order.symbol} (₩${order.value.toLocaleString()})`);
+            
+            // 시장가 매도 주문
+            await upbitService.sellOrder(market, sellAmount);
+            executedOrders.push({ ...order, type: 'SELL', amount: sellAmount });
+            
+            // API 제한 회피를 위한 지연
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Failed to sell ${order.symbol}:`, error);
+            failedOrders.push({ ...order, reason: (error as Error).message });
+          }
+        }
+        
+        // 2. 매도 주문 체결 대기 (5초)
+        console.log('Waiting for sell orders to complete...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // 3. 매수 주문 실행
+        console.log(`Executing ${buyOrders.length} buy orders...`);
+        for (const order of buyOrders) {
+          try {
+            const market = `KRW-${order.symbol}`;
+            const buyAmountKrw = order.value.toFixed(0);
+            
+            console.log(`Buying ${order.symbol} for ₩${order.value.toLocaleString()}`);
+            
+            // 시장가 매수 주문 (KRW 금액 지정)
+            await upbitService.buyOrder(market, buyAmountKrw);
+            executedOrders.push({ ...order, type: 'BUY', amount: buyAmountKrw });
+            
+            // API 제한 회피를 위한 지연
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Failed to buy ${order.symbol}:`, error);
+            failedOrders.push({ ...order, reason: (error as Error).message });
+          }
+        }
+        
+        console.log('Rebalancing completed.');
+        console.log(`Executed: ${executedOrders.length}, Failed: ${failedOrders.length}`);
+        
+        // 알림 발송
+        const notificationService = require('./notification-service').default;
+        notificationService.notify({
+          type: 'rebalancing',
+          title: '포트폴리오 리밸런싱 완료',
+          message: `성공: ${executedOrders.length}건, 실패: ${failedOrders.length}건`,
+          priority: 'high'
+        });
+        
         return { 
           success: true, 
-          message: '리밸런싱이 예약되었습니다. 시장가 주문으로 순차적으로 실행됩니다.' 
+          message: `리밸런싱 완료: ${executedOrders.length}건 실행, ${failedOrders.length}건 실패`,
+          executedOrders,
+          failedOrders
         };
       } catch (error) {
         console.error('Failed to execute rebalancing:', error);
