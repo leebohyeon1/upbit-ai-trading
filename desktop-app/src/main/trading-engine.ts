@@ -10,6 +10,9 @@ import notificationService from './notification-service';
 import riskManagementService, { VaRResult, PortfolioPosition } from './risk-management-service';
 import tradeHistoryService from './trade-history-service';
 import newsService from './news-service';
+import * as fs from 'fs';
+import * as path from 'path';
+import { app } from 'electron';
 
 export interface TradingConfig {
   enableRealTrading: boolean;
@@ -188,6 +191,7 @@ class TradingEngine extends EventEmitter {
     this.apiClient = new ApiClient();
     this.setupLearningService();
     this.setupApiClient();
+    this.loadCooldownData();
   }
   
   // Kill Switch에서 사용할 시스템 잠금 메서드
@@ -1393,6 +1397,74 @@ class TradingEngine extends EventEmitter {
     existing[action] = Date.now();
     this.lastTradeTime.set(market, existing);
     console.log(`[${market}] ${action === 'buy' ? '매수' : '매도'} 시간 기록: ${new Date().toLocaleString('ko-KR')}`);
+    
+    // 쿨타임 데이터 저장
+    this.saveCooldownData();
+  }
+  
+  // 쿨타임 데이터 파일 경로
+  private getCooldownPath(): string {
+    const userDataPath = app.getPath('userData');
+    return path.join(userDataPath, 'data', 'cooldown.json');
+  }
+  
+  // 쿨타임 데이터 저장
+  private saveCooldownData(): void {
+    try {
+      const cooldownPath = this.getCooldownPath();
+      const dataDir = path.dirname(cooldownPath);
+      
+      // 디렉토리가 없으면 생성
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      // Map을 일반 객체로 변환하여 저장
+      const cooldownData: Record<string, { buy?: number; sell?: number }> = {};
+      this.lastTradeTime.forEach((value, key) => {
+        cooldownData[key] = value;
+      });
+      
+      fs.writeFileSync(cooldownPath, JSON.stringify(cooldownData, null, 2));
+      console.log('쿨타임 데이터 저장 완료');
+    } catch (error) {
+      console.error('쿨타임 데이터 저장 실패:', error);
+    }
+  }
+  
+  // 쿨타임 데이터 로드
+  private loadCooldownData(): void {
+    try {
+      const cooldownPath = this.getCooldownPath();
+      
+      if (!fs.existsSync(cooldownPath)) {
+        console.log('저장된 쿨타임 데이터가 없습니다.');
+        return;
+      }
+      
+      const cooldownData = JSON.parse(fs.readFileSync(cooldownPath, 'utf-8'));
+      
+      // 객체를 Map으로 변환
+      Object.entries(cooldownData).forEach(([market, times]) => {
+        this.lastTradeTime.set(market, times as { buy?: number; sell?: number });
+      });
+      
+      console.log('쿨타임 데이터 로드 완료:', this.lastTradeTime.size, '개 코인');
+      
+      // 현재 쿨타임 상태 출력
+      this.lastTradeTime.forEach((times, market) => {
+        if (times.buy) {
+          const buyElapsed = Math.floor((Date.now() - times.buy) / 60000);
+          console.log(`[${market}] 마지막 매수 후 ${buyElapsed}분 경과`);
+        }
+        if (times.sell) {
+          const sellElapsed = Math.floor((Date.now() - times.sell) / 60000);
+          console.log(`[${market}] 마지막 매도 후 ${sellElapsed}분 경과`);
+        }
+      });
+    } catch (error) {
+      console.error('쿨타임 데이터 로드 실패:', error);
+    }
   }
 
   // 동적 파라미터 조정 메서드들

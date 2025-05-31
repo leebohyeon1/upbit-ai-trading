@@ -641,6 +641,14 @@ class TradingApp {
         this.getPortfolioPath(),
         JSON.stringify(portfolio, null, 2)
       );
+      
+      // 자동매매가 실행 중인 경우 activeMarkets 업데이트
+      if (tradingEngine.isRunning()) {
+        const activeMarkets = portfolio.map(item => item.ticker || item.market);
+        console.log('[Main] Updating active markets:', activeMarkets);
+        tradingEngine.setActiveMarkets(activeMarkets);
+      }
+      
       return true;
     } catch (error) {
       console.error('Failed to save portfolio:', error);
