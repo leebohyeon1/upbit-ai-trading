@@ -20,7 +20,9 @@
     "test:calculations": "electron test-calculations.js",
     "test:scenarios": "electron test-scenarios.js",
     "test:performance": "electron test-performance.js",
-    "test:all": "run-comprehensive-test.bat"
+    "test:all": "run-comprehensive-test.bat",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx"
   },
   "keywords": [
     "trading",

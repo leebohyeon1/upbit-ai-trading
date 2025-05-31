@@ -1377,8 +1377,8 @@ class TradingEngine extends EventEmitter {
           let profitAmount = 0;
           
           if (this.config.enableRealTrading) {
-            // 실거래: account의 평균 매수가 사용
-            avgBuyPrice = parseFloat(account.avg_buy_price || '0');
+            // 실거래: coinAccount의 평균 매수가 사용
+            avgBuyPrice = parseFloat(coinAccount.avg_buy_price || '0');
             if (avgBuyPrice > 0) {
               profit = ((analysis.currentPrice - avgBuyPrice) / avgBuyPrice) * 100;
               profitAmount = (analysis.currentPrice - avgBuyPrice) * sellAmount - (sellValue * 0.0005); // 수수료 차감
