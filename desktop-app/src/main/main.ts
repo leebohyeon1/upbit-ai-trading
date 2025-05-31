@@ -86,20 +86,47 @@ class TradingApp {
       // 독립적인 거래 엔진 이벤트 연결은 이미 setupTradingEngine()에서 설정됨
     });
 
-    app.on('window-all-closed', () => {
-      if (process.platform !== 'darwin') {
-        app.quit();
+
+    app.on('before-quit', async (event) => {
+      if (!this.isQuitting) {
+        event.preventDefault();
+        this.isQuitting = true;
+        
+        console.log('[Main] Cleaning up before quit...');
+        
+        // 거래 엔진 종료
+        try {
+          await tradingEngine.stop();
+        } catch (error) {
+          console.error('[Main] Failed to stop trading engine:', error);
+        }
+        
+        // Python 프로세스 종료
+        if (this.pythonProcess) {
+          this.pythonProcess.kill();
+          this.pythonProcess = null;
+        }
+        
+        // 트레이 아이콘 제거
+        if (this.tray) {
+          this.tray.destroy();
+          this.tray = null;
+        }
+        
+        // 모든 윈도우 닫기
+        BrowserWindow.getAllWindows().forEach(window => {
+          window.destroy();
+        });
+        
+        // 강제 종료
+        setTimeout(() => {
+          app.exit(0);
+        }, 1000);
       }
     });
 
-    app.on('before-quit', () => {
-      this.isQuitting = true;
-      // 앱 종료시 Python 프로세스도 종료
-      if (this.pythonProcess) {
-        this.pythonProcess.kill();
-      }
-      // 거래 엔진 종료
-      tradingEngine.stop();
+    app.on('quit', () => {
+      console.log('[Main] App is quitting...');
     });
 
     app.on('activate', () => {
@@ -142,7 +169,8 @@ class TradingApp {
     });
 
     this.mainWindow.on('close', (event) => {
-      if (!this.isQuitting) {
+      // 트레이가 활성화되어 있고 종료 중이 아닌 경우에만 숨기기
+      if (!this.isQuitting && this.tray) {
         event.preventDefault();
         this.mainWindow?.hide();
       }
@@ -150,6 +178,10 @@ class TradingApp {
 
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
+      // 트레이가 없거나 종료 중인 경우 앱 종료
+      if (!this.tray || this.isQuitting) {
+        app.quit();
+      }
     });
   }
 
@@ -190,9 +222,32 @@ class TradingApp {
       { type: 'separator' },
       {
         label: '종료',
-        click: () => {
+        click: async () => {
+          console.log('[Main] Exit clicked from tray');
           this.isQuitting = true;
-          app.quit();
+          
+          // 거래 엔진 종료
+          try {
+            await tradingEngine.stop();
+          } catch (error) {
+            console.error('[Main] Failed to stop trading engine:', error);
+          }
+          
+          // 트레이 제거
+          if (this.tray) {
+            this.tray.destroy();
+            this.tray = null;
+          }
+          
+          // 모든 윈도우 강제 종료
+          BrowserWindow.getAllWindows().forEach(window => {
+            window.destroy();
+          });
+          
+          // 앱 강제 종료
+          setTimeout(() => {
+            app.exit(0);
+          }, 500);
         }
       }
     ]);
@@ -292,9 +347,18 @@ class TradingApp {
       setTimeout(async () => {
         try {
           // 내장 거래 엔진 사용
-          if (tickers && tickers.length > 0) {
-            tradingEngine.setActiveMarkets(tickers);
+          if (!tickers || tickers.length === 0) {
+            console.error('[Main] No tickers provided to startTrading');
+            // 실패 시 상태 롤백
+            this.tradingState.isRunning = false;
+            this.tradingState.lastUpdate = new Date().toISOString();
+            this.updateTrayMenu();
+            this.sendStatusUpdate();
+            return;
           }
+          
+          console.log('[Main] Setting active markets:', tickers);
+          tradingEngine.setActiveMarkets(tickers);
           const success = await tradingEngine.start();
           
           if (!success) {
@@ -1309,11 +1373,14 @@ class TradingApp {
         
         // analysisConfigs가 없으면 포트폴리오에서 가져오기
         if (!analysisConfigs || analysisConfigs.length === 0) {
+          console.log('[Main] No analysisConfigs provided, loading from portfolio...');
           const portfolio = JSON.parse(fs.readFileSync(this.getPortfolioPath(), 'utf-8') || '[]');
+          console.log('[Main] Full portfolio:', portfolio);
           const enabledCoins = portfolio.filter((coin: any) => coin.enabled);
+          console.log('[Main] Enabled coins:', enabledCoins);
           
           if (enabledCoins.length === 0) {
-            console.error('No enabled coins in portfolio');
+            console.error('[Main] No enabled coins in portfolio');
             return false;
           }
           
@@ -1326,6 +1393,7 @@ class TradingApp {
             minConfidenceForSell: 60,
             // ... 기타 기본값
           }));
+          console.log('[Main] Created analysisConfigs:', analysisConfigs);
         }
         
         // 설정 업데이트
@@ -1354,17 +1422,26 @@ class TradingApp {
           });
         }
         
-        // 분석 설정 전달 (UI에서 설정한 코인별 거래 파라미터)
-        tradingEngine.setAnalysisConfigs(analysisConfigs);
-        
         // AI 설정
         tradingEngine.toggleAI(tradingConfig.useAI || false);
+        
+        // 분석 설정 전달 (UI에서 설정한 코인별 거래 파라미터)
+        // 이것은 setActiveMarkets 이후에 호출되어야 함
+        tradingEngine.setAnalysisConfigs(analysisConfigs);
         
         // 거래 시작 (analysisConfigs에서 시장 목록 추출)
         const markets = analysisConfigs.map(config => {
           // config.ticker가 이미 KRW-를 포함하고 있을 수 있음
           return config.ticker.startsWith('KRW-') ? config.ticker : `KRW-${config.ticker}`;
         });
+        
+        console.log('[Main] Extracted markets from analysisConfigs:', markets);
+        
+        if (markets.length === 0) {
+          console.error('[Main] No markets to trade after extraction');
+          return false;
+        }
+        
         return await this.startTrading(markets);
       } catch (error) {
         console.error('Failed to start trading:', error);

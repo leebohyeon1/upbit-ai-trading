@@ -204,6 +204,13 @@ class TradingEngine extends EventEmitter {
     this.tradeHistory = [];
     this.performanceMetrics.clear();
     this.highestPrices.clear();
+    
+    // 시뮬레이션 거래 기록도 삭제
+    if (!this.config.enableRealTrading) {
+      console.log('[TradingEngine] 시뮬레이션 거래 기록 삭제 중...');
+      tradeHistoryService.clearSimulationTrades();
+    }
+    
     console.log('[TradingEngine] 시뮬레이션이 초기화되었습니다. 초기 자본: ₩10,000,000');
     
     // 수익률 업데이트 이벤트 발송
@@ -509,6 +516,15 @@ class TradingEngine extends EventEmitter {
 
     try {
       this._isRunning = true;
+      
+      // activeMarkets가 설정되어 있는지 확인
+      if (this.activeMarkets.length === 0) {
+        console.error('[TradingEngine] No active markets set. Please call setActiveMarkets() before starting.');
+        this._isRunning = false;
+        return false;
+      }
+      
+      console.log('[TradingEngine] Starting with active markets:', this.activeMarkets);
       
       // 즉시 첫 분석 실행
       await this.performAnalysis();
@@ -1171,26 +1187,31 @@ class TradingEngine extends EventEmitter {
           };
           this.recordTrade(trade);
           
-          // trade-history-service에 거래 기록 저장
-          if (this.config.enableRealTrading) {
-            tradeHistoryService.addTrade({
-              market,
-              timestamp: Date.now(),
-              type: 'BUY',
-              price: smartOrder.limitPrice || analysis.currentPrice,
-              volume: parseFloat(buyAmountStr) / analysis.currentPrice, // 코인 수량
-              totalAmount: parseFloat(buyAmountStr), // KRW 금액
-              fee: parseFloat(buyAmountStr) * 0.0005, // 0.05% 수수료
-              reason: `신뢰도: ${(technical.confidence * 100).toFixed(1)}%`,
-              indicators: {
-                rsi: technical.rsi,
-                macd: technical.macd.histogram,
-                bollingerBands: technical.bollinger,
-                volume: technical.volumeRatio
-              },
-              aiAnalysis: (technical as any).aiAnalysis
-            });
-          }
+          // trade-history-service에 거래 기록 저장 (실거래와 시뮬레이션 모두)
+          const buyPrice = smartOrder.limitPrice || analysis.currentPrice;
+          const buyAmountKRW = parseFloat(buyAmountStr);
+          const buyFee = buyAmountKRW * 0.0005; // 0.05% 수수료
+          const actualBuyAmount = buyAmountKRW - buyFee; // 수수료를 뺀 실제 구매 금액
+          const actualVolume = actualBuyAmount / buyPrice; // 실제 구매된 코인 수량
+          
+          tradeHistoryService.addTrade({
+            market,
+            timestamp: Date.now(),
+            type: 'BUY',
+            price: buyPrice,
+            volume: actualVolume, // 실제 구매된 코인 수량 (수수료 차감)
+            totalAmount: buyAmountKRW, // 지불한 KRW 금액
+            fee: buyFee, // 0.05% 수수료
+            reason: `신뢰도: ${(technical.confidence * 100).toFixed(1)}%`,
+            indicators: {
+              rsi: technical.rsi,
+              macd: technical.macd.histogram,
+              bollingerBands: technical.bollinger,
+              volume: technical.volumeRatio
+            },
+            aiAnalysis: (technical as any).aiAnalysis,
+            isSimulation: !this.config.enableRealTrading // 시뮬레이션 여부 표시
+          });
           
           // 알림 발송
           notificationService.notifyTradeExecuted({
@@ -1339,11 +1360,26 @@ class TradingEngine extends EventEmitter {
           this.recordTradeTime(market, 'sell');
           
           // 거래 기록 저장 (매도의 경우 수익률 계산)
-          const buyHistory = this.getMarketTradeHistory(market).filter(t => t.type === 'BUY');
-          const avgBuyPrice = buyHistory.length > 0 ? 
-            buyHistory.reduce((sum, t) => sum + t.price, 0) / buyHistory.length : 
-            analysis.currentPrice;
-          const profit = ((analysis.currentPrice - avgBuyPrice) / avgBuyPrice) * 100;
+          let avgBuyPrice = analysis.currentPrice;
+          let profit = 0;
+          let profitAmount = 0;
+          
+          if (this.config.enableRealTrading) {
+            // 실거래: account의 평균 매수가 사용
+            avgBuyPrice = parseFloat(account.avg_buy_price || '0');
+            if (avgBuyPrice > 0) {
+              profit = ((analysis.currentPrice - avgBuyPrice) / avgBuyPrice) * 100;
+              profitAmount = (analysis.currentPrice - avgBuyPrice) * sellAmount - (sellValue * 0.0005); // 수수료 차감
+            }
+          } else {
+            // 시뮬레이션: 가상 포트폴리오의 평균 매수가 사용
+            const virtualAsset = this.virtualPortfolio.get(market);
+            if (virtualAsset) {
+              avgBuyPrice = virtualAsset.avgBuyPrice;
+              profit = ((analysis.currentPrice - avgBuyPrice) / avgBuyPrice) * 100;
+              profitAmount = (analysis.currentPrice - avgBuyPrice) * sellAmount - (sellValue * 0.0005); // 수수료 차감
+            }
+          }
           
           const trade = {
             market,
@@ -1356,26 +1392,27 @@ class TradingEngine extends EventEmitter {
           };
           this.recordTrade(trade);
           
-          // trade-history-service에 거래 기록 저장
-          if (this.config.enableRealTrading) {
-            tradeHistoryService.addTrade({
-              market,
-              timestamp: Date.now(),
-              type: 'SELL',
-              price: smartOrder.limitPrice || analysis.currentPrice,
-              volume: sellAmount, // 코인 수량
-              totalAmount: sellValue, // KRW 금액
-              fee: sellValue * 0.0005, // 0.05% 수수료
-              reason: `신뢰도: ${(technical.confidence * 100).toFixed(1)}%`,
-              indicators: {
-                rsi: technical.rsi,
-                macd: technical.macd.histogram,
-                bollingerBands: technical.bollinger,
-                volume: technical.volumeRatio
-              },
-              aiAnalysis: (technical as any).aiAnalysis
-            });
-          }
+          // trade-history-service에 거래 기록 저장 (실거래와 시뮬레이션 모두)
+          tradeHistoryService.addTrade({
+            market,
+            timestamp: Date.now(),
+            type: 'SELL',
+            price: smartOrder.limitPrice || analysis.currentPrice,
+            volume: sellAmount, // 코인 수량
+            totalAmount: sellValue, // KRW 금액
+            fee: sellValue * 0.0005, // 0.05% 수수료
+            reason: `신뢰도: ${(technical.confidence * 100).toFixed(1)}%`,
+            indicators: {
+              rsi: technical.rsi,
+              macd: technical.macd.histogram,
+              bollingerBands: technical.bollinger,
+              volume: technical.volumeRatio
+            },
+            aiAnalysis: (technical as any).aiAnalysis,
+            profit: profitAmount, // 정확한 수익 금액 (수수료 차감)
+            profitRate: profit, // 수익률(%)
+            isSimulation: !this.config.enableRealTrading // 시뮬레이션 여부 표시
+          });
           
           // 알림 발송
           notificationService.notifyTradeExecuted({
@@ -1866,24 +1903,23 @@ class TradingEngine extends EventEmitter {
   // 코인별 거래 설정 업데이트 메서드
   setAnalysisConfigs(configs: any[]): void {
     this.analysisConfigs = configs;
-    // 활성 시장 업데이트 - 이미 KRW-가 포함되어 있는지 확인
-    const newActiveMarkets = configs.map(config => {
-      const ticker = config.ticker;
-      // 이미 KRW-로 시작하면 그대로 사용, 아니면 KRW- 추가
-      return ticker.startsWith('KRW-') ? ticker : `KRW-${ticker}`;
-    });
+    console.log('[TradingEngine] Analysis configs updated:', configs.length, 'coins');
     
-    // 기존 활성 시장과 비교하여 제거된 코인의 분석 결과 삭제
-    const removedMarkets = this.activeMarkets.filter(market => !newActiveMarkets.includes(market));
-    removedMarkets.forEach(market => {
-      console.log(`[${market}] Removing analysis results - no longer in active markets`);
-      this.analysisResults.delete(market);
-    });
-    
-    this.activeMarkets = newActiveMarkets;
-    console.log('Analysis configs updated:', configs.length, 'coins');
-    console.log('Active markets:', this.activeMarkets);
-    console.log('Removed markets:', removedMarkets);
+    // activeMarkets가 이미 설정되어 있는지 확인
+    if (this.activeMarkets.length === 0 && configs.length > 0) {
+      // activeMarkets가 비어있으면 analysisConfigs에서 추출
+      console.log('[TradingEngine] activeMarkets is empty, extracting from analysisConfigs');
+      const newActiveMarkets = configs.map(config => {
+        const ticker = config.ticker;
+        // 이미 KRW-로 시작하면 그대로 사용, 아니면 KRW- 추가
+        return ticker.startsWith('KRW-') ? ticker : `KRW-${ticker}`;
+      });
+      this.activeMarkets = newActiveMarkets;
+      console.log('[TradingEngine] Set activeMarkets from analysisConfigs:', this.activeMarkets);
+    } else {
+      // activeMarkets가 이미 설정되어 있으면 유지
+      console.log('[TradingEngine] Keeping existing activeMarkets:', this.activeMarkets);
+    }
     
     // 디버깅: 첫 번째 설정의 쿨다운 확인
     if (configs.length > 0) {

@@ -27,7 +27,8 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
-  Autorenew as AutorenewIcon
+  Autorenew as AutorenewIcon,
+  DeleteForever as DeleteForeverIcon
 } from '@mui/icons-material';
 import { PortfolioCoin, Account, TickerData } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
@@ -229,6 +230,21 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
                 label="보유 코인만 표시"
               />
             </Box>
+            <Tooltip title="포트폴리오 초기화 (모든 코인 제거)">
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteForeverIcon />}
+                onClick={() => {
+                  if (window.confirm('정말로 포트폴리오를 초기화하시겠습니까?\n모든 코인이 포트폴리오에서 제거됩니다.')) {
+                    onUpdatePortfolio([]);
+                  }
+                }}
+                size="small"
+              >
+                포트폴리오 초기화
+              </Button>
+            </Tooltip>
           </Box>
         
           {/* 검색 필드 */}

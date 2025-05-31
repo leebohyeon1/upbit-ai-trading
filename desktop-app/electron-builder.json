@@ -23,7 +23,11 @@
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": true,
-    "packElevateHelper": false
+    "packElevateHelper": false,
+    "include": "installer.nsh",
+    "runAfterFinish": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
   },
   "publish": {
     "provider": "github",

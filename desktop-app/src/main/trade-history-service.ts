@@ -25,6 +25,7 @@ export interface TradeRecord {
     sentiment: string;
     recommendation: string;
   };
+  isSimulation?: boolean; // 시뮬레이션 거래 여부
 }
 
 export interface DailyPerformance {
@@ -108,18 +109,33 @@ class TradeHistoryService {
       timestamp: trade.timestamp || Date.now()
     };
 
-    // 매도 시 수익 계산
-    if (trade.type === 'SELL') {
+    // 매도 시 수익 계산 (이미 전달된 값이 없는 경우에만)
+    if (trade.type === 'SELL' && trade.profit === undefined) {
+      // 실제 거래만 필터링 (시뮬레이션 제외)
       const buyTrades = this.trades
-        .filter(t => t.market === trade.market && t.type === 'BUY')
+        .filter(t => t.market === trade.market && t.type === 'BUY' && !t.isSimulation)
         .sort((a, b) => a.timestamp - b.timestamp);
 
       if (buyTrades.length > 0) {
-        const avgBuyPrice = buyTrades.reduce((sum, t) => sum + t.price * t.volume, 0) /
-                           buyTrades.reduce((sum, t) => sum + t.volume, 0);
+        // FIFO 방식으로 매수 거래 매칭
+        let remainingVolume = trade.volume;
+        let totalCost = 0;
+        let matchedVolume = 0;
         
-        newTrade.profit = (trade.price - avgBuyPrice) * trade.volume - trade.fee;
-        newTrade.profitRate = ((trade.price - avgBuyPrice) / avgBuyPrice) * 100;
+        for (const buyTrade of buyTrades) {
+          if (remainingVolume <= 0) break;
+          
+          const volumeToMatch = Math.min(remainingVolume, buyTrade.volume);
+          totalCost += buyTrade.price * volumeToMatch;
+          matchedVolume += volumeToMatch;
+          remainingVolume -= volumeToMatch;
+        }
+        
+        if (matchedVolume > 0) {
+          const avgBuyPrice = totalCost / matchedVolume;
+          newTrade.profit = (trade.price - avgBuyPrice) * matchedVolume - trade.fee;
+          newTrade.profitRate = ((trade.price - avgBuyPrice) / avgBuyPrice) * 100;
+        }
       }
     }
 
@@ -204,15 +220,25 @@ class TradeHistoryService {
     profitableDays: number;
     totalDays: number;
   } {
-    let trades = this.trades;
+    // 실제 거래만 필터링 (시뮬레이션 제외)
+    let trades = this.trades.filter(t => !t.isSimulation);
+    
+    console.log('[TradeHistoryService] getTradeStatistics called');
+    console.log('[TradeHistoryService] Total trades (real only):', trades.length);
     
     if (period) {
       trades = trades.filter(t => 
         t.timestamp >= period.start && t.timestamp <= period.end
       );
+      console.log('[TradeHistoryService] Filtered trades for period:', trades.length);
     }
 
     const sellTrades = trades.filter(t => t.type === 'SELL' && t.profit !== undefined);
+    
+    console.log('[TradeHistoryService] Sell trades with profit:', sellTrades.length);
+    sellTrades.forEach((trade, index) => {
+      console.log(`[TradeHistoryService] Trade ${index + 1}: ${trade.market}, Profit: ${trade.profit?.toFixed(0)}원, Rate: ${trade.profitRate?.toFixed(2)}%`);
+    });
     
     const totalProfit = sellTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
     const wins = sellTrades.filter(t => (t.profit || 0) > 0).length;
@@ -246,17 +272,81 @@ class TradeHistoryService {
     };
   }
 
-  // 일별 성과 조회
+  // 시뮬레이션 거래 기록 삭제
+  clearSimulationTrades(): void {
+    console.log('[TradeHistoryService] Clearing simulation trades...');
+    const beforeCount = this.trades.length;
+    
+    // 시뮬레이션 거래만 필터링하여 제거
+    this.trades = this.trades.filter(trade => !trade.isSimulation);
+    
+    const removedCount = beforeCount - this.trades.length;
+    console.log(`[TradeHistoryService] Removed ${removedCount} simulation trades`);
+    
+    // 일일 성과도 재계산
+    this.recalculateDailyPerformance();
+    
+    // 파일에 저장
+    this.saveTradeHistory();
+  }
+  
+  // 일일 성과 재계산
+  private recalculateDailyPerformance(): void {
+    this.dailyPerformance.clear();
+    
+    for (const trade of this.trades) {
+      this.updateDailyPerformance(trade);
+    }
+  }
+
+  // 일별 성과 조회 (실제 거래만)
   getDailyPerformance(days: number = 30): DailyPerformance[] {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    // 실제 거래만 필터링하여 일별 성과 재계산
+    const realTradesOnly = this.trades.filter(t => !t.isSimulation);
+    const dailyPerformanceReal = new Map<string, DailyPerformance>();
+    
+    // 실제 거래만으로 일별 성과 계산
+    for (const trade of realTradesOnly) {
+      const date = new Date(trade.timestamp).toISOString().split('T')[0];
+      const existing = dailyPerformanceReal.get(date) || {
+        date,
+        profit: 0,
+        profitRate: 0,
+        trades: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0
+      };
+      
+      existing.trades++;
+      
+      if (trade.type === 'SELL' && trade.profit !== undefined) {
+        existing.profit += trade.profit;
+        existing.profitRate += trade.profitRate || 0;
+        
+        if (trade.profit > 0) {
+          existing.wins++;
+        } else if (trade.profit < 0) {
+          existing.losses++;
+        }
+        
+        existing.winRate = existing.wins + existing.losses > 0
+          ? (existing.wins / (existing.wins + existing.losses)) * 100
+          : 0;
+      }
+      
+      dailyPerformanceReal.set(date, existing);
+    }
+
     const performances: DailyPerformance[] = [];
     
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split('T')[0];
-      const perf = this.dailyPerformance.get(dateStr) || {
+      const perf = dailyPerformanceReal.get(dateStr) || {
         date: dateStr,
         profit: 0,
         profitRate: 0,
