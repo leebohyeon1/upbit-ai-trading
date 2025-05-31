@@ -665,8 +665,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const fetchProfitHistory = useCallback(async () => {
     try {
       console.log('[TradingContext] Fetching profit history...');
-      // 백엔드에서 거래 내역 가져오기
-      const history = await (window as any).electronAPI.getTradingHistory();
+      // 백엔드에서 수익률 차트 데이터 가져오기
+      const history = await window.electronAPI.getProfitHistory(30); // 30일 데이터
       console.log('[TradingContext] Profit history received:', history);
       
       if (history && history.length > 0) {

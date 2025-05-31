@@ -2864,57 +2864,34 @@ class TradingEngine extends EventEmitter {
   }
 
   getProfitHistory(days: number = 7): Array<{ time: string; profitRate: number; totalValue: number }> {
-    const now = new Date();
-    const result = [];
-    
-    // 시작 자금
-    const initialCapital = 10000000;
-    
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      date.setHours(0, 0, 0, 0);
+    try {
+      // trade-history-service에서 일별 성과 데이터 가져오기
+      const dailyPerformance = tradeHistoryService.getDailyPerformance(days);
       
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
-      
-      // 해당 날짜까지의 모든 거래 계산
-      const tradesUntilDay = this.getTradeHistory().filter(t => t.timestamp <= dayEnd.getTime());
-      
-      let totalValue = initialCapital;
-      let totalProfit = 0;
-      
-      // 실제 거래 모드
-      if (this.config.enableRealTrading) {
-        // TODO: 실제 계좌 잔액에서 계산
-        totalValue = initialCapital; // 임시
-      } else {
-        // 시뮬레이션 모드
-        // 현재 KRW 잔액
-        totalValue = this.virtualKRW;
+      if (dailyPerformance && dailyPerformance.length > 0) {
+        // 시작 자금
+        const initialCapital = this.config.enableRealTrading ? 10000000 : 10000000; // 1천만원
+        let cumulativeProfit = 0;
         
-        // 보유 코인의 현재 가치 추가
-        for (const [market, portfolio] of this.virtualPortfolio) {
-          if (portfolio.balance > 0) {
-            // 현재가 가져오기 (최신 분석 결과에서)
-            const analysis = this.analysisResults.get(market);
-            if (analysis) {
-              totalValue += portfolio.balance * analysis.currentPrice;
-            }
-          }
-        }
+        return dailyPerformance.map(day => {
+          cumulativeProfit += day.profit;
+          const totalValue = initialCapital + cumulativeProfit;
+          const profitRate = (cumulativeProfit / initialCapital) * 100;
+          
+          return {
+            time: new Date(day.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+            profitRate: profitRate,
+            totalValue: totalValue
+          };
+        });
       }
       
-      const profitRate = ((totalValue - initialCapital) / initialCapital) * 100;
-      
-      result.push({
-        time: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-        profitRate: profitRate,
-        totalValue: totalValue
-      });
+      // 거래 내역이 없는 경우 빈 배열 반환
+      return [];
+    } catch (error) {
+      console.error('Failed to get profit history:', error);
+      return [];
     }
-    
-    return result;
   }
 }
 
