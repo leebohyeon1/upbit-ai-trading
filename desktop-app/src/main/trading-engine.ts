@@ -966,8 +966,9 @@ class TradingEngine extends EventEmitter {
 
         // 매수 로직
         const maxPositionSize = coinConfig.maxPositionSize > 0 ? coinConfig.maxPositionSize : this.config.maxInvestmentPerCoin;
-        const maxInvestment = Math.min(this.config.maxInvestmentPerCoin, maxPositionSize);
         if (krwAccount && parseFloat(krwAccount.balance) > 0) {
+          const krwBalance = parseFloat(krwAccount.balance);
+          
           // Kelly Criterion 계산
           let adjustedBuyRatio = coinConfig.defaultBuyRatio;
           
@@ -1028,8 +1029,9 @@ class TradingEngine extends EventEmitter {
             }
           }
           
-          // 매수할 금액 계산 (코인별 최대 포지션 크기 고려)
-          const buyAmount = maxInvestment * adjustedBuyRatio;
+          // 매수할 금액 계산 (최대 포지션 금액 기준)
+          // KRW 잔액이 충분한지는 나중에 체크
+          const buyAmount = maxPositionSize * adjustedBuyRatio;
           
           // 최소 주문 금액 확인 (기본 5,000원, UI 설정 사용 가능)
           const minOrderAmount = analysisConfig?.minOrderAmount ?? 5000;
@@ -1044,11 +1046,22 @@ class TradingEngine extends EventEmitter {
             };
           }
           
+          // KRW 잔액이 충분한지 확인
+          if (buyAmount > krwBalance) {
+            console.log(`[${market}] 매수 금액 ₩${buyAmount.toLocaleString()}이 KRW 잔액 ₩${krwBalance.toLocaleString()}보다 많음`);
+            return {
+              attempted: true,
+              success: false,
+              failureReason: 'INSUFFICIENT_BALANCE',
+              details: `매수 금액(₩${buyAmount.toLocaleString()})이 KRW 잔액(₩${krwBalance.toLocaleString()})을 초과합니다.`
+            };
+          }
+          
           const buyAmountStr = buyAmount.toFixed(0); // 원 단위로 반올림
           
           console.log(`Buy signal for ${market} - confidence: ${technical.confidence.toFixed(1)}%`);
           console.log(`Base ratio: ${(this.config.buyRatio * 100).toFixed(1)}%, Adjusted ratio: ${(adjustedBuyRatio * 100).toFixed(1)}%`);
-          console.log(`Max investment: ₩${maxInvestment.toLocaleString()}, Buy amount: ₩${buyAmount.toLocaleString()}`);
+          console.log(`Max position: ₩${maxPositionSize.toLocaleString()}, Buy amount: ₩${buyAmount.toLocaleString()}, KRW Balance: ₩${krwBalance.toLocaleString()}`);
           
           // 스마트 주문 타입 결정
           const smartOrder = await this.determineSmartOrderType(market, 'BUY', analysis.currentPrice);

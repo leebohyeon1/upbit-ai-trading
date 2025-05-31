@@ -242,6 +242,9 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                 <Box sx={{ px: 2 }}>
                   <Typography variant="body2" color="text.secondary">
                     기본 매수 비율: {((localSettings.defaultBuyRatio || 0.1) * 100).toFixed(0)}%
+                    <Tooltip title="최대 투자 금액의 몇 %를 사용할지 설정합니다">
+                      <Info sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />
+                    </Tooltip>
                   </Typography>
                   <Slider
                     value={(localSettings.defaultBuyRatio || 0.1) * 100}
@@ -254,6 +257,9 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                   
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                     기본 매도 비율: {((localSettings.defaultSellRatio || 0.5) * 100).toFixed(0)}%
+                    <Tooltip title="현재 보유 코인의 몇 %를 매도할지 설정합니다">
+                      <Info sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />
+                    </Tooltip>
                   </Typography>
                   <Slider
                     value={(localSettings.defaultSellRatio || 0.5) * 100}
