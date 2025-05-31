@@ -77,6 +77,14 @@ export interface TechnicalAnalysis {
     sellScore: number; // 매도 신호 강도 (0-100)
     activeSignals: string[]; // 활성화된 주요 신호들
   };
+  // 신호 해석 정보
+  interpretation?: {
+    level: string; // VERY_STRONG, STRONG, MODERATE, WEAK, VERY_WEAK
+    activeSignals: string; // "매수 12개, 매도 3개"
+    dominance: string; // "매수가 4.0배 우세"
+    topReasons: string[]; // ["🐋 고래 활동", "📉 RSI 극도의 과매도"]
+    scoreInterpretation: string; // "강한 매수 신호"
+  };
   // 뉴스 분석
   newsAnalysis?: NewsAnalysis;
   // 패턴 분석
@@ -581,6 +589,14 @@ class AnalysisService {
       priceChange.changeRate24h
     );
 
+    // 신호 카테고리별 그룹화
+    const signalCategories = {
+      critical: { weight: 3.0, threshold: 0.8 },  // 핵심 신호
+      major: { weight: 2.0, threshold: 0.6 },     // 주요 신호
+      minor: { weight: 1.0, threshold: 0.4 },     // 보조 신호
+      special: { weight: 3.5, threshold: 0.9 }    // 특별 신호 (고래 등)
+    };
+
     // 각 신호에 가중치 부여 (중요도에 따라 다르게 설정)
     const buySignalsWithWeight = [
       // RSI 관련 지표
@@ -776,28 +792,54 @@ class AnalysisService {
       activeSellSignals: sellSignalsWithWeight.filter(s => s.condition).length
     });
 
-    // 더 정교한 신호 결정 (임계값 낮춤)
-    if (normalizedBuyScore > 15 && normalizedBuyScore > normalizedSellScore * 1.3) {
+    // 신호 강도 레벨 정의
+    const getSignalStrength = (score: number): string => {
+      if (score >= 50) return 'VERY_STRONG';
+      if (score >= 35) return 'STRONG';
+      if (score >= 20) return 'MODERATE';
+      if (score >= 15) return 'WEAK';
+      return 'VERY_WEAK';
+    };
+    
+    // 임계값 설정 근거
+    const thresholds = {
+      minScore: 15,        // 최소 15% = 최소 5-6개 신호 필요
+      dominanceRatio: 1.3, // 30% 우위 = 명확한 방향성
+      strongSignal: 35,    // 35% = 강한 신호 (약 12개 조건)
+      veryStrong: 50       // 50% = 매우 강한 신호 (약 17개 조건)
+    };
+    
+    // 더 정교한 신호 결정
+    const buyStrength = getSignalStrength(normalizedBuyScore);
+    const sellStrength = getSignalStrength(normalizedSellScore);
+    
+    if (normalizedBuyScore > thresholds.minScore && 
+        normalizedBuyScore > normalizedSellScore * thresholds.dominanceRatio) {
       signal = 'BUY';
-      confidence = Math.min(40 + normalizedBuyScore * 0.6, 95); // 40-95% 범위
-    } else if (normalizedSellScore > 15 && normalizedSellScore > normalizedBuyScore * 1.3) {
+      // 신호 강도에 따른 신뢰도 차등 적용
+      const baseConfidence = buyStrength === 'VERY_STRONG' ? 70 :
+                           buyStrength === 'STRONG' ? 60 :
+                           buyStrength === 'MODERATE' ? 50 : 40;
+      confidence = Math.min(baseConfidence + normalizedBuyScore * 0.3, 95);
+    } else if (normalizedSellScore > thresholds.minScore && 
+               normalizedSellScore > normalizedBuyScore * thresholds.dominanceRatio) {
       signal = 'SELL';
-      confidence = Math.min(40 + normalizedSellScore * 0.6, 95); // 40-95% 범위
+      const baseConfidence = sellStrength === 'VERY_STRONG' ? 70 :
+                           sellStrength === 'STRONG' ? 60 :
+                           sellStrength === 'MODERATE' ? 50 : 40;
+      confidence = Math.min(baseConfidence + normalizedSellScore * 0.3, 95);
     } else {
       signal = 'HOLD';
-      // HOLD일 때도 더 넓은 범위의 신뢰도 허용
       const maxScore = Math.max(normalizedBuyScore, normalizedSellScore);
       const scoreDiff = Math.abs(normalizedBuyScore - normalizedSellScore);
       
       if (maxScore > 10) {
-        // 어느 한쪽이 10% 이상이면 더 높은 신뢰도
         confidence = 35 + maxScore * 0.3 + scoreDiff * 0.2;
       } else {
-        // 둘 다 낮으면 낮은 신뢰도
         confidence = 20 + maxScore * 0.5;
       }
       
-      confidence = Math.min(Math.max(confidence, 20), 60); // 20-60% 범위
+      confidence = Math.min(Math.max(confidence, 20), 60);
     }
     
     // NaN 체크 및 기본값 설정
@@ -842,6 +884,36 @@ class AnalysisService {
       }
     }
 
+    // 과최적화 방지: 활성 신호가 너무 많으면 가중치 감소
+    const overfittingPrevention = (score: number, activeSignals: number, totalSignals: number): number => {
+      const activationRate = activeSignals / totalSignals;
+      
+      // 80% 이상 신호가 활성화되면 과최적화 의심
+      if (activationRate > 0.8) {
+        console.log(`과최적화 경고: ${(activationRate * 100).toFixed(1)}% 신호 활성화`);
+        return score * 0.7; // 30% 감소
+      }
+      // 60% 이상이면 약간 감소
+      else if (activationRate > 0.6) {
+        return score * 0.9; // 10% 감소
+      }
+      
+      return score;
+    };
+    
+    // 과최적화 방지 적용
+    const adjustedBuyScore = overfittingPrevention(
+      normalizedBuyScore,
+      buySignalsWithWeight.filter(s => s.condition).length,
+      buySignalsWithWeight.length
+    );
+    
+    const adjustedSellScore = overfittingPrevention(
+      normalizedSellScore,
+      sellSignalsWithWeight.filter(s => s.condition).length,
+      sellSignalsWithWeight.length
+    );
+    
     // 패턴 분석 추가
     let patterns;
     try {

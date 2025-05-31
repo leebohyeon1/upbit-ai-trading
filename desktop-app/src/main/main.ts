@@ -255,8 +255,25 @@ class TradingApp {
     }
   }
 
-  private async startTrading(tickers: string[] = ['KRW-BTC']): Promise<boolean> {
+  private async startTrading(tickers?: string[]): Promise<boolean> {
     try {
+      // 티커가 없으면 포트폴리오에서 활성화된 코인 가져오기
+      if (!tickers || tickers.length === 0) {
+        const portfolio = await this.getPortfolio();
+        const enabledCoins = portfolio.filter((coin: any) => coin.enabled);
+        
+        if (enabledCoins.length === 0) {
+          console.error('[Main] No enabled coins in portfolio');
+          return false;
+        }
+        
+        tickers = enabledCoins.map((coin: any) => 
+          coin.ticker || (coin.symbol ? `KRW-${coin.symbol}` : '')
+        ).filter(ticker => ticker);
+        
+        console.log('[Main] Using enabled coins from portfolio:', tickers);
+      }
+      
       console.log('[Main] startTrading called with tickers:', tickers);
       
       // 즉시 UI 상태 업데이트 (버튼 애니메이션을 위해)
@@ -275,7 +292,9 @@ class TradingApp {
       setTimeout(async () => {
         try {
           // 내장 거래 엔진 사용
-          tradingEngine.setActiveMarkets(tickers);
+          if (tickers && tickers.length > 0) {
+            tradingEngine.setActiveMarkets(tickers);
+          }
           const success = await tradingEngine.start();
           
           if (!success) {
@@ -644,8 +663,14 @@ class TradingApp {
       
       // 자동매매가 실행 중인 경우 activeMarkets 업데이트
       if (tradingEngine.isRunning()) {
-        const activeMarkets = portfolio.map(item => item.ticker || item.market);
-        console.log('[Main] Updating active markets:', activeMarkets);
+        // enabled가 true인 코인만 필터링
+        const enabledCoins = portfolio.filter(item => item.enabled === true);
+        const activeMarkets = enabledCoins.map(item => {
+          const ticker = item.ticker || item.market || (item.symbol ? `KRW-${item.symbol}` : '');
+          return ticker;
+        }).filter(ticker => ticker); // 빈 문자열 제거
+        
+        console.log('[Main] Updating active markets (enabled only):', activeMarkets);
         tradingEngine.setActiveMarkets(activeMarkets);
       }
       
@@ -686,6 +711,24 @@ class TradingApp {
         configsPath,
         JSON.stringify(configs, null, 2)
       );
+      
+      // 자동매매가 실행 중인 경우 분석 설정과 activeMarkets 업데이트
+      if (tradingEngine.isRunning()) {
+        // 포트폴리오에서 enabled 상태 확인
+        const portfolio = await this.getPortfolio();
+        const enabledSymbols = portfolio
+          .filter(coin => coin.enabled === true)
+          .map(coin => coin.symbol);
+        
+        // 분석 설정 중 enabled 코인만 필터링
+        const enabledConfigs = configs.filter(config => {
+          const symbol = config.ticker.replace('KRW-', '');
+          return enabledSymbols.includes(symbol);
+        });
+        
+        console.log('[Main] Updating analysis configs for enabled coins:', enabledConfigs.length);
+        tradingEngine.setAnalysisConfigs(enabledConfigs);
+      }
       
       console.log('[Main] Analysis configs saved successfully');
       return true;
