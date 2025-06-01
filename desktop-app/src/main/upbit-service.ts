@@ -171,51 +171,53 @@ class UpbitService {
   // 다양한 타임프레임의 캔들 데이터 조회
   async getCandlesByTimeframe(market: string, interval: string, count: number = 200): Promise<any[]> {
     try {
-      let url = '';
+      let path = '';
       
       switch (interval) {
         case '1m':
-          url = `${this.baseURL}/v1/candles/minutes/1?market=${market}&count=${count}`;
+          path = `/v1/candles/minutes/1?market=${market}&count=${count}`;
           break;
         case '5m':
-          url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
+          path = `/v1/candles/minutes/5?market=${market}&count=${count}`;
           break;
         case '15m':
-          url = `${this.baseURL}/v1/candles/minutes/15?market=${market}&count=${count}`;
+          path = `/v1/candles/minutes/15?market=${market}&count=${count}`;
           break;
         case '1h':
-          url = `${this.baseURL}/v1/candles/minutes/60?market=${market}&count=${count}`;
+          path = `/v1/candles/minutes/60?market=${market}&count=${count}`;
           break;
         case '4h':
-          url = `${this.baseURL}/v1/candles/minutes/240?market=${market}&count=${count}`;
+          path = `/v1/candles/minutes/240?market=${market}&count=${count}`;
           break;
         case '1d':
-          url = `${this.baseURL}/v1/candles/days?market=${market}&count=${count}`;
+          path = `/v1/candles/days?market=${market}&count=${count}`;
           break;
         default:
           throw new Error(`지원하지 않는 타임프레임: ${interval}`);
       }
       
-      const response = await axios.get(url);
+      const cacheKey = `candles:${interval}:${market}:${count}`;
       
-      // 응답 데이터 검증
-      if (!response.data || !Array.isArray(response.data)) {
-        console.error(`Invalid response data for ${market} ${interval}`);
-        return [];
-      }
-      
-      console.log(`Fetched ${response.data.length} candles for ${market} ${interval}`);
-      return response.data;
+      return await apiRateLimiter.executeRequest(
+        'candles',
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}${path}`;
+          const response = await axios.get(url);
+          
+          // 응답 데이터 검증
+          if (!response.data || !Array.isArray(response.data)) {
+            console.error(`Invalid response data for ${market} ${interval}`);
+            return [];
+          }
+          
+          console.log(`Fetched ${response.data.length} candles for ${market} ${interval}`);
+          return response.data;
+        },
+        30000 // 30초 캐시
+      );
     } catch (error: any) {
       console.error(`Failed to get candles for ${market} ${interval}:`, error.message);
-      
-      // 429 에러(Too Many Requests) 처리
-      if (error.response?.status === 429) {
-        console.warn(`Rate limit exceeded for ${market} ${interval}. Waiting before retry...`);
-        return [];
-      }
-      
-      // 기타 에러는 빈 배열 반환
       return [];
     }
   }
@@ -223,18 +225,27 @@ class UpbitService {
   // 15분봉 캔들 데이터 조회
   async getCandles15m(market: string, count: number = 100): Promise<CandleData[]> {
     try {
-      const url = `${this.baseURL}/v1/candles/minutes/15?market=${market}&count=${count}`;
-      const response = await axios.get(url);
+      const cacheKey = `candles:15m:${market}:${count}`;
       
-      return response.data.map((candle: any) => ({
-        market: candle.market,
-        candle_date_time_utc: candle.candle_date_time_utc,
-        opening_price: candle.opening_price,
-        high_price: candle.high_price,
-        low_price: candle.low_price,
-        trade_price: candle.trade_price,
-        candle_acc_trade_volume: candle.candle_acc_trade_volume
-      }));
+      return await apiRateLimiter.executeRequest(
+        'candles',
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}/v1/candles/minutes/15?market=${market}&count=${count}`;
+          const response = await axios.get(url);
+          
+          return response.data.map((candle: any) => ({
+            market: candle.market,
+            candle_date_time_utc: candle.candle_date_time_utc,
+            opening_price: candle.opening_price,
+            high_price: candle.high_price,
+            low_price: candle.low_price,
+            trade_price: candle.trade_price,
+            candle_acc_trade_volume: candle.candle_acc_trade_volume
+          }));
+        },
+        30000 // 30초 캐시
+      );
     } catch (error) {
       console.error('Failed to get 15m candles:', error);
       return [];
@@ -244,18 +255,27 @@ class UpbitService {
   // 1시간봉 캔들 데이터 조회
   async getCandles1h(market: string, count: number = 50): Promise<CandleData[]> {
     try {
-      const url = `${this.baseURL}/v1/candles/minutes/60?market=${market}&count=${count}`;
-      const response = await axios.get(url);
+      const cacheKey = `candles:1h:${market}:${count}`;
       
-      return response.data.map((candle: any) => ({
-        market: candle.market,
-        candle_date_time_utc: candle.candle_date_time_utc,
-        opening_price: candle.opening_price,
-        high_price: candle.high_price,
-        low_price: candle.low_price,
-        trade_price: candle.trade_price,
-        candle_acc_trade_volume: candle.candle_acc_trade_volume
-      }));
+      return await apiRateLimiter.executeRequest(
+        'candles',
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}/v1/candles/minutes/60?market=${market}&count=${count}`;
+          const response = await axios.get(url);
+          
+          return response.data.map((candle: any) => ({
+            market: candle.market,
+            candle_date_time_utc: candle.candle_date_time_utc,
+            opening_price: candle.opening_price,
+            high_price: candle.high_price,
+            low_price: candle.low_price,
+            trade_price: candle.trade_price,
+            candle_acc_trade_volume: candle.candle_acc_trade_volume
+          }));
+        },
+        30000 // 30초 캐시
+      );
     } catch (error) {
       console.error('Failed to get 1h candles:', error);
       return [];
@@ -265,22 +285,31 @@ class UpbitService {
   // 특정 시간까지의 캔들 데이터 조회 (백테스트용)
   async getCandlesWithTime(market: string, count: number = 200, to?: string): Promise<CandleData[]> {
     try {
-      let url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
-      if (to) {
-        url += `&to=${to}`;
-      }
+      const cacheKey = `candles:5m:${market}:${count}:${to || 'latest'}`;
       
-      const response = await axios.get(url);
-      
-      return response.data.map((candle: any) => ({
-        market: candle.market,
-        candle_date_time_utc: candle.candle_date_time_utc,
-        opening_price: candle.opening_price,
-        high_price: candle.high_price,
-        low_price: candle.low_price,
-        trade_price: candle.trade_price,
-        candle_acc_trade_volume: candle.candle_acc_trade_volume
-      }));
+      return await apiRateLimiter.executeRequest(
+        'candles',
+        cacheKey,
+        async () => {
+          let url = `${this.baseURL}/v1/candles/minutes/5?market=${market}&count=${count}`;
+          if (to) {
+            url += `&to=${to}`;
+          }
+          
+          const response = await axios.get(url);
+          
+          return response.data.map((candle: any) => ({
+            market: candle.market,
+            candle_date_time_utc: candle.candle_date_time_utc,
+            opening_price: candle.opening_price,
+            high_price: candle.high_price,
+            low_price: candle.low_price,
+            trade_price: candle.trade_price,
+            candle_acc_trade_volume: candle.candle_acc_trade_volume
+          }));
+        },
+        30000 // 30초 캐시
+      );
     } catch (error) {
       console.error('Failed to get candles with time:', error);
       return [];
@@ -468,9 +497,18 @@ class UpbitService {
   // 호가 정보 조회 (개선된 버전)
   async getOrderbook(market: string): Promise<any> {
     try {
-      const url = `${this.baseURL}/v1/orderbook?markets=${market}`;
-      const response = await axios.get(url);
-      const orderbook = response.data[0];
+      const cacheKey = `orderbook:${market}`;
+      
+      const orderbook = await apiRateLimiter.executeRequest(
+        'orderbook',
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}/v1/orderbook?markets=${market}`;
+          const response = await axios.get(url);
+          return response.data[0];
+        },
+        5000 // 5초 캐시
+      );
       
       // 호가창 상세 분석 추가
       if (orderbook) {
@@ -539,9 +577,18 @@ class UpbitService {
   // 체결 내역 조회 (웨일 감지 포함)
   async getTrades(market: string, count: number = 50): Promise<any[]> {
     try {
-      const url = `${this.baseURL}/v1/trades/ticks?market=${market}&count=${count}`;
-      const response = await axios.get(url);
-      const trades = response.data;
+      const cacheKey = `trades:${market}:${count}`;
+      
+      const trades = await apiRateLimiter.executeRequest(
+        'trades',
+        cacheKey,
+        async () => {
+          const url = `${this.baseURL}/v1/trades/ticks?market=${market}&count=${count}`;
+          const response = await axios.get(url);
+          return response.data;
+        },
+        5000 // 5초 캐시
+      );
       
       // 웨일 감지를 위한 분석
       if (trades && trades.length > 0) {

@@ -154,6 +154,8 @@ class TradingEngine extends EventEmitter {
   private lastTradeTime: Map<string, { buy?: number; sell?: number }> = new Map();
   private analysisInterval: NodeJS.Timeout | null = null;
   private statusInterval: NodeJS.Timeout | null = null;
+  private memoryCleanupInterval: NodeJS.Timeout | null = null;
+  private readonly MAX_ANALYSIS_HISTORY = 1000; // 최대 대시보드 항목 수
   
   // 추가된 속성들
   private tradeHistory: TradeHistory[] = [];
@@ -193,6 +195,11 @@ class TradingEngine extends EventEmitter {
     this.setupLearningService();
     this.setupApiClient();
     this.loadCooldownData();
+  }
+  
+  // 비동기 대기 유틸리티 함수
+  private async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
   
   // 시뮬레이션 초기화 메서드
@@ -455,12 +462,76 @@ class TradingEngine extends EventEmitter {
   }
 
   setActiveMarkets(markets: string[]) {
+    const marketsChanged = JSON.stringify(this.activeMarkets) !== JSON.stringify(markets);
     this.activeMarkets = markets;
+    
+    if (marketsChanged) {
+      console.log('[TradingEngine] Active markets changed:', markets);
+      this.emitStatus();
+    }
   }
 
   toggleAI(enabled: boolean) {
+    const stateChanged = this.aiEnabled !== enabled;
     this.aiEnabled = enabled;
-    this.emit('aiToggled', enabled);
+    
+    if (stateChanged) {
+      this.emit('aiToggled', enabled);
+      this.emitStatus();
+    }
+  }
+  
+  // 메모리 정리 메서드
+  private cleanupOldData(): void {
+    console.log('[TradingEngine] Starting memory cleanup...');
+    
+    // 1. 오래된 분석 결과 정리
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;  // 1시간 전
+    
+    let cleanedCount = 0;
+    
+    // analysisResults에서 오래된 데이터 제거
+    for (const [market, analysis] of this.analysisResults.entries()) {
+      if (!this.activeMarkets.includes(market) || analysis.lastUpdated < oneHourAgo) {
+        this.analysisResults.delete(market);
+        cleanedCount++;
+      }
+    }
+    
+    // 2. 가격 이력 정리 (VaR 계산용)
+    for (const [market, prices] of this.priceHistoryForVaR.entries()) {
+      if (prices.length > this.MAX_PRICE_HISTORY) {
+        this.priceHistoryForVaR.set(market, prices.slice(-this.MAX_PRICE_HISTORY));
+      }
+    }
+    
+    // 3. 거래 이력 정리 (최근 1000개만 유지)
+    if (this.tradeHistory.length > 1000) {
+      this.tradeHistory = this.tradeHistory.slice(-1000);
+    }
+    
+    if (this.virtualTradeHistory.length > 1000) {
+      this.virtualTradeHistory = this.virtualTradeHistory.slice(-1000);
+    }
+    
+    // 4. 비활성 코인 데이터 정리
+    for (const [market, _] of this.highestPrices.entries()) {
+      if (!this.activeMarkets.includes(market)) {
+        this.highestPrices.delete(market);
+        this.dynamicParameters.delete(market);
+        this.performanceMetrics.delete(market);
+        cleanedCount++;
+      }
+    }
+    
+    console.log(`[TradingEngine] Memory cleanup completed. Cleaned ${cleanedCount} items`);
+    
+    // Node.js 가비지 커렉션 요청
+    if (global.gc) {
+      global.gc();
+      console.log('[TradingEngine] Garbage collection requested');
+    }
   }
 
   updateConfig(newConfig: Partial<TradingConfig>) {
@@ -557,6 +628,11 @@ class TradingEngine extends EventEmitter {
           console.error('Failed to send profit update:', error);
         }
       }, 60000);
+      
+      // 메모리 정리 (5분마다)
+      this.memoryCleanupInterval = setInterval(() => {
+        this.cleanupOldData();
+      }, 300000);  // 5분
 
       this.emit('tradingStarted');
       console.log('Trading engine started');
@@ -610,6 +686,11 @@ class TradingEngine extends EventEmitter {
     if (this.rebalanceInterval) {
       clearInterval(this.rebalanceInterval);
       this.rebalanceInterval = null;
+    }
+    
+    if (this.memoryCleanupInterval) {
+      clearInterval(this.memoryCleanupInterval);
+      this.memoryCleanupInterval = null;
     }
 
     this.emit('tradingStopped');
@@ -675,13 +756,26 @@ class TradingEngine extends EventEmitter {
           const tf = timeframeMap[timeframeConfig] || timeframeMap['minute60'];
           console.log(`[${market}] Using timeframe: ${timeframeConfig} -> ${tf.minutes} minutes`);
           
-          // getCandlesByTimeframe 메서드가 없으면 getCandles 사용 (기본 5분봉)
+          // 타임프레임에 따라 적절한 캔들 데이터 가져오기
           let candles: any[];
-          if (tf.minutes === 5) {
-            candles = await upbitService.getCandles(market, 200);
+          const intervalMap: { [key: number]: string } = {
+            1: '1m',
+            3: '3m',
+            5: '5m',
+            10: '10m',
+            15: '15m',
+            30: '30m',
+            60: '1h',
+            240: '4h'
+          };
+          
+          if (tf.unit === 'days') {
+            candles = await upbitService.getCandlesByTimeframe(market, '1d', 200);
+          } else if (intervalMap[tf.minutes]) {
+            candles = await upbitService.getCandlesByTimeframe(market, intervalMap[tf.minutes], 200);
           } else {
-            // TODO: 다양한 타임프레임 지원을 위해 upbitService 개선 필요
-            console.log(`[${market}] WARNING: Using default 5m timeframe instead of ${tf.minutes}m`);
+            // 기본값으로 5분봉 사용
+            console.log(`[${market}] WARNING: Unsupported timeframe ${tf.minutes}m, using default 5m`);
             candles = await upbitService.getCandles(market, 200);
           }
           if (candles.length === 0) {
@@ -694,11 +788,24 @@ class TradingEngine extends EventEmitter {
           const ticker = tickers[0];
           const currentPrice = ticker?.trade_price || candles[candles.length - 1].trade_price;
 
-          // 추가 데이터 가져오기
-          const [orderbook, trades] = await Promise.all([
-            upbitService.getOrderbook(market),
-            upbitService.getTrades(market, 50)
-          ]);
+          // 추가 데이터 가져오기 (에러 핸들링 강화)
+          let orderbook = null;
+          let trades: any[] = [];
+          
+          try {
+            [orderbook, trades] = await Promise.all([
+              upbitService.getOrderbook(market).catch(err => {
+                console.error(`[${market}] Failed to get orderbook:`, err.message);
+                return null;
+              }),
+              upbitService.getTrades(market, 50).catch(err => {
+                console.error(`[${market}] Failed to get trades:`, err.message);
+                return [];
+              })
+            ]);
+          } catch (error) {
+            console.error(`[${market}] Failed to get additional data:`, error);
+          }
 
           // 분석 설정 찾기 (market에서 코인 심볼 추출)
           const coinSymbol = market.split('-')[1];
@@ -755,6 +862,14 @@ class TradingEngine extends EventEmitter {
           };
 
           this.analysisResults.set(market, coinAnalysis);
+          
+          // 분석 결과 기록 수 확인 및 제한
+          if (this.analysisResults.size > this.MAX_ANALYSIS_HISTORY) {
+            // 가장 오래된 항목 제거
+            const oldestKey = Array.from(this.analysisResults.entries())
+              .sort(([, a], [, b]) => a.lastUpdated - b.lastUpdated)[0][0];
+            this.analysisResults.delete(oldestKey);
+          }
 
           // 손절/익절 체크 (보유 포지션이 있는 경우)
           let checkCoinAccount;
@@ -808,7 +923,9 @@ class TradingEngine extends EventEmitter {
           console.log(`Analysis completed for ${market}: ${technicalAnalysis.signal} (${technicalAnalysis.confidence?.toFixed(1) || '0'}%)`);
           
         } catch (error) {
-          console.log(`Failed to analyze ${market}: ${(error as Error).message}`);
+          console.error(`Failed to analyze ${market}:`, error);
+          // 에러가 발생해도 다음 코인 분석 계속
+          continue;
         }
       }
 
@@ -1533,6 +1650,16 @@ class TradingEngine extends EventEmitter {
     };
 
     this.emit('statusUpdate', status);
+    
+    // 상태 변경 시 즉시 renderer로 전달
+    try {
+      const mainInstance = require('./main').default;
+      if (mainInstance) {
+        mainInstance.sendStatusUpdate();
+      }
+    } catch (error) {
+      console.error('Failed to send status update to renderer:', error);
+    }
   }
 
   getStatus(): TradingStatus {

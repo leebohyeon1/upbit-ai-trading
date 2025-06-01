@@ -803,6 +803,18 @@ class TradingApp {
       }
     }
   }
+  
+  // 상태 업데이트 이벤트 발송
+  public sendStatusUpdate() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      try {
+        const status = tradingEngine.getStatus();
+        this.mainWindow.webContents.send('trading-status-update', status);
+      } catch (error) {
+        console.error('Failed to send status update:', error);
+      }
+    }
+  }
 
   private async saveAnalysisConfigs(configs: any[]): Promise<boolean> {
     try {
@@ -1497,7 +1509,11 @@ class TradingApp {
     // 거래 통계 조회
     ipcMain.handle('get-trade-statistics', async (event, period?: any) => {
       try {
-        return tradeHistoryService.getTradeStatistics(period);
+        // 거래 설정 확인하여 시뮤레이션 모드인 경우 시뮤레이션 거래 포함
+        const tradingConfig = await this.getTradingConfig();
+        const includeSimulation = tradingConfig && !tradingConfig.enableRealTrading;
+        
+        return tradeHistoryService.getTradeStatistics(period, includeSimulation);
       } catch (error) {
         console.error('Failed to get trade statistics:', error);
         return null;
@@ -1532,7 +1548,11 @@ class TradingApp {
         const startDate = endDate - (days * 24 * 60 * 60 * 1000);
         const period = { start: startDate, end: endDate };
         
-        return tradeHistoryService.getTradeStatistics(period);
+        // 거래 설정 확인하여 시뮤레이션 모드인 경우 시뮤레이션 거래 포함
+        const tradingConfig = await this.getTradingConfig();
+        const includeSimulation = tradingConfig && !tradingConfig.enableRealTrading;
+        
+        return tradeHistoryService.getTradeStatistics(period, includeSimulation);
       } catch (error) {
         console.error('Failed to get performance stats:', error);
         return {

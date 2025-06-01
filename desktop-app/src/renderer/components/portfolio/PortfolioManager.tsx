@@ -130,23 +130,29 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
         coin.symbol === symbol ? { ...coin, enabled: !coin.enabled } : coin
       );
       onUpdatePortfolio(updatedPortfolio);
-    } else {
-      const newCoin: PortfolioCoin = {
-        symbol,
-        name: symbol,
-        enabled: true
-      };
-      onUpdatePortfolio([...portfolio, newCoin]);
     }
+    // 포트폴리오에 없는 코인은 토글하지 않음 (추가 버튼을 통해서만 추가)
   };
 
   const handleAddCoin = (coin: { symbol: string; name: string }) => {
+    // 이미 포트폴리오에 있는지 확인
+    const existingCoin = portfolio.find(p => p.symbol === coin.symbol);
+    if (existingCoin) {
+      console.log(`${coin.symbol} is already in portfolio`);
+      return;
+    }
+    
     const newCoin: PortfolioCoin = {
       symbol: coin.symbol,
       name: coin.name,
       enabled: true
     };
     onUpdatePortfolio([...portfolio, newCoin]);
+  };
+
+  const handleRemoveCoin = (symbol: string) => {
+    const updatedPortfolio = portfolio.filter(coin => coin.symbol !== symbol);
+    onUpdatePortfolio(updatedPortfolio);
   };
 
   const highlightText = (text: string, query: string) => {
@@ -345,11 +351,24 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
                               variant="outlined"
                             />
                           )}
-                          <Switch
-                            checked={isEnabled}
-                            onChange={() => handleToggleCoin(coin.symbol)}
-                            color="primary"
-                          />
+                          {portfolioCoin && (
+                            <>
+                              <Switch
+                                checked={isEnabled}
+                                onChange={() => handleToggleCoin(coin.symbol)}
+                                color="primary"
+                              />
+                              <Tooltip title="포트폴리오에서 제거">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleRemoveCoin(coin.symbol)}
+                                  color="error"
+                                >
+                                  <RemoveIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
                         </Box>
                       </Box>
 
@@ -403,7 +422,7 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
                         </Box>
                       )}
 
-                      {!isEnabled && (
+                      {!portfolioCoin && (
                         <Button
                           fullWidth
                           variant="outlined"

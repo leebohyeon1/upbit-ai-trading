@@ -209,7 +209,7 @@ class TradeHistoryService {
   }
 
   // 거래 통계 조회
-  getTradeStatistics(period?: { start: number; end: number }): {
+  getTradeStatistics(period?: { start: number; end: number }, includeSimulation?: boolean): {
     totalTrades: number;
     totalProfit: number;
     totalProfitRate: number;
@@ -222,12 +222,17 @@ class TradeHistoryService {
   } {
     // 실제 거래만 필터링 (시뮬레이션 제외)
     // isSimulation이 명시적으로 false인 경우만 실거래로 간주
-    let trades = this.trades.filter(t => t.isSimulation === false);
+    // includeSimulation이 true면 모든 거래, false면 실거래만
+    let trades = includeSimulation === true 
+      ? this.trades 
+      : this.trades.filter(t => t.isSimulation === false);
     
     console.log('[TradeHistoryService] getTradeStatistics called');
     console.log('[TradeHistoryService] All trades:', this.trades.length);
     console.log('[TradeHistoryService] Simulation trades:', this.trades.filter(t => t.isSimulation === true).length);
-    console.log('[TradeHistoryService] Real trades:', trades.length);
+    console.log('[TradeHistoryService] includeSimulation:', includeSimulation);
+    console.log('[TradeHistoryService] Real trades:', this.trades.filter(t => t.isSimulation === false).length);
+    console.log('[TradeHistoryService] Filtered trades for statistics:', trades.length);
     console.log('[TradeHistoryService] Undefined isSimulation:', this.trades.filter(t => t.isSimulation === undefined).length);
     
     if (period) {
