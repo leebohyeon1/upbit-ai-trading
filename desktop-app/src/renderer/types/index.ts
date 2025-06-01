@@ -212,6 +212,13 @@ export interface AnalysisConfig {
   // 지표 가중치
   indicatorWeights?: IndicatorWeights;
   weightLearning?: WeightLearning;
+  // 쿨타임 학습
+  cooldownLearning?: {
+    enabled: boolean;
+    minTrades: number;
+    winRateThreshold: number;
+    lastUpdate: number | null;
+  };
 }
 
 // 지표 가중치 타입

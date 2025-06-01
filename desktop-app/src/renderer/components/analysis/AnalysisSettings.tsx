@@ -80,6 +80,12 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
         lastUpdated: Date.now()
       }
     },
+    cooldownLearning: {
+      enabled: false,
+      minTrades: 30,
+      winRateThreshold: 0.6,
+      lastUpdate: null
+    },
     ...settings
   });
 
@@ -134,6 +140,12 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
           avgProfit: 0,
           lastUpdated: Date.now()
         }
+      },
+      cooldownLearning: settings.cooldownLearning || {
+        enabled: false,
+        minTrades: 30,
+        winRateThreshold: 0.6,
+        lastUpdate: null
       }
     });
   }, [settings]);
@@ -330,6 +342,33 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                       onChange={(e) => handleChange('sellCooldown', parseInt(e.target.value) || 0)}
                     />
                   </Grid>
+                  {/* 쿨타임 학습 토글 */}
+                  <Grid item xs={12}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={localSettings.cooldownLearning?.enabled || false}
+                          onChange={(e) => handleChange('cooldownLearning', {
+                            ...(localSettings.cooldownLearning || {}),
+                            enabled: e.target.checked
+                          })}
+                        />
+                      }
+                      label="쿨타임 자동 학습"
+                    />
+                    {localSettings.cooldownLearning?.enabled && (
+                      <Box sx={{ mt: 1, pl: 2 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          거래 성과에 따라 쿨타임을 자동으로 조정합니다.
+                        </Typography>
+                        {localSettings.cooldownLearning?.lastUpdate && (
+                          <Typography variant="caption" display="block" color="text.secondary">
+                            마지막 업데이트: {new Date(localSettings.cooldownLearning.lastUpdate).toLocaleString('ko-KR')}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Grid>
                 </Grid>
               </Grid>
 
@@ -463,6 +502,12 @@ export const AnalysisSettings: React.FC = () => {
           bollinger: 1.1,
           aiAnalysis: 0.8,
           newsImpact: 0.6
+        },
+        cooldownLearning: {
+          enabled: false,
+          minTrades: 30,
+          winRateThreshold: 0.6,
+          lastUpdate: null
         }
       }
     },
@@ -484,7 +529,13 @@ export const AnalysisSettings: React.FC = () => {
         minVolume: 100000000,
         volatilityAdjustment: true,
         useKellyOptimization: false,
-        indicatorWeights: DEFAULT_INDICATOR_WEIGHTS
+        indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
+        cooldownLearning: {
+          enabled: false,
+          minTrades: 30,
+          winRateThreshold: 0.6,
+          lastUpdate: null
+        }
       }
     },
     aggressive: {
@@ -513,6 +564,12 @@ export const AnalysisSettings: React.FC = () => {
           aiAnalysis: 1.5,
           newsImpact: 1.3,
           whaleActivity: 1.2
+        },
+        cooldownLearning: {
+          enabled: false,
+          minTrades: 30,
+          winRateThreshold: 0.6,
+          lastUpdate: null
         }
       }
     }
@@ -580,6 +637,12 @@ export const AnalysisSettings: React.FC = () => {
                     avgProfit: 0,
                     lastUpdated: Date.now()
                   }
+                },
+                cooldownLearning: {
+                  enabled: false,
+                  minTrades: 30,
+                  winRateThreshold: 0.6,
+                  lastUpdate: null
                 }
               };
             });
@@ -731,6 +794,12 @@ export const AnalysisSettings: React.FC = () => {
             avgProfit: 0,
             lastUpdated: Date.now()
           }
+        },
+        cooldownLearning: {
+          enabled: false,
+          minTrades: 30,
+          winRateThreshold: 0.6,
+          lastUpdate: null
         }
       };
     });
