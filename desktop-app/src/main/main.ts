@@ -1214,44 +1214,6 @@ class TradingApp {
     });
   }
 
-  private sendStatusUpdate() {
-    console.log('[Main] sendStatusUpdate called, mainWindow exists:', !!this.mainWindow);
-    console.log('[Main] Trading state to send:', this.tradingState);
-    
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      console.log('[Main] Window is valid, sending status update');
-      console.log('[Main] Window webContents ready:', this.mainWindow.webContents.isLoading() ? 'loading' : 'ready');
-      
-      // webContents가 로드될 때까지 대기
-      if (this.mainWindow.webContents.isLoading()) {
-        console.log('[Main] WebContents is loading, waiting for dom-ready');
-        this.mainWindow.webContents.once('dom-ready', () => {
-          console.log('[Main] DOM ready, sending status update');
-          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-            console.log('[Main] Sending trading-state-changed event with data:', this.tradingState);
-            this.mainWindow.webContents.send('trading-state-changed', this.tradingState);
-            console.log('[Main] Event sent successfully');
-          }
-        });
-      } else {
-        console.log('[Main] Sending status update immediately');
-        try {
-          this.mainWindow.webContents.send('trading-state-changed', this.tradingState);
-          console.log('[Main] Status update sent successfully');
-          
-          // IPC 통신 테스트를 위한 추가 디버깅
-          this.mainWindow.webContents.executeJavaScript(`
-            console.log('[Renderer] Direct test - window.electronAPI exists:', !!window.electronAPI);
-            console.log('[Renderer] Direct test - current trading state:', window.electronAPI ? window.electronAPI.tradingState : 'No electronAPI');
-          `);
-        } catch (error) {
-          console.error('[Main] Error sending status update:', error);
-        }
-      }
-    } else {
-      console.log('[Main] Window not available for sending status update');
-    }
-  }
 
   private async loadSavedApiKeys() {
     try {

@@ -48,6 +48,10 @@ interface LearningConfig {
   cooldown_adjustment_rate: number;
 }
 
+// 쿨타임 상수
+const MAX_COOLDOWN = 360; // 최대 쿨타임 (분)
+const MIN_COOLDOWN = 5;   // 최소 쿨타임 (분)
+
 export class LearningService extends EventEmitter {
   private tradeHistory: TradeResult[] = [];
   private signalWeights: Map<string, SignalWeight> = new Map();
@@ -826,32 +830,32 @@ export class LearningService extends EventEmitter {
     
     // 1. 연속 손실 시 쿨타임 증가
     if (cooldownData.performance.consecutiveLosses > 2) {
-      cooldownData.buyCooldown = Math.min(120, cooldownData.buyCooldown * (1 + adjustmentRate * cooldownData.performance.consecutiveLosses));
+      cooldownData.buyCooldown = Math.min(MAX_COOLDOWN, cooldownData.buyCooldown * (1 + adjustmentRate * cooldownData.performance.consecutiveLosses));
     }
     
     // 2. 수익 거래 후 쿨타임 감소
     if (tradeResult.profitRate > 2) {
-      cooldownData.buyCooldown = Math.max(5, cooldownData.buyCooldown * (1 - adjustmentRate));
-      cooldownData.sellCooldown = Math.max(5, cooldownData.sellCooldown * (1 - adjustmentRate));
+      cooldownData.buyCooldown = Math.max(MIN_COOLDOWN, cooldownData.buyCooldown * (1 - adjustmentRate));
+      cooldownData.sellCooldown = Math.max(MIN_COOLDOWN, cooldownData.sellCooldown * (1 - adjustmentRate));
     }
     
     // 3. 변동성에 따른 조정
     if (cooldownData.performance.recentVolatility > 2) {
       // 고변동성 시장: 쿨타임 감소 (기회 포착)
-      cooldownData.buyCooldown = Math.max(5, cooldownData.buyCooldown * 0.8);
+      cooldownData.buyCooldown = Math.max(MIN_COOLDOWN, cooldownData.buyCooldown * 0.8);
     } else if (cooldownData.performance.recentVolatility < 0.5) {
       // 저변동성 시장: 쿨타임 증가 (거래 빈도 감소)
-      cooldownData.buyCooldown = Math.min(120, cooldownData.buyCooldown * 1.2);
+      cooldownData.buyCooldown = Math.min(MAX_COOLDOWN, cooldownData.buyCooldown * 1.2);
     }
 
     // 4. 시장 상황에 따른 조정
     if (tradeResult.market_conditions.trend === 'bull') {
       // 상승장: 매수 쿨타임 감소
-      cooldownData.buyCooldown = Math.max(5, cooldownData.buyCooldown * 0.9);
+      cooldownData.buyCooldown = Math.max(MIN_COOLDOWN, cooldownData.buyCooldown * 0.9);
     } else if (tradeResult.market_conditions.trend === 'bear') {
       // 하락장: 매수 쿨타임 증가, 매도 쿨타임 감소
-      cooldownData.buyCooldown = Math.min(120, cooldownData.buyCooldown * 1.1);
-      cooldownData.sellCooldown = Math.max(5, cooldownData.sellCooldown * 0.9);
+      cooldownData.buyCooldown = Math.min(MAX_COOLDOWN, cooldownData.buyCooldown * 1.1);
+      cooldownData.sellCooldown = Math.max(MIN_COOLDOWN, cooldownData.sellCooldown * 0.9);
     }
 
     console.log(`[LearningService] ${market} 쿨타임 조정: 매수 ${cooldownData.buyCooldown.toFixed(0)}분, 매도 ${cooldownData.sellCooldown.toFixed(0)}분`);
