@@ -15,16 +15,30 @@ import {
   Chip,
   LinearProgress,
   Alert,
-  AlertTitle
+  AlertTitle,
+  Tooltip
 } from '@mui/material';
 import {
   TrendingUp,
   TrendingDown,
   AccountBalance,
   ShowChart,
-  Assessment
+  Assessment,
+  Timer,
+  AutoMode
 } from '@mui/icons-material';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
+
+interface CooldownInfo {
+  learningEnabled: boolean;
+  dynamicBuyCooldown: number;
+  dynamicSellCooldown: number;
+  cooldownPerformance?: {
+    consecutiveLosses: number;
+    recentVolatility: number;
+    lastUpdated: number;
+  };
+}
 
 interface SimulationData {
   krwBalance: number;
@@ -55,6 +69,7 @@ interface SimulationData {
 export const SimulationStatus: React.FC = () => {
   const [simulationData, setSimulationData] = useState<SimulationData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [cooldownInfoMap, setCooldownInfoMap] = useState<Map<string, CooldownInfo>>(new Map());
 
   useEffect(() => {
     const fetchSimulationStatus = async () => {
@@ -62,6 +77,29 @@ export const SimulationStatus: React.FC = () => {
         const data = await window.electronAPI.getSimulationStatus();
         setSimulationData(data);
         setLoading(false);
+
+        // 포트폴리오의 각 코인에 대한 쿨타임 정보 가져오기
+        if (data?.portfolio) {
+          const cooldownPromises = data.portfolio.map(async (coin) => {
+            try {
+              const info = await window.electronAPI.getCooldownInfo(coin.market);
+              return { market: coin.market, info };
+            } catch (error) {
+              console.error(`Failed to fetch cooldown info for ${coin.market}:`, error);
+              return null;
+            }
+          });
+
+          const results = await Promise.all(cooldownPromises);
+          const newMap = new Map<string, CooldownInfo>();
+          results.forEach((result) => {
+            if (result) {
+              console.log(`[SimulationStatus] Cooldown info for ${result.market}:`, result.info);
+              newMap.set(result.market, result.info);
+            }
+          });
+          setCooldownInfoMap(newMap);
+        }
       } catch (error) {
         console.error('Failed to fetch simulation status:', error);
         setLoading(false);
@@ -196,10 +234,13 @@ export const SimulationStatus: React.FC = () => {
                     <TableCell align="right">현재가</TableCell>
                     <TableCell align="right">평가금액</TableCell>
                     <TableCell align="right">수익률</TableCell>
+                    <TableCell align="center">쿨타임</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {simulationData.portfolio.map((coin) => (
+                  {simulationData.portfolio.map((coin) => {
+                    const cooldownInfo = cooldownInfoMap.get(coin.market);
+                    return (
                     <TableRow key={coin.market}>
                       <TableCell>
                         <Chip label={coin.market.split('-')[1]} size="small" />
@@ -225,8 +266,52 @@ export const SimulationStatus: React.FC = () => {
                           {formatPercent(coin.profitRate)}
                         </Typography>
                       </TableCell>
+                      <TableCell align="center">
+                        {cooldownInfo?.learningEnabled ? (
+                          <Tooltip 
+                            title={
+                              <Box>
+                                <Typography variant="caption" display="block">
+                                  학습된 쿨타임 적용중
+                                </Typography>
+                                <Typography variant="caption" display="block">
+                                  매수: {cooldownInfo.dynamicBuyCooldown}분
+                                </Typography>
+                                <Typography variant="caption" display="block">
+                                  매도: {cooldownInfo.dynamicSellCooldown}분
+                                </Typography>
+                                {cooldownInfo.cooldownPerformance && (
+                                  <>
+                                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                                      연속 손실: {cooldownInfo.cooldownPerformance.consecutiveLosses}회
+                                    </Typography>
+                                    <Typography variant="caption" display="block">
+                                      변동성: {(cooldownInfo.cooldownPerformance.recentVolatility * 100).toFixed(2)}%
+                                    </Typography>
+                                  </>
+                                )}
+                              </Box>
+                            }
+                          >
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <AutoMode sx={{ fontSize: 16, color: 'info.main' }} />
+                              <Typography variant="caption" color="info.main">
+                                {cooldownInfo.dynamicBuyCooldown}/{cooldownInfo.dynamicSellCooldown}분
+                              </Typography>
+                            </Box>
+                          </Tooltip>
+                        ) : (
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <Timer sx={{ fontSize: 16, color: 'text.secondary' }} />
+                            <Typography variant="caption" color="text.secondary">
+                              기본값
+                            </Typography>
+                          </Box>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

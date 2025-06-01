@@ -180,6 +180,14 @@ const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
                   {analysis.tradeAttempt.details && (
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 2.5 }}>
                       {analysis.tradeAttempt.details}
+                      {/* 쿨타임 관련 실패시 학습 정보 표시 */}
+                      {(analysis.tradeAttempt.failureReason === TradeFailureReason.COOLDOWN_BUY || 
+                        analysis.tradeAttempt.failureReason === TradeFailureReason.COOLDOWN_SELL) && 
+                        analysis.cooldownInfo?.learningEnabled && (
+                        <Box component="span" sx={{ ml: 1, color: 'info.main' }}>
+                          (학습된 쿨타임 적용중)
+                        </Box>
+                      )}
                     </Typography>
                   )}
                 </Box>

@@ -19,7 +19,8 @@ import {
   ShowChart,
   Timer,
   TimerOff,
-  RestartAlt
+  RestartAlt,
+  AutoMode
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
 import { StatCard } from '../common/StatCard';
@@ -38,12 +39,18 @@ interface DashboardProps {
 }
 
 interface CooldownInfo {
-  [market: string]: {
-    buyRemaining: number;
-    sellRemaining: number;
-    buyTotal: number;
-    sellTotal: number;
+  learningEnabled: boolean;
+  dynamicBuyCooldown: number;
+  dynamicSellCooldown: number;
+  cooldownPerformance?: {
+    consecutiveLosses: number;
+    recentVolatility: number;
+    lastUpdated: number;
   };
+  buyRemaining: number;
+  sellRemaining: number;
+  buyTotal: number;
+  sellTotal: number;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -83,7 +90,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     console.log('[Dashboard] portfolioChartData:', portfolioChartData);
   }, [profitHistory, portfolioChartData]);
   
-  const [cooldowns, setCooldowns] = useState<CooldownInfo>({});
+  const [cooldowns, setCooldowns] = useState<Map<string, CooldownInfo>>(new Map());
   
   // 거래 통계 가져오기
   useEffect(() => {
@@ -125,23 +132,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // 쿨타임 정보 업데이트
   useEffect(() => {
     const updateCooldowns = async () => {
-      const newCooldowns: CooldownInfo = {};
+      const newCooldowns = new Map<string, CooldownInfo>();
       const enabledCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(p => p.enabled) : [];
       
       for (const coin of enabledCoins) {
         const market = `KRW-${coin.symbol}`;
         try {
           const cooldownInfo = await window.electronAPI.getCooldownInfo(market);
-          newCooldowns[market] = cooldownInfo;
+          console.log(`[Dashboard] Cooldown info for ${market}:`, cooldownInfo);
+          newCooldowns.set(market, cooldownInfo);
         } catch (error) {
           console.error(`Failed to get cooldown info for ${market}:`, error);
-          // 에러 시 기본값 사용
-          newCooldowns[market] = {
-            buyRemaining: 0,
-            sellRemaining: 0,
-            buyTotal: 30,
-            sellTotal: 20
-          };
         }
       }
       
@@ -365,7 +366,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 const account = accounts.find(acc => acc.currency === coin.symbol);
                 const hasHoldings = account && parseFloat(account.balance) > 0;
                 const market = `KRW-${coin.symbol}`;
-                const cooldownInfo = cooldowns[market];
+                const cooldownInfo = cooldowns.get(market);
+                console.log(`[Dashboard] Rendering cooldown for ${market}:`, cooldownInfo);
                 const ticker = Object.values(tickers).find(t => t.market === market);
                 
                 // 수익률 계산
@@ -448,12 +450,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         {/* 쿨타임 정보 */}
                         {cooldownInfo && (
                           <Box sx={{ mt: 2 }}>
+                            {/* 학습된 쿨타임 적용 중 표시 */}
+                            {cooldownInfo.learningEnabled && (
+                              <Box display="flex" alignItems="center" gap={0.5} mb={1}>
+                                <AutoMode sx={{ fontSize: 16, color: 'info.main' }} />
+                                <Typography variant="caption" color="info.main">
+                                  학습된 쿨타임 적용중
+                                </Typography>
+                              </Box>
+                            )}
+                            
                             {/* 매수 쿨타임 */}
                             <Box sx={{ mb: 1 }}>
                               <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
                                 <Box display="flex" alignItems="center" gap={0.5}>
                                   <Timer sx={{ fontSize: 16 }} />
-                                  <Typography variant="caption">매수 쿨타임</Typography>
+                                  <Typography variant="caption">
+                                    매수 쿨타임
+                                    {cooldownInfo.learningEnabled && cooldownInfo.dynamicBuyCooldown && (
+                                      <Typography component="span" variant="caption" color="info.main" sx={{ ml: 0.5 }}>
+                                        ({cooldownInfo.dynamicBuyCooldown}분)
+                                      </Typography>
+                                    )}
+                                  </Typography>
                                 </Box>
                                 <Chip 
                                   size="small" 
@@ -469,7 +488,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
                                 <Box display="flex" alignItems="center" gap={0.5}>
                                   <Timer sx={{ fontSize: 16 }} />
-                                  <Typography variant="caption">매도 쿨타임</Typography>
+                                  <Typography variant="caption">
+                                    매도 쿨타임
+                                    {cooldownInfo.learningEnabled && cooldownInfo.dynamicSellCooldown && (
+                                      <Typography component="span" variant="caption" color="info.main" sx={{ ml: 0.5 }}>
+                                        ({cooldownInfo.dynamicSellCooldown}분)
+                                      </Typography>
+                                    )}
+                                  </Typography>
                                 </Box>
                                 <Chip 
                                   size="small" 

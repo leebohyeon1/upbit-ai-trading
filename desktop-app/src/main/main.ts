@@ -1655,15 +1655,35 @@ class TradingApp {
     ipcMain.handle('get-cooldown-info', async (event, market: string) => {
       try {
         const cooldownInfo = tradingEngine.getCooldownInfo(market);
-        return cooldownInfo;
+        const learningService = tradingEngine.getLearningService();
+        const learnedCooldown = learningService.getCooldownInfo(market);
+        
+        // 학습된 쿨타임 정보 추가
+        console.log(`[Main] Cooldown info for ${market}:`, cooldownInfo);
+        console.log(`[Main] Learned cooldown for ${market}:`, learnedCooldown);
+        
+        return {
+          ...cooldownInfo,
+          buyTotal: cooldownInfo.buyTotal || 30,
+          sellTotal: cooldownInfo.sellTotal || 30,
+          learningEnabled: learnedCooldown.isLearning,
+          dynamicBuyCooldown: learnedCooldown.buyCooldown,
+          dynamicSellCooldown: learnedCooldown.sellCooldown,
+          cooldownPerformance: learnedCooldown.performance
+        };
       } catch (error) {
         console.error('Failed to get cooldown info:', error);
         return {
           market,
           buyRemaining: 0,
           sellRemaining: 0,
+          buyTotal: 30,
+          sellTotal: 30,
           canBuy: true,
-          canSell: true
+          canSell: true,
+          learningEnabled: false,
+          dynamicBuyCooldown: 30,
+          dynamicSellCooldown: 30
         };
       }
     });

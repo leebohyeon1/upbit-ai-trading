@@ -44,6 +44,8 @@ interface LearningConfig {
   weight_adjustment_rate: number;
   performance_window: number; // days
   save_interval: number; // minutes
+  cooldown_adjustment_enabled: boolean;
+  cooldown_adjustment_rate: number;
 }
 
 export class LearningService extends EventEmitter {
@@ -53,7 +55,9 @@ export class LearningService extends EventEmitter {
     min_sample_size: 20,
     weight_adjustment_rate: 0.1,
     performance_window: 30,
-    save_interval: 30
+    save_interval: 30,
+    cooldown_adjustment_enabled: true,
+    cooldown_adjustment_rate: 0.05
   };
   private dataPath: string;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -89,6 +93,9 @@ export class LearningService extends EventEmitter {
         const weights = JSON.parse(data);
         this.signalWeights = new Map(weights);
       }
+
+      // 쿨타임 데이터 로드
+      this.loadCooldownData();
     } catch (error) {
       console.error('Error loading historical data:', error);
     }
@@ -767,5 +774,138 @@ export class LearningService extends EventEmitter {
     console.log(`[LearningService] Stopping learning for ${ticker}`);
     this.learningStates.set(ticker, false);
     this.emit('learningStateChanged', this.getLearningStates());
+  }
+
+  // 쿨타임 학습 관련
+  private cooldownLearning: Map<string, {
+    buyCooldown: number;
+    sellCooldown: number;
+    performance: {
+      avgTimeBetweenTrades: number;
+      consecutiveLosses: number;
+      recentVolatility: number;
+      lastUpdated: number;
+    };
+  }> = new Map();
+
+  // 쿨타임 조정
+  public adjustCooldown(market: string, tradeResult: TradeResult): { buyCooldown: number; sellCooldown: number } | null {
+    if (!this.learningConfig.cooldown_adjustment_enabled) {
+      return null;
+    }
+
+    let cooldownData = this.cooldownLearning.get(market);
+    if (!cooldownData) {
+      // 초기값 설정 (기본 30분)
+      cooldownData = {
+        buyCooldown: 30,
+        sellCooldown: 30,
+        performance: {
+          avgTimeBetweenTrades: 30,
+          consecutiveLosses: 0,
+          recentVolatility: 0.5,
+          lastUpdated: Date.now()
+        }
+      };
+      this.cooldownLearning.set(market, cooldownData);
+    }
+
+    // 성과 업데이트
+    if (tradeResult.profitRate < 0) {
+      cooldownData.performance.consecutiveLosses++;
+    } else {
+      cooldownData.performance.consecutiveLosses = 0;
+    }
+
+    // 변동성 계산 (ATR 기반)
+    cooldownData.performance.recentVolatility = tradeResult.indicators.atr;
+    cooldownData.performance.lastUpdated = Date.now();
+
+    // 쿨타임 조정 로직
+    const adjustmentRate = this.learningConfig.cooldown_adjustment_rate;
+    
+    // 1. 연속 손실 시 쿨타임 증가
+    if (cooldownData.performance.consecutiveLosses > 2) {
+      cooldownData.buyCooldown = Math.min(120, cooldownData.buyCooldown * (1 + adjustmentRate * cooldownData.performance.consecutiveLosses));
+    }
+    
+    // 2. 수익 거래 후 쿨타임 감소
+    if (tradeResult.profitRate > 2) {
+      cooldownData.buyCooldown = Math.max(5, cooldownData.buyCooldown * (1 - adjustmentRate));
+      cooldownData.sellCooldown = Math.max(5, cooldownData.sellCooldown * (1 - adjustmentRate));
+    }
+    
+    // 3. 변동성에 따른 조정
+    if (cooldownData.performance.recentVolatility > 2) {
+      // 고변동성 시장: 쿨타임 감소 (기회 포착)
+      cooldownData.buyCooldown = Math.max(5, cooldownData.buyCooldown * 0.8);
+    } else if (cooldownData.performance.recentVolatility < 0.5) {
+      // 저변동성 시장: 쿨타임 증가 (거래 빈도 감소)
+      cooldownData.buyCooldown = Math.min(120, cooldownData.buyCooldown * 1.2);
+    }
+
+    // 4. 시장 상황에 따른 조정
+    if (tradeResult.market_conditions.trend === 'bull') {
+      // 상승장: 매수 쿨타임 감소
+      cooldownData.buyCooldown = Math.max(5, cooldownData.buyCooldown * 0.9);
+    } else if (tradeResult.market_conditions.trend === 'bear') {
+      // 하락장: 매수 쿨타임 증가, 매도 쿨타임 감소
+      cooldownData.buyCooldown = Math.min(120, cooldownData.buyCooldown * 1.1);
+      cooldownData.sellCooldown = Math.max(5, cooldownData.sellCooldown * 0.9);
+    }
+
+    console.log(`[LearningService] ${market} 쿨타임 조정: 매수 ${cooldownData.buyCooldown.toFixed(0)}분, 매도 ${cooldownData.sellCooldown.toFixed(0)}분`);
+    
+    // 저장
+    this.saveCooldownData();
+    
+    return {
+      buyCooldown: Math.round(cooldownData.buyCooldown),
+      sellCooldown: Math.round(cooldownData.sellCooldown)
+    };
+  }
+
+  // 쿨타임 데이터 저장
+  private saveCooldownData(): void {
+    try {
+      const cooldownFile = path.join(this.dataPath, 'cooldown_learning.json');
+      const cooldownArray = Array.from(this.cooldownLearning.entries());
+      fs.writeFileSync(cooldownFile, JSON.stringify(cooldownArray, null, 2));
+    } catch (error) {
+      console.error('Error saving cooldown data:', error);
+    }
+  }
+
+  // 쿨타임 데이터 로드
+  private loadCooldownData(): void {
+    try {
+      const cooldownFile = path.join(this.dataPath, 'cooldown_learning.json');
+      if (fs.existsSync(cooldownFile)) {
+        const data = fs.readFileSync(cooldownFile, 'utf8');
+        const cooldownArray = JSON.parse(data);
+        this.cooldownLearning = new Map(cooldownArray);
+      }
+    } catch (error) {
+      console.error('Error loading cooldown data:', error);
+    }
+  }
+
+  // 쿨타임 학습 정보 가져오기
+  public getCooldownInfo(market: string): any {
+    const cooldownData = this.cooldownLearning.get(market);
+    if (!cooldownData) {
+      return {
+        buyCooldown: 30,
+        sellCooldown: 30,
+        isLearning: false
+      };
+    }
+
+    return {
+      buyCooldown: cooldownData.buyCooldown,
+      sellCooldown: cooldownData.sellCooldown,
+      performance: cooldownData.performance,
+      isLearning: this.learningConfig.cooldown_adjustment_enabled
+    };
   }
 }

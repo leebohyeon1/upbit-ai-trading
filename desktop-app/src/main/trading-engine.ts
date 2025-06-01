@@ -708,18 +708,24 @@ class TradingEngine extends EventEmitter {
             return configTicker === coinSymbol;
           });
           
+          // analysisConfig가 없으면 이 코인은 분석하지 않음
+          if (!analysisConfig) {
+            console.log(`[${market}] No analysis config found, skipping analysis entirely`);
+            continue;
+          }
+          
           // 학습된 가중치 가져오기 (코인별 -> 카테고리별 -> 전역)
           const learnedWeights = this.learningService.getCoinWeights(market);
           
           // 분석 설정에 학습된 가중치 병합
-          const analysisConfigWithWeights = analysisConfig ? {
+          const analysisConfigWithWeights = {
             ...analysisConfig,
             indicatorWeights: this.mergeWeights(
               analysisConfig.indicatorWeights,
               learnedWeights,
               analysisConfig.weightLearning
             )
-          } : { indicatorWeights: learnedWeights };
+          };
           
           // 기술적 분석 수행 (추가 데이터 및 설정 포함)
           const technicalAnalysis = await analysisService.analyzeTechnicals(candles, ticker, orderbook, trades, analysisConfigWithWeights);
@@ -1990,6 +1996,16 @@ class TradingEngine extends EventEmitter {
   
   // 코인별 쿨다운 체크
   private isInCooldownWithConfig(market: string, action: 'buy' | 'sell', cooldownMinutes: number): boolean {
+    // 학습 시스템에서 동적 쿨타임 확인
+    const learningCooldown = this.learningService.getCooldownInfo(market);
+    
+    // 학습된 쿨타임이 있으면 우선 사용
+    if (learningCooldown.isLearning) {
+      const dynamicCooldown = action === 'buy' ? learningCooldown.buyCooldown : learningCooldown.sellCooldown;
+      console.log(`[${market}] 학습된 쿨타임 사용: ${action} ${dynamicCooldown}분 (기본값: ${cooldownMinutes}분)`);
+      cooldownMinutes = dynamicCooldown;
+    }
+    
     const lastTrade = this.lastTradeTime.get(market);
     console.log(`[${market}] 쿨타임 체크 상세 - action: ${action}, cooldownMinutes: ${cooldownMinutes}, lastTrade:`, lastTrade);
     
@@ -2034,6 +2050,42 @@ class TradingEngine extends EventEmitter {
     metrics.totalProfit += profitRate;
     
     this.performanceMetrics.set(market, metrics);
+    
+    // 학습 시스템에 거래 결과 전달 (쿨타임 조정 포함)
+    if (this.learningService.isLearningEnabled(market)) {
+      const tradeResult = {
+        market,
+        timestamp: Date.now(),
+        entryPrice: 0,
+        exitPrice: 0,
+        profit: 0,
+        profitRate,
+        holding_period: 0,
+        indicators: {
+          rsi: 50,
+          macd: 0,
+          bb_position: 0,
+          volume_ratio: 1,
+          stochastic_rsi: 50,
+          atr: 1,
+          obv_trend: 0,
+          adx: 25
+        },
+        market_conditions: {
+          trend: 'sideways' as const,
+          volatility: 'medium' as const,
+          volume: 'medium' as const
+        },
+        news_sentiment: 0,
+        whale_activity: false
+      };
+      
+      // 쿨타임 동적 조정
+      const adjustedCooldown = this.learningService.adjustCooldown(market, tradeResult);
+      if (adjustedCooldown) {
+        console.log(`[${market}] 학습된 쿨타임 적용: 매수 ${adjustedCooldown.buyCooldown}분, 매도 ${adjustedCooldown.sellCooldown}분`);
+      }
+    }
   }
 
   // 학습된 가중치를 사용한 신호 평가

@@ -67,6 +67,11 @@ export interface Analysis {
     patternConfidence: number;
   };
   currentPrice?: number;
+  cooldownInfo?: {
+    learningEnabled: boolean;
+    dynamicBuyCooldown?: number;
+    dynamicSellCooldown?: number;
+  };
 }
 
 export interface TradeAttempt {

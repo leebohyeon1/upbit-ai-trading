@@ -46,6 +46,14 @@ declare global {
         sellRemaining: number;
         buyTotal: number;
         sellTotal: number;
+        learningEnabled: boolean;
+        dynamicBuyCooldown: number;
+        dynamicSellCooldown: number;
+        cooldownPerformance?: {
+          consecutiveLosses: number;
+          recentVolatility: number;
+          lastUpdated: number;
+        };
       }>;
       
       // Weight learning methods
