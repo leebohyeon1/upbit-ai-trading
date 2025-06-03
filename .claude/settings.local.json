@@ -58,7 +58,8 @@
       "Bash(test -f .env)",
       "Bash(true)",
       "Bash(taskkill:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(awk:*)"
     ],
     "deny": []
   },

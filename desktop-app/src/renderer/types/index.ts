@@ -72,6 +72,27 @@ export interface Analysis {
     dynamicBuyCooldown?: number;
     dynamicSellCooldown?: number;
   };
+  // Python 스타일 분석 추가 필드
+  signals?: Array<{
+    source: string;
+    signal: 'buy' | 'sell' | 'hold';
+    strength: number;
+    description: string;
+    weight?: number;
+  }>;
+  avgSignalStrength?: number;
+  signalCounts?: {
+    buy: number;
+    sell: number;
+    hold: number;
+  };
+  interpretation?: {
+    level: string;
+    activeSignals: string;
+    dominance: string;
+    topReasons: string[];
+    scoreInterpretation: string;
+  };
 }
 
 export interface TradeAttempt {

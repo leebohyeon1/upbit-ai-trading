@@ -684,8 +684,26 @@ class AnalysisService {
       }
     };
 
-    // Python 스타일 분석을 사용할지 결정 (useSimplifiedMode 또는 usePythonStyle)
-    const usePythonStyle = config?.usePythonStyle ?? useSimplifiedMode;
+    // Python 스타일 분석을 사용할지 결정 (독립적으로 설정 가능)
+    // config.usePythonStyle이 명시적으로 설정되지 않은 경우에만 useSimplifiedMode를 기본값으로 사용
+    const usePythonStyle = config?.usePythonStyle !== undefined ? config.usePythonStyle : useSimplifiedMode;
+    
+    // reason 텍스트를 위한 변수 선언 (스코프 문제 해결)
+    let analysisReason = '';
+    
+    // 패턴 분석을 위한 변수 (모든 경우에 사용)
+    let patterns;
+    
+    // 활성화된 주요 신호들 수집 (모든 경우에 사용)
+    const activeSignals: string[] = [];
+    
+    // 신호 가중치 배열 (기존 분석에서 사용)
+    let buySignalsWithWeight: Array<{condition: boolean | undefined, weight: number}> = [];
+    let sellSignalsWithWeight: Array<{condition: boolean | undefined, weight: number}> = [];
+    
+    // 정규화된 점수 (기존 분석에서 사용)
+    let normalizedBuyScore = 0;
+    let normalizedSellScore = 0;
     
     if (usePythonStyle) {
       // Python 스타일 개별 신호 생성
@@ -734,7 +752,6 @@ class AnalysisService {
       });
       
       // Python 스타일 분석 결과에 대한 기본 reason 생성 (AI가 없을 때 사용)
-      var analysisReason = '';
       if (pythonStyleSignals.length > 0) {
         analysisReason = `📊 ${decisionKr} 신호 (신뢰도: ${confidence.toFixed(1)}%)\n\n`;
         analysisReason += `📈 분석 결과:\n`;
@@ -775,7 +792,8 @@ class AnalysisService {
       }
     } else {
       // 기존 포인트 기반 분석 유지
-      const buySignalsWithWeight = [
+      analysisReason = ''; // Python 스타일이 아닐 때는 빈 문자열
+      buySignalsWithWeight = [
       // RSI 관련 지표
       { condition: rsi < (config?.rsiOversold || 30), weight: 3.0 }, // RSI 극도의 과매도 (매우 중요)
       { condition: rsi < ((config?.rsiOversold || 30) + 10), weight: 2.0 }, // RSI 과매도
@@ -809,7 +827,7 @@ class AnalysisService {
       // 호가 및 체결 분석
       { condition: orderbookData && orderbookData.bidAskRatio > 1.5, weight: 2.0 }, // 강한 매수세
       { condition: orderbookData && orderbookData.bidAskRatio > 1.2, weight: 1.0 }, // 매수세 우세
-      { condition: orderbookData && orderbookData.imbalance && orderbookData.imbalance > 20, weight: 2.5 }, // 호가 매수 불균형
+      { condition: orderbookData && orderbookData.imbalance !== undefined && orderbookData.imbalance > 20, weight: 2.5 }, // 호가 매수 불균형
       { condition: tradesData && tradesData.buyRatio > 0.7, weight: 2.0 }, // 강한 매수 체결
       { condition: tradesData && tradesData.buyRatio > 0.6, weight: 1.0 }, // 매수 체결 우세
       { condition: tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume, weight: 3.5 }, // 매수 고래 감지
@@ -831,7 +849,7 @@ class AnalysisService {
     ];
 
     // 매도 신호 조건들 (가중치 포함)
-    const sellSignalsWithWeight = [
+    sellSignalsWithWeight = [
       // RSI 관련 지표
       { condition: rsi > (config?.rsiOverbought || 70), weight: 3.0 }, // RSI 극도의 과매수 (매우 중요)
       { condition: rsi > ((config?.rsiOverbought || 70) - 10), weight: 2.0 }, // RSI 과매수
@@ -864,7 +882,7 @@ class AnalysisService {
       // 호가 및 체결 분석
       { condition: orderbookData && orderbookData.bidAskRatio < 0.7, weight: 2.0 }, // 강한 매도세
       { condition: orderbookData && orderbookData.bidAskRatio < 0.8, weight: 1.0 }, // 매도세 우세
-      { condition: orderbookData && orderbookData.imbalance && orderbookData.imbalance < -20, weight: 2.5 }, // 호가 매도 불균형
+      { condition: orderbookData && orderbookData.imbalance !== undefined && orderbookData.imbalance < -20, weight: 2.5 }, // 호가 매도 불균형
       { condition: tradesData && tradesData.buyRatio < 0.3, weight: 2.0 }, // 강한 매도 체결
       { condition: tradesData && tradesData.buyRatio < 0.4, weight: 1.0 }, // 매도 체결 우세
       { condition: tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume, weight: 3.5 }, // 매도 고래 감지
@@ -885,37 +903,23 @@ class AnalysisService {
       { condition: newsAnalysis && newsAnalysis.majorEvents.length > 0 && newsAnalysis.sentimentScore < -20, weight: 2.5 } // 부정적 주요 이벤트
     ];
     
-      // 기존 방식의 신호 처리 로직 계속...
-    } // usePythonStyle의 else 끝
+      // 가중치 설정 가져오기
+      const indicatorWeights = config?.indicatorWeights || {
+        rsi: 1.0,
+        macd: 1.0,
+        bollinger: 1.0,
+        stochastic: 0.8,
+        volume: 1.0,
+        atr: 0.8,
+        obv: 0.7,
+        adx: 0.8,
+        volatility: 1.0,
+        trendStrength: 1.0,
+        aiAnalysis: 1.2,
+        newsImpact: 1.0,
+        whaleActivity: 0.8
+      };
 
-    // 가중치 설정 가져오기
-    const indicatorWeights = config?.indicatorWeights || {
-      rsi: 1.0,
-      macd: 1.0,
-      bollinger: 1.0,
-      stochastic: 0.8,
-      volume: 1.0,
-      atr: 0.8,
-      obv: 0.7,
-      adx: 0.8,
-      volatility: 1.0,
-      trendStrength: 1.0,
-      aiAnalysis: 1.2,
-      newsImpact: 1.0,
-      whaleActivity: 0.8
-    };
-
-    // 기존 점수 기반 분석을 위한 변수 초기화
-    let normalizedBuyScore = 0;
-    let normalizedSellScore = 0;
-    let buySignalsWithWeight: any[] = [];
-    let sellSignalsWithWeight: any[] = [];
-    
-    // reason 텍스트를 위한 변수 (Python 스타일 분석에서 생성된 것)
-    let analysisReason = '';
-    
-    if (!usePythonStyle) {
-      // 기존 점수 기반 분석 로직
       const newsWeight = indicatorWeights.newsImpact || 1.0;
       
       // 가중치를 적용한 점수 계산
@@ -962,8 +966,8 @@ class AnalysisService {
     const maxSellScore = sellSignalsWithWeight.reduce((sum, signal) => sum + signal.weight, 0);
 
     // 정규화된 점수 (0-100) - NaN 방지
-    const normalizedBuyScore = maxBuyScore > 0 ? (buyScore / maxBuyScore) * 100 : 0;
-    const normalizedSellScore = maxSellScore > 0 ? (sellScore / maxSellScore) * 100 : 0;
+    normalizedBuyScore = maxBuyScore > 0 ? (buyScore / maxBuyScore) * 100 : 0;
+    normalizedSellScore = maxSellScore > 0 ? (sellScore / maxSellScore) * 100 : 0;
     
     // 디버깅용 로그
     console.log(`[${candles[0].market}] 신호 점수:`, {
@@ -1098,107 +1102,108 @@ class AnalysisService {
       sellSignalsWithWeight.filter(s => s.condition).length,
       sellSignalsWithWeight.length
     );
+    // else 블록 내의 패턴 분석 코드를 제거 (나중에 else 블록 밖에서 처리)
+    } // else 블록 끝
+
+    // 패턴 분석 코드를 else 블록 밖으로 이동
+    if (!patterns) {
+      try {
+        // 캔들 데이터 준비
+        const candleData = candles.map(c => ({
+          open: c.opening_price,
+          high: c.high_price,
+          low: c.low_price,
+          close: c.trade_price,
+          volume: c.candle_acc_trade_volume,
+          timestamp: new Date(c.candle_date_time_utc).getTime()
+        }));
+        
+        // 패턴 인식
+        const candlePatterns = this.patternService.detectCandlePatterns(candleData);
+        const chartPatterns = this.patternService.detectChartPatterns(candleData);
+        
+        console.log(`[${candles[0].market}] 패턴 인식 결과:`, {
+          candlePatterns: candlePatterns.length,
+          chartPatterns: chartPatterns.length,
+          candleData: candleData.slice(0, 3) // 첫 3개 캔들 데이터 확인
+        });
+        
+        // 패턴 신호 변환
+        const patternSignalResult = this.patternService.convertToSignal(candlePatterns, chartPatterns);
+        
+        patterns = {
+          candlePatterns: candlePatterns.slice(0, 3).map(p => ({
+            pattern: p.pattern,
+            type: p.type,
+            confidence: p.confidence,
+            description: p.description
+          })),
+          chartPatterns: chartPatterns.slice(0, 3).map(p => ({
+            pattern: p.pattern,
+            type: p.type,
+            confidence: p.confidence,
+            targetPrice: p.targetPrice
+          })),
+          patternSignal: patternSignalResult.signal,
+          patternConfidence: patternSignalResult.confidence
+        };
+        
+        console.log(`[${candles[0].market}] 최종 패턴 객체:`, patterns);
+        
+        // 패턴 신호를 전체 신호에 반영 (가중치 적용)
+        const patternWeight = 0.15; // 패턴 분석의 가중치 15%
+        if (patternSignalResult.signal === 'BUY' && patternSignalResult.confidence > 0.6) {
+          confidence = confidence * (1 - patternWeight) + patternSignalResult.confidence * 100 * patternWeight;
+          if (signal === 'HOLD' && patternSignalResult.confidence > 0.7) {
+            signal = 'BUY';
+          }
+        } else if (patternSignalResult.signal === 'SELL' && patternSignalResult.confidence > 0.6) {
+          confidence = confidence * (1 - patternWeight) + patternSignalResult.confidence * 100 * patternWeight;
+          if (signal === 'HOLD' && patternSignalResult.confidence > 0.7) {
+            signal = 'SELL';
+          }
+        }
+        
+      } catch (error) {
+        console.error('Pattern recognition failed:', error);
+        patterns = undefined;
+      }
+    }
     
-    // 패턴 분석 추가
-    let patterns;
-    try {
-      // 캔들 데이터 준비
-      const candleData = candles.map(c => ({
-        open: c.opening_price,
-        high: c.high_price,
-        low: c.low_price,
-        close: c.trade_price,
-        volume: c.candle_acc_trade_volume,
-        timestamp: new Date(c.candle_date_time_utc).getTime()
-      }));
-      
-      // 패턴 인식
-      const candlePatterns = this.patternService.detectCandlePatterns(candleData);
-      const chartPatterns = this.patternService.detectChartPatterns(candleData);
-      
-      console.log(`[${candles[0].market}] 패턴 인식 결과:`, {
-        candlePatterns: candlePatterns.length,
-        chartPatterns: chartPatterns.length,
-        candleData: candleData.slice(0, 3) // 첫 3개 캔들 데이터 확인
-      });
-      
-      // 패턴 신호 변환
-      const patternSignalResult = this.patternService.convertToSignal(candlePatterns, chartPatterns);
-      
-      patterns = {
-        candlePatterns: candlePatterns.slice(0, 3).map(p => ({
-          pattern: p.pattern,
-          type: p.type,
-          confidence: p.confidence,
-          description: p.description
-        })),
-        chartPatterns: chartPatterns.slice(0, 3).map(p => ({
-          pattern: p.pattern,
-          type: p.type,
-          confidence: p.confidence,
-          targetPrice: p.targetPrice
-        })),
-        patternSignal: patternSignalResult.signal,
-        patternConfidence: patternSignalResult.confidence
-      };
-      
-      console.log(`[${candles[0].market}] 최종 패턴 객체:`, patterns);
-      
-      // 패턴 신호를 전체 신호에 반영 (가중치 적용)
-      const patternWeight = 0.15; // 패턴 분석의 가중치 15%
-      if (patternSignalResult.signal === 'BUY' && patternSignalResult.confidence > 0.6) {
-        confidence = confidence * (1 - patternWeight) + patternSignalResult.confidence * 100 * patternWeight;
-        if (signal === 'HOLD' && patternSignalResult.confidence > 0.7) {
-          signal = 'BUY';
-        }
-      } else if (patternSignalResult.signal === 'SELL' && patternSignalResult.confidence > 0.6) {
-        confidence = confidence * (1 - patternWeight) + patternSignalResult.confidence * 100 * patternWeight;
-        if (signal === 'HOLD' && patternSignalResult.confidence > 0.7) {
-          signal = 'SELL';
-        }
+    // activeSignals 채우기 (Python 스타일이 아닌 경우에만)
+    if (!usePythonStyle) {
+      // 주요 패턴을 activeSignals에 추가
+      if (patterns && patterns.candlePatterns.length > 0 && patterns.candlePatterns[0].confidence > 0.7) {
+        activeSignals.push(`패턴: ${patterns.candlePatterns[0].pattern}`);
       }
       
-    } catch (error) {
-      console.error('Pattern recognition failed:', error);
-      patterns = undefined;
-    }
-
-    // 활성화된 주요 신호들 수집
-    const activeSignals: string[] = [];
-    
-    // 주요 패턴을 activeSignals에 추가 (변수 선언 후로 이동)
-    if (patterns && patterns.candlePatterns.length > 0 && patterns.candlePatterns[0].confidence > 0.7) {
-      activeSignals.push(`패턴: ${patterns.candlePatterns[0].pattern}`);
-    }
-    
-    if (signal === 'BUY') {
-      buySignalsWithWeight.forEach(sig => {
-        if (sig.condition && sig.weight >= 2.0) {
-          if (sig.condition === (rsi < 30)) activeSignals.push('RSI 극도의 과매도');
-          else if (sig.condition === (stochasticRSI && stochasticRSI.k < 20 && stochasticRSI.d < 20)) activeSignals.push('Stochastic RSI 과매도');
-          else if (sig.condition === (currentPrice < bollinger.lower)) activeSignals.push('볼린저 하단 돌파');
-          else if (sig.condition === (kimchiPremium < 0)) activeSignals.push('역프리미엄');
-          else if (sig.condition === (fearGreedIndex < 20)) activeSignals.push('극도의 공포');
-          else if (sig.condition === (volumeRatio > 2.0)) activeSignals.push('거래량 급증');
-          else if (sig.condition === (priceChange.changeRate24h < -0.1)) activeSignals.push('24시간 10% 이상 하락');
-          // OBV와 ADX 신호는 간소화를 위해 제거
-          else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume)) activeSignals.push('매수 고래 감지');
-        }
-      });
-    } else if (signal === 'SELL') {
-      sellSignalsWithWeight.forEach(sig => {
-        if (sig.condition && sig.weight >= 2.0) {
-          if (sig.condition === (rsi > 80)) activeSignals.push('RSI 극도의 과매수');
-          else if (sig.condition === (stochasticRSI && stochasticRSI.k > 80 && stochasticRSI.d > 80)) activeSignals.push('Stochastic RSI 과매수');
-          else if (sig.condition === (currentPrice > bollinger.upper)) activeSignals.push('볼린저 상단 돌파');
-          else if (sig.condition === (kimchiPremium > 5)) activeSignals.push('김프 과열');
-          else if (sig.condition === (fearGreedIndex > 85)) activeSignals.push('극도의 탐욕');
-          else if (sig.condition === (volumeRatio > 2.0 && priceChange.changeRate24h > 0)) activeSignals.push('상승 중 거래량 급증');
-          else if (sig.condition === (priceChange.changeRate24h > 0.15)) activeSignals.push('24시간 15% 이상 급등');
-          // OBV와 ADX 신호는 간소화를 위해 제거
-          else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume)) activeSignals.push('매도 고래 감지');
-        }
-      });
+      if (signal === 'BUY') {
+        buySignalsWithWeight.forEach(sig => {
+          if (sig.condition && sig.weight >= 2.0) {
+            if (sig.condition === (rsi < 30)) activeSignals.push('RSI 극도의 과매도');
+            else if (sig.condition === (stochasticRSI && stochasticRSI.k < 20 && stochasticRSI.d < 20)) activeSignals.push('Stochastic RSI 과매도');
+            else if (sig.condition === (currentPrice < bollinger.lower)) activeSignals.push('볼린저 하단 돌파');
+            else if (sig.condition === (kimchiPremium < 0)) activeSignals.push('역프리미엄');
+            else if (sig.condition === (fearGreedIndex < 20)) activeSignals.push('극도의 공포');
+            else if (sig.condition === (volumeRatio > 2.0)) activeSignals.push('거래량 급증');
+            else if (sig.condition === (priceChange.changeRate24h < -0.1)) activeSignals.push('24시간 10% 이상 하락');
+            else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.buyVolume > tradesData.sellVolume)) activeSignals.push('매수 고래 감지');
+          }
+        });
+      } else if (signal === 'SELL') {
+        sellSignalsWithWeight.forEach(sig => {
+          if (sig.condition && sig.weight >= 2.0) {
+            if (sig.condition === (rsi > 80)) activeSignals.push('RSI 극도의 과매수');
+            else if (sig.condition === (stochasticRSI && stochasticRSI.k > 80 && stochasticRSI.d > 80)) activeSignals.push('Stochastic RSI 과매수');
+            else if (sig.condition === (currentPrice > bollinger.upper)) activeSignals.push('볼린저 상단 돌파');
+            else if (sig.condition === (kimchiPremium > 5)) activeSignals.push('김프 과열');
+            else if (sig.condition === (fearGreedIndex > 85)) activeSignals.push('극도의 탐욕');
+            else if (sig.condition === (volumeRatio > 2.0 && priceChange.changeRate24h > 0)) activeSignals.push('상승 중 거래량 급증');
+            else if (sig.condition === (priceChange.changeRate24h > 0.15)) activeSignals.push('24시간 15% 이상 급등');
+            else if (sig.condition === (tradesData && tradesData.whaleDetected && tradesData.sellVolume > tradesData.buyVolume)) activeSignals.push('매도 고래 감지');
+          }
+        });
+      }
     }
 
     return {

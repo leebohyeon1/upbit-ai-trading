@@ -67,6 +67,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
     useKellyOptimization: false,
     volatilityAdjustment: false,
     newsImpactMultiplier: 1.0,
+    usePythonStyle: false,
     indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
     weightLearning: {
       enabled: false,
@@ -128,6 +129,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
       useKellyOptimization: settings.useKellyOptimization || false,
       volatilityAdjustment: settings.volatilityAdjustment || false,
       newsImpactMultiplier: settings.newsImpactMultiplier || 1.0,
+      usePythonStyle: settings.usePythonStyle || false,
       indicatorWeights: settings.indicatorWeights || DEFAULT_INDICATOR_WEIGHTS,
       weightLearning: settings.weightLearning || {
         enabled: false,
@@ -405,6 +407,22 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     }
                     label="패턴 인식 사용"
                   />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={localSettings.usePythonStyle || false}
+                        onChange={(e) => handleChange('usePythonStyle', e.target.checked)}
+                      />
+                    }
+                    label={
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        Python 스타일 분석
+                        <Tooltip title="이전 Python 프로젝트와 동일한 방식으로 기술적 지표를 분석합니다. 지표별 가중치와 신호 강도를 사용하여 매매 결정을 내립니다.">
+                          <Info sx={{ fontSize: 16, color: 'text.secondary' }} />
+                        </Tooltip>
+                      </Box>
+                    }
+                  />
                 </Box>
                 {localSettings.enablePatternRecognition !== false && (
                   <Box sx={{ mt: 2, px: 2 }}>
@@ -495,6 +513,7 @@ export const AnalysisSettings: React.FC = () => {
         minVolume: 200000000,
         volatilityAdjustment: true,
         useKellyOptimization: false,
+        usePythonStyle: false,
         indicatorWeights: {
           ...DEFAULT_INDICATOR_WEIGHTS,
           rsi: 1.2,
@@ -529,6 +548,7 @@ export const AnalysisSettings: React.FC = () => {
         minVolume: 100000000,
         volatilityAdjustment: true,
         useKellyOptimization: false,
+        usePythonStyle: false,
         indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
         cooldownLearning: {
           enabled: false,
@@ -556,6 +576,7 @@ export const AnalysisSettings: React.FC = () => {
         minVolume: 50000000,
         volatilityAdjustment: false,
         useKellyOptimization: true,
+        usePythonStyle: true,
         indicatorWeights: {
           ...DEFAULT_INDICATOR_WEIGHTS,
           rsi: 0.8,
@@ -625,6 +646,7 @@ export const AnalysisSettings: React.FC = () => {
                 volatilityAdjustment: true,
                 useKellyOptimization: false,
                 newsImpactMultiplier: 1.0,
+                usePythonStyle: false,
                 indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
                 weightLearning: {
                   enabled: false,
@@ -782,6 +804,7 @@ export const AnalysisSettings: React.FC = () => {
         volatilityAdjustment: true,
         useKellyOptimization: false,
         newsImpactMultiplier: 1.0,
+        usePythonStyle: false,
         indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
         weightLearning: {
           enabled: false,
