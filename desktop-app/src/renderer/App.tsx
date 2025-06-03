@@ -278,10 +278,11 @@ const AppContent: React.FC = () => {
                 </Box>
               </Box>
               
-              {context.tradingState.aiEnabled && selectedAnalysisDetail.reason && (
+              {/* AI 분석 또는 Python 스타일 분석 결과 표시 */}
+              {selectedAnalysisDetail.reason && (
                 <Box>
                   <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    AI 분석 의견
+                    {context.tradingState.aiEnabled ? 'AI 분석 의견' : '분석 결과'}
                   </Typography>
                   <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
                     <Typography 
@@ -294,6 +295,81 @@ const AppContent: React.FC = () => {
                     >
                       {formatAIReason(selectedAnalysisDetail.reason, selectedAnalysisDetail.decision)}
                     </Typography>
+                  </Paper>
+                </Box>
+              )}
+              
+              {/* Python 스타일 개별 신호 표시 */}
+              {selectedAnalysisDetail.signals && selectedAnalysisDetail.signals.length > 0 && (
+                <Box mt={3}>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    개별 신호 분석 ({selectedAnalysisDetail.signals.length}개)
+                  </Typography>
+                  <Paper sx={{ p: 2 }}>
+                    <Grid container spacing={1}>
+                      {selectedAnalysisDetail.signals.map((signal, index) => (
+                        <Grid item xs={12} key={index}>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" py={0.5}>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Chip 
+                                label={signal.signal === 'buy' ? '매수' : signal.signal === 'sell' ? '매도' : '홀드'} 
+                                size="small"
+                                color={signal.signal === 'buy' ? 'success' : signal.signal === 'sell' ? 'error' : 'default'}
+                              />
+                              <Typography variant="body2">{signal.source}</Typography>
+                            </Box>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Typography variant="caption" color="text.secondary">
+                                {signal.description}
+                              </Typography>
+                              <Typography variant="body2" fontWeight="bold">
+                                {(signal.strength * 100).toFixed(0)}%
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Paper>
+                  
+                  {selectedAnalysisDetail.avgSignalStrength !== undefined && (
+                    <Box mt={2} p={2} bgcolor="primary.50" borderRadius={1}>
+                      <Typography variant="body2" color="primary.main">
+                        평균 신호 강도: <strong>{selectedAnalysisDetail.avgSignalStrength.toFixed(3)}</strong>
+                        {selectedAnalysisDetail.decision === 'buy' && ` > ${0.15} (매수 임계값)`}
+                        {selectedAnalysisDetail.decision === 'sell' && ` < ${-0.2} (매도 임계값)`}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              )}
+              
+              {/* 기술적 지표 요약 */}
+              {selectedAnalysisDetail.interpretation && (
+                <Box mt={3}>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    분석 요약
+                  </Typography>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>신호 강도:</strong> {selectedAnalysisDetail.interpretation.level}
+                    </Typography>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>활성 신호:</strong> {selectedAnalysisDetail.interpretation.activeSignals}
+                    </Typography>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>우세:</strong> {selectedAnalysisDetail.interpretation.dominance}
+                    </Typography>
+                    {selectedAnalysisDetail.interpretation.topReasons && (
+                      <Box mt={1}>
+                        <Typography variant="caption" color="text.secondary">주요 근거:</Typography>
+                        {selectedAnalysisDetail.interpretation.topReasons.map((reason, idx) => (
+                          <Typography key={idx} variant="body2" sx={{ ml: 1 }}>
+                            • {reason}
+                          </Typography>
+                        ))}
+                      </Box>
+                    )}
                   </Paper>
                 </Box>
               )}

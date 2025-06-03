@@ -2,6 +2,17 @@ import { CandleData } from './upbit-service';
 import upbitService from './upbit-service';
 import newsService, { NewsAnalysis } from './news-service';
 import PatternRecognitionService from './pattern-recognition-service';
+import PythonStyleAnalyzer from './analysis-service-python-style';
+import { SimplifiedTradingConfig } from './trading-config';
+
+// Python 프로젝트 스타일 신호 인터페이스
+export interface TradingSignal {
+  source: string;           // 신호 출처 (예: "이동평균선(MA)", "RSI")
+  signal: 'buy' | 'sell' | 'hold';  // 신호 타입
+  strength: number;         // 신호 강도 (0.0 ~ 1.0)
+  description: string;      // 신호 설명
+  weight?: number;          // 지표 가중치 (선택적)
+}
 
 export interface TechnicalAnalysis {
   market: string;
@@ -24,6 +35,7 @@ export interface TechnicalAnalysis {
   sma: {
     sma20: number;
     sma50: number;
+    sma60?: number;  // 장기 이동평균선 추가
   };
   atr?: number; // Average True Range
   obv?: {
@@ -71,23 +83,33 @@ export interface TechnicalAnalysis {
   };
   kimchiPremium?: number; // 김치 프리미엄 (%)
   fearGreedIndex?: number; // 공포/탐욕 지수 (0-100)
-  // 분석 점수
+  reason?: string; // 분석 이유/설명 (AI 또는 Python 스타일 분석 시 생성)
+  
+  // Python 스타일 분석 결과 추가
+  signals?: TradingSignal[];           // 개별 신호 리스트
+  avgSignalStrength?: number;          // 평균 신호 강도 (-1.0 ~ 1.0)
+  signalCounts?: {
+    buy: number;
+    sell: number;
+    hold: number;
+  };
+  decision?: 'buy' | 'sell' | 'hold';  // 최종 결정
+  decisionKr?: '매수' | '매도' | '홀드';  // 한국어 결정
+  
+  // 기존 필드 유지 (호환성)
   scores?: {
-    buyScore: number; // 매수 신호 강도 (0-100)
-    sellScore: number; // 매도 신호 강도 (0-100)
-    activeSignals: string[]; // 활성화된 주요 신호들
+    buyScore: number;
+    sellScore: number;
+    activeSignals: string[];
   };
-  // 신호 해석 정보
   interpretation?: {
-    level: string; // VERY_STRONG, STRONG, MODERATE, WEAK, VERY_WEAK
-    activeSignals: string; // "매수 12개, 매도 3개"
-    dominance: string; // "매수가 4.0배 우세"
-    topReasons: string[]; // ["🐋 고래 활동", "📉 RSI 극도의 과매도"]
-    scoreInterpretation: string; // "강한 매수 신호"
+    level: string;
+    activeSignals: string;
+    dominance: string;
+    topReasons: string[];
+    scoreInterpretation: string;
   };
-  // 뉴스 분석
   newsAnalysis?: NewsAnalysis;
-  // 패턴 분석
   patterns?: {
     candlePatterns: Array<{
       pattern: string;
@@ -108,10 +130,12 @@ export interface TechnicalAnalysis {
 
 class AnalysisService {
   private patternService: PatternRecognitionService;
+  private pythonStyleAnalyzer: PythonStyleAnalyzer;
   private defaultTimeframe: string = 'minute60'; // 기본 60분봉
 
   constructor() {
     this.patternService = new PatternRecognitionService();
+    this.pythonStyleAnalyzer = new PythonStyleAnalyzer();
   }
   
   // 타임프레임 설정
@@ -553,9 +577,14 @@ class AnalysisService {
       };
     }
 
-    // 신호 생성 로직 (추가 데이터 포함)
+    // Python 스타일 신호 생성 및 결정 로직 사용 (useSimplifiedConfig가 true인 경우)
     let signal: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
     let confidence = 0;
+    let pythonStyleSignals: TradingSignal[] = [];
+    let avgSignalStrength = 0;
+    let signalCounts = { buy: 0, sell: 0, hold: 0 };
+    let decision: 'buy' | 'sell' | 'hold' = 'hold';
+    let decisionKr: '매수' | '매도' | '홀드' = '홀드';
 
     // 김치 프리미엄 계산
     let kimchiPremium = 0;
@@ -589,16 +618,164 @@ class AnalysisService {
       priceChange.changeRate24h
     );
 
-    // 신호 카테고리별 그룹화
-    const signalCategories = {
-      critical: { weight: 3.0, threshold: 0.8 },  // 핵심 신호
-      major: { weight: 2.0, threshold: 0.6 },     // 주요 신호
-      minor: { weight: 1.0, threshold: 0.4 },     // 보조 신호
-      special: { weight: 3.5, threshold: 0.9 }    // 특별 신호 (고래 등)
+    // Python 스타일 분석을 위한 SimplifiedTradingConfig 생성
+    const simplifiedConfig: SimplifiedTradingConfig = config?.simplifiedConfig || {
+      timeframe: 'minute60',
+      analysisInterval: 60,
+      useIndicators: {
+        movingAverage: true,
+        rsi: true,
+        macd: true,
+        bollingerBands: true,
+        stochastic: true,
+        volume: true,
+        orderbook: true,
+        trades: true,
+        kimchiPremium: true,
+        fearGreed: true,
+        obv: true,
+        adx: true
+      },
+      signalStrengths: {
+        maCrossover: 0.7,
+        maLongTrend: 0.5,
+        bbExtreme: 0.8,
+        bbMiddle: 0.3,
+        rsiExtreme: 0.95,
+        rsiMiddle: 0.4,
+        macdCrossover: 0.9,
+        macdTrend: 0.5,
+        stochExtreme: 0.7,
+        stochMiddle: 0.3,
+        orderbook: 0.7,
+        tradeData: 0.6,
+        volumeRatio: 0.6,
+        kimchiPremium: 0.7,
+        fearGreed: 0.9,
+        obv: 0.6,
+        adx: 0.7
+      },
+      indicatorWeights: {
+        MA: 0.8,
+        MA60: 0.7,
+        BB: 1.3,
+        RSI: 1.5,
+        MACD: 1.5,
+        Stochastic: 1.3,
+        Orderbook: 1.1,
+        Trades: 0.9,
+        Volume: 1.0,
+        KIMP: 1.2,
+        FearGreed: 1.4,
+        OBV: 0.6,
+        ADX: 0.8
+      },
+      tradingThresholds: {
+        buyThreshold: 0.15,
+        sellThreshold: -0.2,
+        rsiOverbought: 70,
+        rsiOversold: 30
+      },
+      investmentSettings: {
+        investmentRatio: 0.2,
+        maxPositionSize: 1000000,
+        stopLossPercent: 5,
+        takeProfitPercent: 10
+      }
     };
 
-    // 각 신호에 가중치 부여 (중요도에 따라 다르게 설정)
-    const buySignalsWithWeight = [
+    // Python 스타일 분석을 사용할지 결정 (useSimplifiedMode 또는 usePythonStyle)
+    const usePythonStyle = config?.usePythonStyle ?? useSimplifiedMode;
+    
+    if (usePythonStyle) {
+      // Python 스타일 개별 신호 생성
+      const sma60 = useIndicators.movingAverage ? this.calculateSMA(prices, 60) : 0;
+      
+      const analysisData = {
+        candles,
+        rsi,
+        macd,
+        bollinger,
+        sma: { sma20, sma50, sma60 },
+        stochastic: stochasticRSI,
+        volumeRatio,
+        orderbook: orderbookData,
+        trades: tradesData,
+        kimchiPremium,
+        fearGreedIndex,
+        obv,
+        adx,
+        currentPrice
+      };
+      
+      // Python 스타일 신호 생성
+      pythonStyleSignals = this.pythonStyleAnalyzer.generateTradingSignals(analysisData, simplifiedConfig);
+      
+      // 가중 평균 계산 및 최종 결정
+      const pythonDecision = this.pythonStyleAnalyzer.calculateWeightedDecision(pythonStyleSignals, simplifiedConfig);
+      
+      decision = pythonDecision.decision;
+      decisionKr = pythonDecision.decisionKr;
+      avgSignalStrength = pythonDecision.avgSignalStrength;
+      confidence = pythonDecision.confidence;
+      signalCounts = pythonDecision.signalCounts;
+      
+      // 기존 형식에 맞게 변환
+      signal = decision.toUpperCase() as 'BUY' | 'SELL' | 'HOLD';
+      
+      console.log(`[${candles[0].market}] Python 스타일 분석:`, {
+        신호수: pythonStyleSignals.length,
+        평균강도: avgSignalStrength.toFixed(3),
+        결정: decisionKr,
+        신뢰도: confidence.toFixed(1) + '%',
+        매수신호: signalCounts.buy,
+        매도신호: signalCounts.sell,
+        홀드신호: signalCounts.hold
+      });
+      
+      // Python 스타일 분석 결과에 대한 기본 reason 생성 (AI가 없을 때 사용)
+      var analysisReason = '';
+      if (pythonStyleSignals.length > 0) {
+        analysisReason = `📊 ${decisionKr} 신호 (신뢰도: ${confidence.toFixed(1)}%)\n\n`;
+        analysisReason += `📈 분석 결과:\n`;
+        analysisReason += `• 평균 신호 강도: ${avgSignalStrength.toFixed(3)}\n`;
+        analysisReason += `• 매수 신호: ${signalCounts.buy}개, 매도 신호: ${signalCounts.sell}개, 홀드 신호: ${signalCounts.hold}개\n\n`;
+        
+        // 주요 신호들 표시 (상위 5개)
+        const topSignals = pythonStyleSignals
+          .filter(s => s.signal !== 'hold')
+          .sort((a, b) => b.strength - a.strength)
+          .slice(0, 5);
+        
+        if (topSignals.length > 0) {
+          analysisReason += `🎯 주요 신호:\n`;
+          topSignals.forEach(s => {
+            const emoji = s.signal === 'buy' ? '🟢' : '🔴';
+            analysisReason += `${emoji} ${s.source}: ${s.description} (강도: ${(s.strength * 100).toFixed(0)}%)\n`;
+          });
+          analysisReason += '\n';
+        }
+        
+        // 결정에 대한 설명
+        if (decision === 'buy') {
+          analysisReason += `💡 매수 추천 이유:\n`;
+          analysisReason += `매수 신호가 매도 신호보다 우세하며, 평균 신호 강도가 매수 임계값(0.15)을 초과했습니다.\n`;
+          if (rsi < 30) analysisReason += `RSI가 과매도 구간에 있어 반등 가능성이 높습니다.\n`;
+          if (currentPrice < bollinger.lower) analysisReason += `현재가가 볼린저 하단을 하회하여 매수 타이밍입니다.\n`;
+        } else if (decision === 'sell') {
+          analysisReason += `💡 매도 추천 이유:\n`;
+          analysisReason += `매도 신호가 매수 신호보다 우세하며, 평균 신호 강도가 매도 임계값(-0.2)을 하회했습니다.\n`;
+          if (rsi > 70) analysisReason += `RSI가 과매수 구간에 있어 조정 가능성이 높습니다.\n`;
+          if (currentPrice > bollinger.upper) analysisReason += `현재가가 볼린저 상단을 상회하여 매도 타이밍입니다.\n`;
+        } else {
+          analysisReason += `💡 홀드 추천 이유:\n`;
+          analysisReason += `매수와 매도 신호가 균형을 이루고 있어 관망이 적절합니다.\n`;
+          analysisReason += `명확한 방향성이 나타날 때까지 기다리는 것을 권장합니다.\n`;
+        }
+      }
+    } else {
+      // 기존 포인트 기반 분석 유지
+      const buySignalsWithWeight = [
       // RSI 관련 지표
       { condition: rsi < (config?.rsiOversold || 30), weight: 3.0 }, // RSI 극도의 과매도 (매우 중요)
       { condition: rsi < ((config?.rsiOversold || 30) + 10), weight: 2.0 }, // RSI 과매도
@@ -707,6 +884,9 @@ class AnalysisService {
       { condition: newsAnalysis && newsAnalysis.sentimentScore > 20, weight: 2.0 }, // 긍정적 뉴스
       { condition: newsAnalysis && newsAnalysis.majorEvents.length > 0 && newsAnalysis.sentimentScore < -20, weight: 2.5 } // 부정적 주요 이벤트
     ];
+    
+      // 기존 방식의 신호 처리 로직 계속...
+    } // usePythonStyle의 else 끝
 
     // 가중치 설정 가져오기
     const indicatorWeights = config?.indicatorWeights || {
@@ -725,20 +905,25 @@ class AnalysisService {
       whaleActivity: 0.8
     };
 
-    // 지표별 가중치 적용 함수
-    const applyIndicatorWeight = (score: number, indicatorType: string): number => {
-      return score * (indicatorWeights[indicatorType] || 1.0);
-    };
-
-    // 가중치를 적용한 점수 계산
-    let buyScore = 0;
-    let sellScore = 0;
-
-    // 뉴스 영향도 가중치 적용
-    const newsWeight = indicatorWeights.newsImpact || 1.0;
+    // 기존 점수 기반 분석을 위한 변수 초기화
+    let normalizedBuyScore = 0;
+    let normalizedSellScore = 0;
+    let buySignalsWithWeight: any[] = [];
+    let sellSignalsWithWeight: any[] = [];
     
-    // 조건별로 가중치 적용
-    buySignalsWithWeight.forEach(signal => {
+    // reason 텍스트를 위한 변수 (Python 스타일 분석에서 생성된 것)
+    let analysisReason = '';
+    
+    if (!usePythonStyle) {
+      // 기존 점수 기반 분석 로직
+      const newsWeight = indicatorWeights.newsImpact || 1.0;
+      
+      // 가중치를 적용한 점수 계산
+      let buyScore = 0;
+      let sellScore = 0;
+      
+      // 조건별로 가중치 적용
+      buySignalsWithWeight.forEach((signal: any) => {
       if (signal.condition) {
         let weight = signal.weight;
         
@@ -1022,7 +1207,7 @@ class AnalysisService {
       stochasticRSI,
       macd,
       bollinger,
-      sma: { sma20, sma50 },
+      sma: { sma20, sma50, sma60: usePythonStyle ? this.calculateSMA(prices, 60) : undefined },
       atr,
       obv,
       adx,
@@ -1039,17 +1224,42 @@ class AnalysisService {
       trades: tradesData,
       kimchiPremium,
       fearGreedIndex,
+      // Python 스타일 분석 결과 추가
+      signals: pythonStyleSignals,
+      avgSignalStrength,
+      signalCounts,
+      decision,
+      decisionKr,
       scores: {
-        buyScore: normalizedBuyScore,
-        sellScore: normalizedSellScore,
-        activeSignals
+        buyScore: usePythonStyle ? signalCounts.buy : normalizedBuyScore,
+        sellScore: usePythonStyle ? signalCounts.sell : normalizedSellScore,
+        activeSignals: usePythonStyle ? 
+          pythonStyleSignals.filter(s => s.signal !== 'hold').map(s => s.source) : 
+          activeSignals
       },
+      interpretation: usePythonStyle ? {
+        level: confidence > 80 ? 'VERY_STRONG' : confidence > 60 ? 'STRONG' : confidence > 40 ? 'MODERATE' : 'WEAK',
+        activeSignals: `매수 ${signalCounts.buy}개, 매도 ${signalCounts.sell}개`,
+        dominance: decision === 'buy' ? 
+          `매수가 ${(signalCounts.buy / Math.max(signalCounts.sell, 1)).toFixed(1)}배 우세` :
+          decision === 'sell' ?
+          `매도가 ${(signalCounts.sell / Math.max(signalCounts.buy, 1)).toFixed(1)}배 우세` :
+          '중립 상태',
+        topReasons: pythonStyleSignals
+          .filter(s => s.signal !== 'hold')
+          .sort((a, b) => b.strength - a.strength)
+          .slice(0, 3)
+          .map(s => `${s.source}: ${s.description}`),
+        scoreInterpretation: decisionKr + ' 신호'
+      } : undefined,
       newsAnalysis,
       patterns,
       // Additional properties for compatibility
       volumeRatio,
-      obvTrend: 0, // OBV는 간소화를 위해 비활성화
-      whaleActivity: tradesData?.whaleDetected || false
+      obvTrend: obv ? (obv.trend === 'UP' ? 1 : obv.trend === 'DOWN' ? -1 : 0) : 0,
+      whaleActivity: tradesData?.whaleDetected || false,
+      // reason 필드 추가 (Python 스타일 분석 시 생성된 텍스트 사용)
+      reason: usePythonStyle ? analysisReason : undefined
     };
   }
 

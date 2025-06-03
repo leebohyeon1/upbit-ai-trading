@@ -1,3 +1,52 @@
+// 신호 강도 설정 (Python 프로젝트 스타일)
+export interface SignalStrengths {
+  // 이동평균선 관련
+  maCrossover: number;      // 골든크로스/데드크로스 (기본값: 0.7)
+  maLongTrend: number;      // 장기 이동평균선 추세 (기본값: 0.5)
+  
+  // 볼린저 밴드 관련
+  bbExtreme: number;        // 볼린저 밴드 상/하단 돌파 (기본값: 0.8)
+  bbMiddle: number;         // 볼린저 밴드 중간 영역 (기본값: 0.3)
+  
+  // RSI 관련
+  rsiExtreme: number;       // RSI 과매수/과매도 (기본값: 0.95)
+  rsiMiddle: number;        // RSI 중간 영역 (기본값: 0.4)
+  
+  // MACD 관련
+  macdCrossover: number;    // MACD 크로스 (기본값: 0.9)
+  macdTrend: number;        // MACD 추세 (기본값: 0.5)
+  
+  // 스토캐스틱 관련
+  stochExtreme: number;     // 스토캐스틱 과매수/과매도 (기본값: 0.7)
+  stochMiddle: number;      // 스토캐스틱 중간 영역 (기본값: 0.3)
+  
+  // 기타 지표
+  orderbook: number;        // 호가창 매수/매도 비율 (기본값: 0.7)
+  tradeData: number;        // 체결 데이터 분석 (기본값: 0.6)
+  volumeRatio: number;      // 거래량 비율 (기본값: 0.6)
+  kimchiPremium: number;    // 김치 프리미엄 (기본값: 0.7)
+  fearGreed: number;        // 공포/탐욕 지수 (기본값: 0.8)
+  obv: number;              // OBV 지표 (기본값: 0.6)
+  adx: number;              // ADX 추세 강도 (기본값: 0.7)
+}
+
+// 지표 가중치 설정 (Python 프로젝트 스타일)
+export interface IndicatorWeights {
+  MA: number;           // 이동평균선 (기본값: 0.8)
+  MA60: number;         // 장기 이동평균선 (기본값: 0.7)
+  BB: number;           // 볼린저 밴드 (기본값: 1.3)
+  RSI: number;          // RSI (기본값: 1.5)
+  MACD: number;         // MACD (기본값: 1.5)
+  Stochastic: number;   // 스토캐스틱 (기본값: 1.3)
+  Orderbook: number;    // 호가창 (기본값: 1.1)
+  Trades: number;       // 체결 데이터 (기본값: 0.9)
+  Volume: number;       // 거래량 (기본값: 1.0)
+  KIMP: number;         // 김치 프리미엄 (기본값: 1.2)
+  FearGreed: number;    // 공포/탐욕 지수 (기본값: 1.4)
+  OBV: number;          // OBV (기본값: 0.8)
+  ADX: number;          // ADX (기본값: 0.8)
+}
+
 // 간소화된 거래 전략 설정
 export interface SimplifiedTradingConfig {
   // 타임프레임 설정 (가장 중요!)
@@ -12,7 +61,19 @@ export interface SimplifiedTradingConfig {
     bollingerBands: boolean;   // 볼린저 밴드
     stochastic: boolean;       // 스토캐스틱
     volume: boolean;           // 거래량
+    orderbook?: boolean;       // 호가창
+    trades?: boolean;          // 체결 데이터
+    kimchiPremium?: boolean;   // 김치 프리미엄
+    fearGreed?: boolean;       // 공포/탐욕 지수
+    obv?: boolean;             // OBV
+    adx?: boolean;             // ADX
   };
+  
+  // Python 스타일 신호 강도 설정
+  signalStrengths: SignalStrengths;
+  
+  // Python 스타일 지표 가중치
+  indicatorWeights: IndicatorWeights;
   
   // 단순화된 매매 임계값 (이전 프로젝트 방식)
   tradingThresholds: {
@@ -142,7 +203,49 @@ export class TradingConfigHelper {
           macd: true,
           bollingerBands: true,
           stochastic: true,
-          volume: true
+          volume: true,
+          orderbook: true,
+          trades: true,
+          kimchiPremium: true,
+          fearGreed: true,
+          obv: true,
+          adx: true
+        },
+        // Python 프로젝트와 동일한 신호 강도 설정
+        signalStrengths: {
+          maCrossover: 0.7,
+          maLongTrend: 0.5,
+          bbExtreme: 0.8,
+          bbMiddle: 0.3,
+          rsiExtreme: 0.95,
+          rsiMiddle: 0.4,
+          macdCrossover: 0.9,
+          macdTrend: 0.5,
+          stochExtreme: 0.7,
+          stochMiddle: 0.3,
+          orderbook: 0.7,
+          tradeData: 0.6,
+          volumeRatio: 0.6,
+          kimchiPremium: 0.7,
+          fearGreed: 0.9,
+          obv: 0.6,
+          adx: 0.7
+        },
+        // Python 프로젝트와 동일한 지표 가중치
+        indicatorWeights: {
+          MA: 0.8,
+          MA60: 0.7,
+          BB: 1.3,
+          RSI: 1.5,
+          MACD: 1.5,
+          Stochastic: 1.3,
+          Orderbook: 1.1,
+          Trades: 0.9,
+          Volume: 1.0,
+          KIMP: 1.2,
+          FearGreed: 1.4,
+          OBV: 0.6,
+          ADX: 0.8
         },
         tradingThresholds: {
           buyThreshold: 0.15,    // 이전 프로젝트와 동일
