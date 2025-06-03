@@ -195,8 +195,8 @@ const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data: propData, titl
                   strokeWidth={2}
                   fillOpacity={1}
                   fill={chartData.some(d => d.profitRate >= 0) ? "url(#colorProfit)" : "url(#colorLoss)"}
-                  animationDuration={1000}
-                  dot={{ r: 4, strokeWidth: 2 }}
+                  animationDuration={300}
+                  dot={false}
                   activeDot={{ r: 6, strokeWidth: 2 }}
                 />
               </AreaChart>
@@ -232,4 +232,34 @@ const ProfitChartComponent: React.FC<ProfitChartProps> = ({ data: propData, titl
   );
 };
 
-export const ProfitChart = React.memo(ProfitChartComponent);
+// areEqual 함수로 props 비교 로직 추가
+const areEqual = (prevProps: ProfitChartProps, nextProps: ProfitChartProps) => {
+  // 데이터 배열의 길이가 다르면 리렌더링
+  if (prevProps.data?.length !== nextProps.data?.length) {
+    return false;
+  }
+  
+  // 제목이나 기간이 변경되면 리렌더링
+  if (prevProps.title !== nextProps.title || prevProps.days !== nextProps.days) {
+    return false;
+  }
+  
+  // 데이터가 없는 경우 동일하게 처리
+  if (!prevProps.data && !nextProps.data) {
+    return true;
+  }
+  
+  // 마지막 데이터 포인트만 비교 (전체 배열 비교는 성능에 영향)
+  if (prevProps.data && nextProps.data && prevProps.data.length > 0) {
+    const lastPrev = prevProps.data[prevProps.data.length - 1];
+    const lastNext = nextProps.data[nextProps.data.length - 1];
+    
+    return lastPrev.time === lastNext.time && 
+           lastPrev.profitRate === lastNext.profitRate &&
+           lastPrev.totalValue === lastNext.totalValue;
+  }
+  
+  return false;
+};
+
+export const ProfitChart = React.memo(ProfitChartComponent, areEqual);

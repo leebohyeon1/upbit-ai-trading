@@ -65,7 +65,7 @@ const PortfolioPieChartComponent: React.FC<PortfolioPieChartProps> = ({
                 fill="#8884d8"
                 dataKey="value"
                 animationBegin={0}
-                animationDuration={800}
+                animationDuration={300}
               >
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -85,4 +85,32 @@ const PortfolioPieChartComponent: React.FC<PortfolioPieChartProps> = ({
   );
 };
 
-export const PortfolioPieChart = React.memo(PortfolioPieChartComponent);
+// areEqual 함수로 props 비교 로직 추가
+const areEqual = (prevProps: PortfolioPieChartProps, nextProps: PortfolioPieChartProps) => {
+  // 제목이 변경되면 리렌더링
+  if (prevProps.title !== nextProps.title) {
+    return false;
+  }
+  
+  // 데이터 배열의 길이가 다르면 리렌더링
+  if (prevProps.data.length !== nextProps.data.length) {
+    return false;
+  }
+  
+  // 데이터 배열의 내용 비교 (얕은 비교)
+  for (let i = 0; i < prevProps.data.length; i++) {
+    const prev = prevProps.data[i];
+    const next = nextProps.data[i];
+    
+    // 이름, 값, 비율 중 하나라도 다르면 리렌더링
+    if (prev.name !== next.name || 
+        prev.value !== next.value || 
+        Math.abs(prev.percentage - next.percentage) > 0.01) { // 0.01% 이상 차이날 때만
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+export const PortfolioPieChart = React.memo(PortfolioPieChartComponent, areEqual);

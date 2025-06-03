@@ -87,11 +87,13 @@ const AppContent: React.FC = () => {
       }
     };
 
-    const interval = setInterval(updateTickers, 5000); // 5초마다 업데이트
+    // 초기 업데이트 간격을 30초로 늘리고, 거래 활성화 시에만 빠르게 업데이트
+    const updateInterval = context.tradingState.isRunning ? 10000 : 30000; // 거래 중: 10초, 대기 중: 30초
+    const interval = setInterval(updateTickers, updateInterval);
     updateTickers(); // 즉시 실행
 
     return () => clearInterval(interval);
-  }, [context.portfolio, context.accounts]);
+  }, [context.portfolio, context.accounts, context.tradingState.isRunning]);
 
 
   const handleAnalysisClick = (analysis: Analysis) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import {
   Grid,
   Typography,
@@ -114,8 +114,8 @@ const DashboardComponent: React.FC<DashboardProps> = ({
     };
     
     fetchTradeStats();
-    // 30초마다 업데이트
-    const interval = setInterval(fetchTradeStats, 30000);
+    // 5분마다 업데이트 (성과 통계는 자주 변하지 않음)
+    const interval = setInterval(fetchTradeStats, 300000);
     
     return () => clearInterval(interval);
   }, []);
@@ -152,14 +152,16 @@ const DashboardComponent: React.FC<DashboardProps> = ({
     // 초기 로드
     updateCooldowns();
     
-    // 5초마다 업데이트
-    const interval = setInterval(updateCooldowns, 5000);
+    // 30초마다 업데이트 (쿨다운은 초 단위로 변하지만 UI는 자주 업데이트할 필요 없음)
+    const interval = setInterval(updateCooldowns, 30000);
     
     return () => clearInterval(interval);
   }, [portfolio]);
 
-  // 계산된 통계
-  const krwBalance = accounts.find(acc => acc.currency === 'KRW')?.balance || '0';
+  // 계산된 통계 - 메모이제이션 추가
+  const krwBalance = useMemo(() => {
+    return accounts.find(acc => acc.currency === 'KRW')?.balance || '0';
+  }, [accounts]);
   
   // 총 자산 계산 (KRW + 코인 평가액) - 메모이제이션 강화
   const totalAssets = useMemo(() => {
@@ -198,8 +200,13 @@ const DashboardComponent: React.FC<DashboardProps> = ({
     return total;
   }, [accounts, tickers]);
   
-  const activeCoins = portfolio && Array.isArray(portfolio) ? portfolio.filter(c => c.enabled).length : 0;
-  const recentAnalyses = analyses.slice(0, 6);
+  const activeCoins = useMemo(() => {
+    return portfolio && Array.isArray(portfolio) ? portfolio.filter(c => c.enabled).length : 0;
+  }, [portfolio]);
+  
+  const recentAnalyses = useMemo(() => {
+    return analyses.slice(0, 6);
+  }, [analyses]);
   
   // 차트 데이터는 이제 TradingContext에서 관리됨
 
@@ -359,9 +366,10 @@ const DashboardComponent: React.FC<DashboardProps> = ({
           </Card>
         ) : (
           <Grid container spacing={2} sx={{ width: '100%' }}>
-            {portfolio && Array.isArray(portfolio) && portfolio
-              .filter(p => p.enabled)
-              .map((coin) => {
+            {portfolio && Array.isArray(portfolio) && React.useMemo(() => 
+              portfolio
+                .filter(p => p.enabled)
+                .map((coin) => {
                 const account = accounts.find(acc => acc.currency === coin.symbol);
                 const hasHoldings = account && parseFloat(account.balance) > 0;
                 const market = `KRW-${coin.symbol}`;
@@ -510,7 +518,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({
                     </AnimatedCard>
                   </Grid>
                 );
-              })}
+              }), [portfolio, accounts, tickers, cooldowns])}
           </Grid>
         )}
       </Box>

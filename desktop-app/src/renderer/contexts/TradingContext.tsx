@@ -763,12 +763,12 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           console.error('[TradingContext] Failed to update tickers:', error);
         }
       }
-    }, 1000); // 1초 디바운스
+    }, 3000); // 3초 디바운스 (기존 1초에서 변경)
     
-    // 10초마다 시세 업데이트 (디바운스 적용)
+    // 30초마다 시세 업데이트 (디바운스 적용) - 기존 10초에서 30초로 변경
     const tickerInterval = setInterval(() => {
       debouncedTickerUpdate();
-    }, 10000);
+    }, 30000);
     
     return () => {
       removeProfitListener();
