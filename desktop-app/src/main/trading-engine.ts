@@ -911,7 +911,7 @@ class TradingEngine extends EventEmitter {
             ticker: market,
             decision: technicalAnalysis.signal.toLowerCase(),
             confidence: confidenceValue,
-            reason: aiAnalysis || null,  // AI 분석이 없으면 null
+            reason: aiAnalysis || technicalAnalysis.reason || null,  // AI 분석이 없으면 기술적 분석의 reason 사용
             timestamp: new Date().toISOString(),
             tradeAttempt: tradeAttempt,
             patterns: technicalAnalysis.patterns,  // 패턴 데이터 추가
@@ -955,13 +955,18 @@ class TradingEngine extends EventEmitter {
             ticker: analysis.market,
             decision: analysis.analysis.signal.toLowerCase(),
             confidence: confidenceValue,
-            reason: analysis.aiAnalysis || null,  // AI 분석이 없으면 null
+            reason: analysis.aiAnalysis || analysis.analysis.reason || null,  // AI 분석이 없으면 기술적 분석의 reason 사용
             timestamp: new Date(analysis.lastUpdated).toISOString(),
             tradeAttempt: analysis.tradeAttempt,
             patterns: analysis.analysis.patterns,  // 패턴 데이터 추가
             currentPrice: analysis.currentPrice,
             aiEnabled: this.aiEnabled,  // AI 모드 활성화 여부 추가
-            // 기술적 지표 추가
+            // Python 스타일 분석 결과 추가
+            signals: analysis.analysis.signals,
+            avgSignalStrength: analysis.analysis.avgSignalStrength,
+            signalCounts: analysis.analysis.signalCounts,
+            interpretation: analysis.analysis.interpretation,
+            // 기술적 분석 지표 추가
             technicalIndicators: {
               rsi: analysis.analysis.rsi,
               macd: analysis.analysis.macd,

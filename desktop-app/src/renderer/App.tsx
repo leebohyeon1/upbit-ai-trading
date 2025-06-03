@@ -282,23 +282,26 @@ const AppContent: React.FC = () => {
               </Box>
               
               {/* 분석 결과 표시 (AI 활성화 여부에 관계없이) */}
-              <Box>
-                <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                  {selectedAnalysisDetail.aiEnabled ? 'AI 분석 의견' : '분석 결과'}
-                </Typography>
-                <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
-                  <Typography 
-                    variant="body1" 
-                    component="div"
-                    sx={{ 
-                      lineHeight: 1.8,
-                      whiteSpace: 'pre-line',
-                    }}
-                  >
-                    {formatAIReason(selectedAnalysisDetail.reason, selectedAnalysisDetail.decision)}
+              {(selectedAnalysisDetail.reason || selectedAnalysisDetail.signals) && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    {selectedAnalysisDetail.aiEnabled ? 'AI 분석 의견' : '분석 결과'}
                   </Typography>
-                </Paper>
-              </Box>
+                  <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
+                    <Typography 
+                      variant="body1" 
+                      component="div"
+                      sx={{ 
+                        lineHeight: 1.8,
+                        whiteSpace: 'pre-line',
+                      }}
+                    >
+                      {formatAIReason(selectedAnalysisDetail.reason, selectedAnalysisDetail.decision) || 
+                       (selectedAnalysisDetail.signals ? '기술적 분석 결과를 확인해주세요.' : '분석 결과가 없습니다.')}
+                    </Typography>
+                  </Paper>
+                </Box>
+              )}
               
               {/* Python 스타일 개별 신호 표시 */}
               {selectedAnalysisDetail.signals && selectedAnalysisDetail.signals.length > 0 && (
@@ -411,6 +414,9 @@ const AppContent: React.FC = () => {
                   <Box mt={1}>
                     {(() => {
                       console.log('[App] Modal technicalIndicators:', selectedAnalysisDetail.technicalIndicators);
+                      console.log('[App] Modal signals:', selectedAnalysisDetail.signals);
+                      console.log('[App] Modal interpretation:', selectedAnalysisDetail.interpretation);
+                      console.log('[App] Modal reason:', selectedAnalysisDetail.reason);
                       console.log('[App] Modal selectedAnalysisDetail full:', JSON.stringify(selectedAnalysisDetail, null, 2));
                       return null;
                     })()}
