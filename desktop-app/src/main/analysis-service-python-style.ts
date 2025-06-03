@@ -447,25 +447,12 @@ export class PythonStyleAnalyzer {
     }
     
     // 신뢰도 계산 (Python 프로젝트 방식)
-    let confidence = Math.abs(avgSignalStrength) * 100;
+    // confidence = 0.5 + abs(avg_signal_strength) / 2
+    // TypeScript에서는 50 + abs(avg_signal_strength) * 50으로 변환 (0.5~1.0을 50~100%로)
+    let confidence = 50 + Math.abs(avgSignalStrength) * 50;
     
-    // 활성 신호 개수에 따른 신뢰도 조정
-    const totalActiveSignals = signalCounts.buy + signalCounts.sell;
-    if (totalActiveSignals < 3) {
-      confidence *= 0.7; // 신호가 적으면 신뢰도 감소
-    } else if (totalActiveSignals > 8) {
-      confidence = Math.min(confidence * 1.2, 95); // 신호가 많으면 신뢰도 증가
-    }
-    
-    // 신호 일치도에 따른 신뢰도 조정
-    if (decision === 'buy' && signalCounts.buy > signalCounts.sell * 2) {
-      confidence = Math.min(confidence * 1.1, 95);
-    } else if (decision === 'sell' && signalCounts.sell > signalCounts.buy * 2) {
-      confidence = Math.min(confidence * 1.1, 95);
-    }
-    
-    // 신뢰도 범위 제한
-    confidence = Math.max(20, Math.min(95, confidence));
+    // 신뢰도 범위 제한 (50% ~ 100%)
+    confidence = Math.max(50, Math.min(100, confidence));
     
     return {
       decision,
