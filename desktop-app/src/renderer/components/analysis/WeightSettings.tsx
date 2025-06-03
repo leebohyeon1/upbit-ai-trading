@@ -121,6 +121,13 @@ export const WeightSettings: React.FC<WeightSettingsProps> = ({
   onLearningChange
 }) => {
   const [expanded, setExpanded] = useState<string | false>('technical');
+  
+  // 디버깅을 위한 로그
+  React.useEffect(() => {
+    console.log('[WeightSettings] Component mounted/updated');
+    console.log('[WeightSettings] learning prop:', learning);
+    console.log('[WeightSettings] onLearningChange prop:', onLearningChange);
+  }, [learning]);
 
   const handlePresetSelect = (presetKey: keyof typeof WEIGHT_PRESETS) => {
     const preset = WEIGHT_PRESETS[presetKey];
@@ -174,11 +181,17 @@ export const WeightSettings: React.FC<WeightSettingsProps> = ({
             <FormControlLabel
               control={
                 <Switch
-                  checked={learning.enabled}
-                  onChange={(e) => onLearningChange({
-                    ...learning,
-                    enabled: e.target.checked
-                  })}
+                  checked={learning.enabled || false}
+                  onChange={(e) => {
+                    console.log('[WeightSettings] Switch onChange - checked:', e.target.checked);
+                    console.log('[WeightSettings] Current learning:', learning);
+                    const updatedLearning = {
+                      ...learning,
+                      enabled: e.target.checked
+                    };
+                    console.log('[WeightSettings] Updated learning:', updatedLearning);
+                    onLearningChange(updatedLearning);
+                  }}
                 />
               }
               label="가중치 자동 조정 활성화"

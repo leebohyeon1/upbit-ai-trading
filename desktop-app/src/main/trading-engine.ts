@@ -832,8 +832,6 @@ class TradingEngine extends EventEmitter {
               learnedWeights,
               analysisConfig.weightLearning
             ),
-            // Python 스타일 분석 사용 여부 (설정이 없으면 false)
-            usePythonStyle: analysisConfig.usePythonStyle ?? false
           };
           
           // 기술적 분석 수행 (추가 데이터 및 설정 포함)
@@ -917,8 +915,24 @@ class TradingEngine extends EventEmitter {
             timestamp: new Date().toISOString(),
             tradeAttempt: tradeAttempt,
             patterns: technicalAnalysis.patterns,  // 패턴 데이터 추가
-            currentPrice: currentPrice
+            currentPrice: currentPrice,
+            aiEnabled: this.aiEnabled,  // AI 모드 활성화 여부 추가
+            // Python 스타일 분석 결과 추가
+            signals: technicalAnalysis.signals,
+            avgSignalStrength: technicalAnalysis.avgSignalStrength,
+            signalCounts: technicalAnalysis.signalCounts,
+            interpretation: technicalAnalysis.interpretation,
+            // 기술적 분석 지표 추가
+            technicalIndicators: {
+              rsi: technicalAnalysis.rsi,
+              macd: technicalAnalysis.macd,
+              bollinger: technicalAnalysis.bollinger,
+              volume: technicalAnalysis.volumeRatio,
+              patterns: technicalAnalysis.patterns
+            }
           };
+          
+          console.log(`[${market}] Frontend analysis technicalIndicators:`, frontendAnalysis.technicalIndicators);
           
           this.emit('singleAnalysisCompleted', frontendAnalysis);
 
@@ -945,7 +959,16 @@ class TradingEngine extends EventEmitter {
             timestamp: new Date(analysis.lastUpdated).toISOString(),
             tradeAttempt: analysis.tradeAttempt,
             patterns: analysis.analysis.patterns,  // 패턴 데이터 추가
-            currentPrice: analysis.currentPrice
+            currentPrice: analysis.currentPrice,
+            aiEnabled: this.aiEnabled,  // AI 모드 활성화 여부 추가
+            // 기술적 지표 추가
+            technicalIndicators: {
+              rsi: analysis.analysis.rsi,
+              macd: analysis.analysis.macd,
+              bollinger: analysis.analysis.bollinger,
+              volume: analysis.analysis.volumeRatio,
+              patterns: analysis.analysis.patterns
+            }
           };
         });
       
@@ -1023,7 +1046,6 @@ class TradingEngine extends EventEmitter {
         volatilityAdjustment: analysisConfig.volatilityAdjustment ?? false,
         newsImpactMultiplier: analysisConfig.newsImpactMultiplier ?? 1.0,
         preferredTradingHours: analysisConfig.preferredTradingHours ?? [],
-        usePythonStyle: analysisConfig.usePythonStyle ?? false
       };
       
       console.log(`[${market}] CoinConfig applied:`, {
@@ -1041,7 +1063,6 @@ class TradingEngine extends EventEmitter {
         minVolume: coinConfig.minVolume,
         useKellyOptimization: coinConfig.useKellyOptimization,
         volatilityAdjustment: coinConfig.volatilityAdjustment,
-        usePythonStyle: coinConfig.usePythonStyle
       });
       
       // UI에서 설정한 preferredTradingHours가 있으면 확인

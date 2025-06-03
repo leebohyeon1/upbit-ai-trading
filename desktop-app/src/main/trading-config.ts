@@ -138,8 +138,6 @@ export interface CoinSpecificConfig {
   useSimplifiedConfig?: boolean;
   simplifiedConfig?: SimplifiedTradingConfig;
   
-  // Python 스타일 분석 사용 (간소화 모드와 독립적)
-  usePythonStyle?: boolean;
 }
 
 // 시장 상황별 조정 계수

@@ -38,6 +38,7 @@
   },
   "type": "commonjs",
   "devDependencies": {
+    "@types/lodash": "^4.17.17",
     "@types/node": "^22.15.21",
     "concurrently": "^8.2.2",
     "copy-webpack-plugin": "^13.0.0",

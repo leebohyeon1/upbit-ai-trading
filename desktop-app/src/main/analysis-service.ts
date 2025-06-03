@@ -686,7 +686,7 @@ class AnalysisService {
 
     // Python 스타일 분석을 사용할지 결정 (독립적으로 설정 가능)
     // config.usePythonStyle이 명시적으로 설정되지 않은 경우에만 useSimplifiedMode를 기본값으로 사용
-    const usePythonStyle = config?.usePythonStyle !== undefined ? config.usePythonStyle : useSimplifiedMode;
+    const usePythonStyle = true;
     
     // reason 텍스트를 위한 변수 선언 (스코프 문제 해결)
     let analysisReason = '';
@@ -1212,7 +1212,7 @@ class AnalysisService {
       stochasticRSI,
       macd,
       bollinger,
-      sma: { sma20, sma50, sma60: usePythonStyle ? this.calculateSMA(prices, 60) : undefined },
+      sma: { sma20, sma50, sma60: this.calculateSMA(prices, 60) },
       atr,
       obv,
       adx,
@@ -1236,13 +1236,11 @@ class AnalysisService {
       decision,
       decisionKr,
       scores: {
-        buyScore: usePythonStyle ? signalCounts.buy : normalizedBuyScore,
-        sellScore: usePythonStyle ? signalCounts.sell : normalizedSellScore,
-        activeSignals: usePythonStyle ? 
-          pythonStyleSignals.filter(s => s.signal !== 'hold').map(s => s.source) : 
-          activeSignals
+        buyScore: signalCounts.buy,
+        sellScore: signalCounts.sell,
+        activeSignals: pythonStyleSignals.filter(s => s.signal !== 'hold').map(s => s.source)
       },
-      interpretation: usePythonStyle ? {
+      interpretation: {
         level: confidence > 80 ? 'VERY_STRONG' : confidence > 60 ? 'STRONG' : confidence > 40 ? 'MODERATE' : 'WEAK',
         activeSignals: `매수 ${signalCounts.buy}개, 매도 ${signalCounts.sell}개`,
         dominance: decision === 'buy' ? 
@@ -1256,7 +1254,7 @@ class AnalysisService {
           .slice(0, 3)
           .map(s => `${s.source}: ${s.description}`),
         scoreInterpretation: decisionKr + ' 신호'
-      } : undefined,
+      },
       newsAnalysis,
       patterns,
       // Additional properties for compatibility
@@ -1264,7 +1262,7 @@ class AnalysisService {
       obvTrend: obv ? (obv.trend === 'UP' ? 1 : obv.trend === 'DOWN' ? -1 : 0) : 0,
       whaleActivity: tradesData?.whaleDetected || false,
       // reason 필드 추가 (Python 스타일 분석 시 생성된 텍스트 사용)
-      reason: usePythonStyle ? analysisReason : undefined
+      reason: analysisReason
     };
   }
 

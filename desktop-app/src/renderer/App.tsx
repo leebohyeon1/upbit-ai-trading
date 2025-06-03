@@ -95,6 +95,9 @@ const AppContent: React.FC = () => {
 
 
   const handleAnalysisClick = (analysis: Analysis) => {
+    console.log('[App] Analysis clicked:', analysis);
+    console.log('[App] Analysis technicalIndicators:', analysis.technicalIndicators);
+    console.log('[App] All analyses from context:', context.analyses);
     setSelectedAnalysisDetail(analysis);
     setAnalysisDetailOpen(true);
   };
@@ -278,26 +281,24 @@ const AppContent: React.FC = () => {
                 </Box>
               </Box>
               
-              {/* AI 분석 또는 Python 스타일 분석 결과 표시 */}
-              {selectedAnalysisDetail.reason && (
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    {context.tradingState.aiEnabled ? 'AI 분석 의견' : '분석 결과'}
+              {/* 분석 결과 표시 (AI 활성화 여부에 관계없이) */}
+              <Box>
+                <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                  {selectedAnalysisDetail.aiEnabled ? 'AI 분석 의견' : '분석 결과'}
+                </Typography>
+                <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
+                  <Typography 
+                    variant="body1" 
+                    component="div"
+                    sx={{ 
+                      lineHeight: 1.8,
+                      whiteSpace: 'pre-line',
+                    }}
+                  >
+                    {formatAIReason(selectedAnalysisDetail.reason, selectedAnalysisDetail.decision)}
                   </Typography>
-                  <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
-                    <Typography 
-                      variant="body1" 
-                      component="div"
-                      sx={{ 
-                        lineHeight: 1.8,
-                        whiteSpace: 'pre-line',
-                      }}
-                    >
-                      {formatAIReason(selectedAnalysisDetail.reason, selectedAnalysisDetail.decision)}
-                    </Typography>
-                  </Paper>
-                </Box>
-              )}
+                </Paper>
+              </Box>
               
               {/* Python 스타일 개별 신호 표시 */}
               {selectedAnalysisDetail.signals && selectedAnalysisDetail.signals.length > 0 && (
@@ -385,9 +386,78 @@ const AppContent: React.FC = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">AI 모드</Typography>
-                    <Typography variant="body2">{context.tradingState.aiEnabled ? '활성' : '비활성'}</Typography>
+                    <Typography variant="body2">{selectedAnalysisDetail.aiEnabled ? '활성' : '비활성'}</Typography>
                   </Grid>
+                  {/* AI가 비활성화되었을 때 기술적 분석 결과 표시 */}
+                  {!selectedAnalysisDetail.aiEnabled && !selectedAnalysisDetail.reason && (
+                    <>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">분석 방식</Typography>
+                        <Typography variant="body2">기술적 지표 분석</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">신뢰도 기준</Typography>
+                        <Typography variant="body2">
+                          {selectedAnalysisDetail.decision === 'buy' ? '매수 60%' : '매도 70%'}
+                        </Typography>
+                      </Grid>
+                    </>
+                  )}
                 </Grid>
+                
+                {/* 주요 지표 표시 (AI 모드 여부와 관계없이) */}
+                <Box mt={2}>
+                  <Typography variant="caption" color="text.secondary">주요 분석 지표</Typography>
+                  <Box mt={1}>
+                    {(() => {
+                      console.log('[App] Modal technicalIndicators:', selectedAnalysisDetail.technicalIndicators);
+                      console.log('[App] Modal selectedAnalysisDetail full:', JSON.stringify(selectedAnalysisDetail, null, 2));
+                      return null;
+                    })()}
+                    {selectedAnalysisDetail.technicalIndicators ? (
+                      <>
+                        {selectedAnalysisDetail.technicalIndicators.rsi !== undefined && (
+                          <Typography variant="body2">
+                            • RSI: {selectedAnalysisDetail.technicalIndicators.rsi.toFixed(1)} 
+                            {selectedAnalysisDetail.technicalIndicators.rsi > 70 ? ' (과매수)' : 
+                             selectedAnalysisDetail.technicalIndicators.rsi < 30 ? ' (과매도)' : ''}
+                          </Typography>
+                        )}
+                        {selectedAnalysisDetail.technicalIndicators.macd && (
+                          <Typography variant="body2">
+                            • MACD: {selectedAnalysisDetail.technicalIndicators.macd.histogram.toFixed(3)} 
+                            {selectedAnalysisDetail.technicalIndicators.macd.histogram > 0 ? ' (상승 신호)' : ' (하락 신호)'}
+                          </Typography>
+                        )}
+                        {selectedAnalysisDetail.technicalIndicators.bollinger && (
+                          <Typography variant="body2">
+                            • 볼린저 밴드: 위치 {(selectedAnalysisDetail.technicalIndicators.bollinger.position * 100).toFixed(0)}% 
+                            {selectedAnalysisDetail.technicalIndicators.bollinger.position > 0.8 ? ' (상단)' : 
+                             selectedAnalysisDetail.technicalIndicators.bollinger.position < 0.2 ? ' (하단)' : ' (중간)'}
+                          </Typography>
+                        )}
+                        {selectedAnalysisDetail.technicalIndicators.volume !== undefined && (
+                          <Typography variant="body2">
+                            • 거래량: 평균 대비 {(selectedAnalysisDetail.technicalIndicators.volume * 100).toFixed(0)}%
+                          </Typography>
+                        )}
+                        {selectedAnalysisDetail.patterns && selectedAnalysisDetail.patterns.candlePatterns.length > 0 && (
+                          <Typography variant="body2">
+                            • 패턴: {selectedAnalysisDetail.patterns.candlePatterns.length}개 캔들 패턴 감지
+                          </Typography>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Typography variant="body2">• RSI (과매수/과매도)</Typography>
+                        <Typography variant="body2">• MACD (추세 전환)</Typography>
+                        <Typography variant="body2">• 볼린저 밴드 (변동성)</Typography>
+                        <Typography variant="body2">• 거래량 분석</Typography>
+                        <Typography variant="body2">• 패턴 인식</Typography>
+                      </>
+                    )}
+                  </Box>
+                </Box>
               </Box>
             </DialogContent>
             <DialogActions>

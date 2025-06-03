@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { Box, CircularProgress } from '@mui/material';
+import { debounce } from 'lodash';
 import {
   TradingState,
   TradingConfig,
@@ -519,78 +520,102 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     });
   }, []);
 
-  // 이벤트 리스너 설정
+  // 이벤트 리스너 설정 - 모든 이벤트 리스너를 TradingContext에서 통합 관리
   useEffect(() => {
-    const removeApiKeyListener = window.electronAPI.onApiKeyStatus((status) => {
-      setApiKeyStatus(status);
-    });
-
-    const removeAnalysisListener = window.electronAPI.onAnalysisCompleted((data) => {
-      console.log('[TradingContext] Analysis completed event received:', data);
-      setAnalyses(data);
-    });
+    console.log('[TradingContext] Setting up all event listeners...');
     
-    // single-analysis-completed 이벤트도 리스닝
-    console.log('[TradingContext] Setting up single-analysis-completed listener');
-    const removeSingleAnalysisListener = window.electronAPI.onSingleAnalysisCompleted((analysis) => {
-      console.log('[TradingContext] Single analysis completed event received:', analysis);
-      setAnalyses(prev => {
-        console.log('[TradingContext] Previous analyses:', prev);
-        // 기존 분석 중 같은 ticker가 있으면 업데이트, 없으면 추가
-        const existingIndex = prev.findIndex(a => a.ticker === analysis.ticker);
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = analysis;
-          console.log('[TradingContext] Updated analyses:', updated);
-          return updated;
-        } else {
-          const newAnalyses = [...prev, analysis];
-          console.log('[TradingContext] New analyses:', newAnalyses);
-          return newAnalyses;
+    // 모든 이벤트 리스너를 배열로 관리하여 cleanup 용이하게 함
+    const unsubscribers = [
+      // API 키 상태
+      window.electronAPI.onApiKeyStatus((status) => {
+        setApiKeyStatus(status);
+      }),
+      
+      // 분석 완료 이벤트
+      window.electronAPI.onAnalysisCompleted((data) => {
+        console.log('[TradingContext] Analysis completed event received:', data);
+        setAnalyses(data);
+      }),
+      
+      // 단일 분석 완료 이벤트
+      window.electronAPI.onSingleAnalysisCompleted((analysis) => {
+        console.log('[TradingContext] Single analysis completed event received:', analysis);
+        console.log('[TradingContext] Full analysis object:', JSON.stringify(analysis, null, 2));
+        console.log('[TradingContext] technicalIndicators:', analysis.technicalIndicators);
+        console.log('[TradingContext] AI Enabled:', analysis.aiEnabled);
+        
+        // technicalIndicators가 없는 경우 경고
+        if (!analysis.technicalIndicators) {
+          console.warn('[TradingContext] WARNING: technicalIndicators is missing from analysis data!');
         }
-      });
-    });
-
-    console.log('[TradingContext] Setting up trading state listener');
-    const removeTradingStateListener = window.electronAPI.onTradingStateChanged((state) => {
-      console.log('[TradingContext] Trading state changed event received:', state);
-      console.log('[TradingContext] Previous state:', localTradingState);
-      // 새 객체로 복사하여 React가 변경을 감지하도록 함
-      setLocalTradingState({ ...state });
-    });
-
-    const removeLearningListener = window.electronAPI.onLearningProgress((states) => {
-      console.log('[TradingContext] Learning progress event received:', states);
-      setLearningStates(states);
-    });
+        
+        setAnalyses(prev => {
+          const existingIndex = prev.findIndex(a => a.ticker === analysis.ticker);
+          if (existingIndex >= 0) {
+            const updated = [...prev];
+            updated[existingIndex] = analysis;
+            return updated;
+          }
+          return [...prev, analysis];
+        });
+      }),
+      
+      // 거래 상태 변경
+      window.electronAPI.onTradingStateChanged((state) => {
+        console.log('[TradingContext] Trading state changed:', state);
+        setLocalTradingState({ ...state });
+      }),
+      
+      // 학습 진행 상황
+      window.electronAPI.onLearningProgress((states) => {
+        console.log('[TradingContext] Learning progress:', states);
+        setLearningStates(states);
+      }),
+      
+      // 계좌 업데이트
+      window.electronAPI.onAccountsUpdated((accounts: Account[]) => {
+        console.log('[TradingContext] Account update received:', accounts);
+        setAccounts(accounts);
+      }),
+      
+      // 티커 업데이트 (추가)
+      window.electronAPI.onTickersUpdated?.((tickers: TickerData[]) => {
+        console.log('[TradingContext] Ticker update received:', tickers);
+        setTickers(tickers);
+      }) || (() => {}),
+      
+      // 수익률 업데이트 (추가)
+      window.electronAPI.onProfitUpdate((profitData: ProfitHistoryItem[]) => {
+        console.log('[TradingContext] Profit update received:', profitData);
+        if (profitData && profitData.length > 0) {
+          setProfitHistory(profitData);
+        }
+      })
+    ];
     
-    // 초기 거래 상태 로드
-    window.electronAPI.getTradingState().then((state) => {
-      console.log('[TradingContext] Initial trading state loaded:', state);
-      setLocalTradingState(state);
-    }).catch(console.error);
-    
-    // 초기 학습 상태 로드
-    window.electronAPI.getLearningStates().then((states) => {
-      console.log('[TradingContext] Initial learning states loaded:', states);
-      setLearningStates(states);
-    }).catch(console.error);
-
-    // 초기 지원 코인 목록 로드
-    window.electronAPI.getSupportedKrwCoins().then((coins) => {
-      console.log('[TradingContext] Supported coins loaded:', coins);
-      setSupportedCoins(coins);
-    }).catch(console.error);
-
-    // 초기 계좌 정보 로드
-    window.electronAPI.fetchAccounts().then((accounts) => {
-      console.log('[TradingContext] Initial accounts loaded:', accounts);
-      setAccounts(accounts);
-    }).catch(console.error);
-
-    // 초기 시세 정보 로드 (활성화된 코인들)
-    const loadInitialTickers = async () => {
+    // 초기 데이터 로드를 Promise.all로 병렬 처리
+    const loadInitialData = async () => {
       try {
+        const [tradingState, learningStates, supportedCoins, accounts] = await Promise.all([
+          window.electronAPI.getTradingState(),
+          window.electronAPI.getLearningStates(),
+          window.electronAPI.getSupportedKrwCoins(),
+          window.electronAPI.fetchAccounts()
+        ]);
+        
+        console.log('[TradingContext] Initial data loaded:', {
+          tradingState,
+          learningStates: learningStates.length,
+          supportedCoins: supportedCoins.length,
+          accounts: accounts.length
+        });
+        
+        setLocalTradingState(tradingState);
+        setLearningStates(learningStates);
+        setSupportedCoins(supportedCoins);
+        setAccounts(accounts);
+        
+        // 포트폴리오 기반 티커 로드
         const savedPortfolio = await window.electronAPI.getPortfolio();
         if (savedPortfolio && savedPortfolio.length > 0) {
           const enabledSymbols = savedPortfolio
@@ -604,18 +629,16 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           }
         }
       } catch (error) {
-        console.error('[TradingContext] Failed to load initial tickers:', error);
+        console.error('[TradingContext] Failed to load initial data:', error);
       }
     };
     
-    loadInitialTickers();
-
+    loadInitialData();
+    
+    // Cleanup function
     return () => {
-      removeApiKeyListener();
-      removeAnalysisListener();
-      removeSingleAnalysisListener();
-      removeTradingStateListener();
-      removeLearningListener();
+      console.log('[TradingContext] Cleaning up event listeners...');
+      unsubscribers.forEach(unsubscribe => unsubscribe());
     };
   }, []);
 
@@ -727,23 +750,25 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       setProfitHistory(profitHistory);
     });
     
-    // 활성화된 코인의 시세를 주기적으로 업데이트
-    const updateTickers = async () => {
+    // 디바운스된 ticker 업데이트 함수
+    const debouncedTickerUpdate = debounce(async () => {
       const enabledCoins = portfolio.filter(p => p.enabled);
       if (enabledCoins.length > 0) {
         try {
           const symbols = enabledCoins.map(p => p.symbol);
           const updatedTickers = await window.electronAPI.fetchTickers(symbols);
-          console.log('[TradingContext] Periodic ticker update:', updatedTickers);
+          console.log('[TradingContext] Debounced ticker update:', updatedTickers);
           setTickers(updatedTickers);
         } catch (error) {
           console.error('[TradingContext] Failed to update tickers:', error);
         }
       }
-    };
+    }, 1000); // 1초 디바운스
     
-    // 10초마다 시세 업데이트
-    const tickerInterval = setInterval(updateTickers, 10000);
+    // 10초마다 시세 업데이트 (디바운스 적용)
+    const tickerInterval = setInterval(() => {
+      debouncedTickerUpdate();
+    }, 10000);
     
     return () => {
       removeProfitListener();

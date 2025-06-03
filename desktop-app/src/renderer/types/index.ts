@@ -93,6 +93,24 @@ export interface Analysis {
     topReasons: string[];
     scoreInterpretation: string;
   };
+  aiEnabled?: boolean; // AI 모드 활성화 여부
+  technicalIndicators?: {
+    rsi?: number;
+    macd?: {
+      macd: number;
+      signal: number;
+      histogram: number;
+    };
+    bollinger?: {
+      upper: number;
+      middle: number;
+      lower: number;
+      band_width: number;
+      position: number;
+    };
+    volume?: number;
+    patterns?: any;
+  };
 }
 
 export interface TradeAttempt {

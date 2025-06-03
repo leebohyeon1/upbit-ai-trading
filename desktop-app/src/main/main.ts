@@ -342,6 +342,10 @@ class TradingApp {
       
       // 렌더러에 상태 업데이트 즉시 알림
       this.sendStatusUpdate();
+      // trading-state-changed 이벤트도 명시적으로 보내기
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('trading-state-changed', this.tradingState);
+      }
       
       // 약간의 지연 후 실제 거래 엔진 시작 (UI 업데이트가 반영되도록)
       setTimeout(async () => {
@@ -373,6 +377,10 @@ class TradingApp {
             
             // 렌더러에 상태 업데이트 알림
             this.sendStatusUpdate();
+            // trading-state-changed 이벤트도 명시적으로 보내기
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send('trading-state-changed', this.tradingState);
+            }
           }
         } catch (error) {
           console.error('Failed to start trading engine:', error);
@@ -809,7 +817,19 @@ class TradingApp {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       try {
         const status = tradingEngine.getStatus();
+        // tradingEngine의 상태로 this.tradingState 동기화
+        this.tradingState.isRunning = status.isRunning;
+        this.tradingState.aiEnabled = status.aiEnabled;
+        this.tradingState.lastUpdate = new Date().toISOString();
+        
+        // trading-status-update와 trading-state-changed 둘 다 보내기
         this.mainWindow.webContents.send('trading-status-update', status);
+        this.mainWindow.webContents.send('trading-state-changed', this.tradingState);
+        
+        console.log('[Main] Status update sent:', { 
+          isRunning: this.tradingState.isRunning,
+          aiEnabled: this.tradingState.aiEnabled 
+        });
       } catch (error) {
         console.error('Failed to send status update:', error);
       }
@@ -1396,20 +1416,35 @@ class TradingApp {
           });
         }
         
+        // 포트폴리오에서 활성화된 코인만 필터링
+        const portfolio = JSON.parse(fs.readFileSync(this.getPortfolioPath(), 'utf-8') || '[]');
+        const enabledSymbols = portfolio
+          .filter((coin: any) => coin.enabled === true)
+          .map((coin: any) => coin.symbol);
+        
+        console.log('[Main] Enabled coins from portfolio:', enabledSymbols);
+        
+        // analysisConfigs 중에서 활성화된 코인만 필터링
+        const enabledAnalysisConfigs = analysisConfigs.filter(config => {
+          const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+          return enabledSymbols.includes(symbol);
+        });
+        
+        console.log('[Main] Filtered analysis configs:', enabledAnalysisConfigs.length);
+        
         // AI 설정
         tradingEngine.toggleAI(tradingConfig.useAI || false);
         
-        // 분석 설정 전달 (UI에서 설정한 코인별 거래 파라미터)
-        // 이것은 setActiveMarkets 이후에 호출되어야 함
-        tradingEngine.setAnalysisConfigs(analysisConfigs);
+        // 분석 설정 전달 (활성화된 코인만)
+        tradingEngine.setAnalysisConfigs(enabledAnalysisConfigs);
         
-        // 거래 시작 (analysisConfigs에서 시장 목록 추출)
-        const markets = analysisConfigs.map(config => {
+        // 활성화된 코인들의 market 목록 생성
+        const markets = enabledAnalysisConfigs.map(config => {
           // config.ticker가 이미 KRW-를 포함하고 있을 수 있음
           return config.ticker.startsWith('KRW-') ? config.ticker : `KRW-${config.ticker}`;
         });
         
-        console.log('[Main] Extracted markets from analysisConfigs:', markets);
+        console.log('[Main] Extracted markets from enabled configs:', markets);
         
         if (markets.length === 0) {
           console.error('[Main] No markets to trade after extraction');

@@ -40,7 +40,11 @@ export const formatTimeAgo = (date: Date | string | number): string => {
   return `${Math.floor(diff / 86400)}일 전`;
 };
 
-export const formatAIReason = (reason: string, decision: string): string => {
+export const formatAIReason = (reason: string | null | undefined, decision: string): string => {
+  if (!reason) {
+    return '기술적 지표 분석에 기반한 자동 매매 결정입니다.';
+  }
+  
   const decisionKorean = {
     'buy': '매수',
     'sell': '매도',

@@ -67,7 +67,6 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
     useKellyOptimization: false,
     volatilityAdjustment: false,
     newsImpactMultiplier: 1.0,
-    usePythonStyle: false,
     indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
     weightLearning: {
       enabled: false,
@@ -129,7 +128,6 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
       useKellyOptimization: settings.useKellyOptimization || false,
       volatilityAdjustment: settings.volatilityAdjustment || false,
       newsImpactMultiplier: settings.newsImpactMultiplier || 1.0,
-      usePythonStyle: settings.usePythonStyle || false,
       indicatorWeights: settings.indicatorWeights || DEFAULT_INDICATOR_WEIGHTS,
       weightLearning: settings.weightLearning || {
         enabled: false,
@@ -153,7 +151,9 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
   }, [settings]);
 
   const handleChange = (field: string, value: any) => {
+    console.log(`[${symbol}] handleChange called - field: ${field}, value:`, value);
     const newSettings = { ...localSettings, [field]: value };
+    console.log(`[${symbol}] New settings after change:`, newSettings);
     setLocalSettings(newSettings);
     onSettingsChange(symbol, newSettings);
     console.log(`[${symbol}] Settings changed:`, field, value);
@@ -407,22 +407,6 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                     }
                     label="패턴 인식 사용"
                   />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={localSettings.usePythonStyle || false}
-                        onChange={(e) => handleChange('usePythonStyle', e.target.checked)}
-                      />
-                    }
-                    label={
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        Python 스타일 분석
-                        <Tooltip title="이전 Python 프로젝트와 동일한 방식으로 기술적 지표를 분석합니다. 지표별 가중치와 신호 강도를 사용하여 매매 결정을 내립니다.">
-                          <Info sx={{ fontSize: 16, color: 'text.secondary' }} />
-                        </Tooltip>
-                      </Box>
-                    }
-                  />
                 </Box>
                 {localSettings.enablePatternRecognition !== false && (
                   <Box sx={{ mt: 2, px: 2 }}>
@@ -451,7 +435,7 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
               <WeightSettings
                 weights={localSettings.indicatorWeights || DEFAULT_INDICATOR_WEIGHTS}
                 onChange={(weights) => handleChange('indicatorWeights', weights)}
-                learning={learningInfo || localSettings.weightLearning || {
+                learning={localSettings.weightLearning || {
                   enabled: false,
                   mode: 'individual',
                   minTrades: 50,
@@ -465,7 +449,9 @@ const CoinSettingsPanel: React.FC<CoinSettingsPanelProps> = ({
                 }}
                 onLearningChange={(learning) => {
                   console.log(`[${symbol}] Weight learning changed:`, learning);
-                  handleChange('weightLearning', { ...learning, enabled: learning.enabled });
+                  const updatedLearning = { ...learning };
+                  console.log(`[${symbol}] Updated learning to save:`, updatedLearning);
+                  handleChange('weightLearning', updatedLearning);
                 }}
               />
             </Box>
@@ -513,8 +499,7 @@ export const AnalysisSettings: React.FC = () => {
         minVolume: 200000000,
         volatilityAdjustment: true,
         useKellyOptimization: false,
-        usePythonStyle: false,
-        indicatorWeights: {
+            indicatorWeights: {
           ...DEFAULT_INDICATOR_WEIGHTS,
           rsi: 1.2,
           macd: 1.2,
@@ -548,8 +533,7 @@ export const AnalysisSettings: React.FC = () => {
         minVolume: 100000000,
         volatilityAdjustment: true,
         useKellyOptimization: false,
-        usePythonStyle: false,
-        indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
+            indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
         cooldownLearning: {
           enabled: false,
           minTrades: 30,
@@ -576,8 +560,7 @@ export const AnalysisSettings: React.FC = () => {
         minVolume: 50000000,
         volatilityAdjustment: false,
         useKellyOptimization: true,
-        usePythonStyle: true,
-        indicatorWeights: {
+            indicatorWeights: {
           ...DEFAULT_INDICATOR_WEIGHTS,
           rsi: 0.8,
           macd: 0.8,
@@ -646,8 +629,7 @@ export const AnalysisSettings: React.FC = () => {
                 volatilityAdjustment: true,
                 useKellyOptimization: false,
                 newsImpactMultiplier: 1.0,
-                usePythonStyle: false,
-                indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
+                            indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
                 weightLearning: {
                   enabled: false,
                   mode: 'individual' as const,
@@ -721,6 +703,8 @@ export const AnalysisSettings: React.FC = () => {
         const configArray = Object.values(updatedConfigs).map((config: any) => {
           // buying/selling 객체 제거하고 평탄화
           const { buying, selling, ...cleanConfig } = config;
+          // weightLearning이 포함되어 있는지 확인
+          console.log(`[${coin}] Config to save includes weightLearning:`, cleanConfig.weightLearning);
           return cleanConfig;
         });
         console.log('[AnalysisSettings] Auto-saving configs:', configArray);
@@ -804,8 +788,7 @@ export const AnalysisSettings: React.FC = () => {
         volatilityAdjustment: true,
         useKellyOptimization: false,
         newsImpactMultiplier: 1.0,
-        usePythonStyle: false,
-        indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
+            indicatorWeights: DEFAULT_INDICATOR_WEIGHTS,
         weightLearning: {
           enabled: false,
           mode: 'individual' as const,

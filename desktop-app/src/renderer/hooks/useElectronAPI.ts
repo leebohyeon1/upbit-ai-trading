@@ -237,49 +237,10 @@ export const useElectronAPI = () => {
     }
   }, []);
 
-  // 이벤트 리스너 설정
+  // 이벤트 리스너 제거 - TradingContext에서 통합 관리
+  // 초기 데이터 로드만 수행
   useEffect(() => {
-    const removeApiKeyListener = window.electronAPI.onApiKeyStatus((status) => {
-      setApiKeyStatus(status);
-    });
-
-    const removeAnalysisListener = window.electronAPI.onAnalysisCompleted((data) => {
-      console.log('[useElectronAPI] Analysis completed event received:', data);
-      setAnalyses(data);
-    });
-    
-    // single-analysis-completed 이벤트도 리스닝
-    const removeSingleAnalysisListener = window.electronAPI.onSingleAnalysisCompleted((analysis) => {
-      console.log('[useElectronAPI] Single analysis completed event received:', analysis);
-      setAnalyses(prev => {
-        console.log('[useElectronAPI] Previous analyses:', prev);
-        // 기존 분석 중 같은 ticker가 있으면 업데이트, 없으면 추가
-        const existingIndex = prev.findIndex(a => a.ticker === analysis.ticker);
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = analysis;
-          console.log('[useElectronAPI] Updated analyses:', updated);
-          return updated;
-        } else {
-          const newAnalyses = [...prev, analysis];
-          console.log('[useElectronAPI] New analyses:', newAnalyses);
-          return newAnalyses;
-        }
-      });
-    });
-
-    console.log('[useElectronAPI] Setting up trading state listener');
-    const removeTradingStateListener = window.electronAPI.onTradingStateChanged((state) => {
-      console.log('[useElectronAPI] Trading state changed event received:', state);
-      console.log('[useElectronAPI] Previous state:', tradingState);
-      // 새 객체로 복사하여 React가 변경을 감지하도록 함
-      setTradingState({ ...state });
-    });
-
-    const removeLearningListener = window.electronAPI.onLearningProgress((states) => {
-      console.log('[useElectronAPI] Learning progress event received:', states);
-      setLearningStates(states);
-    });
+    console.log('[useElectronAPI] Loading initial states...');
     
     // 초기 거래 상태 로드
     window.electronAPI.getTradingState().then((state) => {
@@ -298,14 +259,6 @@ export const useElectronAPI = () => {
       console.log('[useElectronAPI] Supported coins loaded:', coins);
       setSupportedCoins(coins);
     }).catch(console.error);
-
-    return () => {
-      removeApiKeyListener();
-      removeAnalysisListener();
-      removeSingleAnalysisListener();
-      removeTradingStateListener();
-      removeLearningListener();
-    };
   }, []);
 
   return {

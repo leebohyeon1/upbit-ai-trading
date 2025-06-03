@@ -117,8 +117,9 @@ class NewsApiService extends EventEmitter {
   private async fetchGoogleNews(symbol: string, limit: number): Promise<NewsArticle[]> {
     try {
       // RSS를 JSON으로 변환해주는 서비스 사용
-      const query = encodeURIComponent(`${symbol} cryptocurrency blockchain`);
-      const url = `https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
+      const query = `${symbol} cryptocurrency blockchain`;
+      const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+      const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
       
       const response = await axios.get(url, { timeout: 10000 });
       

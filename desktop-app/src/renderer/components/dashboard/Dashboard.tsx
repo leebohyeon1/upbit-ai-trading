@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import {
   Grid,
   Typography,
@@ -53,7 +53,7 @@ interface CooldownInfo {
   sellTotal: number;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({
+const DashboardComponent: React.FC<DashboardProps> = ({
   onTabChange,
   onAnalysisClick
 }) => {
@@ -161,35 +161,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // 계산된 통계
   const krwBalance = accounts.find(acc => acc.currency === 'KRW')?.balance || '0';
   
-  // 총 자산 계산 (KRW + 코인 평가액)
+  // 총 자산 계산 (KRW + 코인 평가액) - 메모이제이션 강화
   const totalAssets = useMemo(() => {
+    // 계정이나 티커가 없으면 0 반환
+    if (!accounts.length || !Array.isArray(tickers)) {
+      return 0;
+    }
+    
     let total = 0;
     
-    // 디버깅 로그
+    // 디버깅 로그 최소화
     console.log('[Dashboard] Calculating totalAssets...');
-    console.log('[Dashboard] accounts:', accounts);
-    console.log('[Dashboard] tickers type:', Array.isArray(tickers) ? 'array' : typeof tickers);
-    console.log('[Dashboard] tickers:', tickers);
+    
+    // Map으로 변환하여 검색 성능 향상
+    const tickerMap = new Map(
+      tickers.map(t => [t.market, t])
+    );
     
     accounts.forEach(acc => {
       if (acc.currency === 'KRW') {
-        const krwBalance = parseFloat(acc.balance);
-        total += krwBalance;
-        console.log(`[Dashboard] KRW balance: ${krwBalance}`);
+        total += parseFloat(acc.balance);
       } else {
-        // 코인의 현재가로 평가
-        const market = `KRW-${acc.currency}`;
-        // tickers가 배열인지 객체인지 확인하여 처리
-        const ticker = Array.isArray(tickers) 
-          ? tickers.find((t: any) => t.market === market)
-          : Object.values(tickers).find((t: any) => t.market === market);
+        const balance = parseFloat(acc.balance);
+        if (balance > 0) {
+          const market = `KRW-${acc.currency}`;
+          const ticker = tickerMap.get(market);
           
-        if (ticker && parseFloat(acc.balance) > 0) {
-          const coinValue = parseFloat(acc.balance) * (ticker as any).trade_price;
-          total += coinValue;
-          console.log(`[Dashboard] ${acc.currency}: balance=${acc.balance}, price=${(ticker as any).trade_price}, value=${coinValue}`);
-        } else {
-          console.log(`[Dashboard] No ticker found for ${market} or zero balance`);
+          if (ticker) {
+            total += balance * ticker.trade_price;
+          }
         }
       }
     });
@@ -320,7 +320,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <AnalysisCard
                   analysis={analysis}
                   onClick={() => onAnalysisClick(analysis)}
-                  showAI={tradingConfig.useAI}
                 />
               </Grid>
             ))}
@@ -593,3 +592,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     </Box>
   );
 };
+
+// React.memo로 컴포넌트 최적화
+export const Dashboard = memo(DashboardComponent);

@@ -59,7 +59,8 @@
       "Bash(true)",
       "Bash(taskkill:*)",
       "Bash(cat:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   },

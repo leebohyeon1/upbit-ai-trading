@@ -27,7 +27,6 @@ import { formatTimeAgo, getDecisionColor, getDecisionText } from '../../utils/fo
 interface AnalysisCardProps {
   analysis: Analysis;
   onClick: () => void;
-  showAI?: boolean;
 }
 
 const getFailureIcon = (reason?: TradeFailureReason) => {
@@ -48,8 +47,7 @@ const getFailureIcon = (reason?: TradeFailureReason) => {
 
 const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
   analysis,
-  onClick,
-  showAI = false
+  onClick
 }) => {
   const getDecisionIcon = () => {
     switch (analysis.decision?.toLowerCase()) {
@@ -79,7 +77,7 @@ const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
                 color={getDecisionColor(analysis.decision) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
                 size="small"
               />
-              {showAI && analysis.reason && (
+              {analysis.aiEnabled && analysis.reason && (
                 <Tooltip title="AI 분석 포함">
                   <Psychology sx={{ fontSize: 20, color: 'primary.main' }} />
                 </Tooltip>
@@ -139,7 +137,7 @@ const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
             />
           </Box>
 
-          {analysis.reason && !showAI && (
+          {analysis.reason && (
             <Typography 
               variant="body2" 
               color="text.secondary"
@@ -154,6 +152,75 @@ const AnalysisCardComponent: React.FC<AnalysisCardProps> = ({
             >
               {analysis.reason}
             </Typography>
+          )}
+
+          {/* 기술적 지표 값 표시 */}
+          {analysis.technicalIndicators && (
+            <Box sx={{ mt: 1.5, p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ display: 'block', mb: 0.5 }}>
+                분석 기준
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {analysis.technicalIndicators.rsi !== undefined && (
+                  <Chip
+                    label={`RSI: ${analysis.technicalIndicators.rsi.toFixed(1)}`}
+                    size="small"
+                    sx={{ 
+                      height: 20,
+                      fontSize: '0.7rem',
+                      backgroundColor: 
+                        analysis.technicalIndicators.rsi > 70 ? 'rgba(244, 67, 54, 0.1)' :
+                        analysis.technicalIndicators.rsi < 30 ? 'rgba(76, 175, 80, 0.1)' :
+                        'rgba(0, 0, 0, 0.05)',
+                      color: 
+                        analysis.technicalIndicators.rsi > 70 ? 'error.main' :
+                        analysis.technicalIndicators.rsi < 30 ? 'success.main' :
+                        'text.secondary'
+                    }}
+                  />
+                )}
+                {analysis.technicalIndicators.macd && (
+                  <Chip
+                    label={`MACD: ${analysis.technicalIndicators.macd.histogram.toFixed(2)}`}
+                    size="small"
+                    sx={{ 
+                      height: 20,
+                      fontSize: '0.7rem',
+                      backgroundColor: 
+                        analysis.technicalIndicators.macd.histogram > 0 ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+                      color: 
+                        analysis.technicalIndicators.macd.histogram > 0 ? 'success.main' : 'error.main'
+                    }}
+                  />
+                )}
+                {analysis.technicalIndicators.bollinger && (
+                  <Chip
+                    label={`BB위치: ${(analysis.technicalIndicators.bollinger.position * 100).toFixed(0)}%`}
+                    size="small"
+                    sx={{ 
+                      height: 20,
+                      fontSize: '0.7rem',
+                      backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                      color: 'info.main'
+                    }}
+                  />
+                )}
+                {analysis.technicalIndicators.volume !== undefined && (
+                  <Chip
+                    label={`거래량: ${(analysis.technicalIndicators.volume * 100).toFixed(0)}%`}
+                    size="small"
+                    sx={{ 
+                      height: 20,
+                      fontSize: '0.7rem',
+                      backgroundColor: 
+                        analysis.technicalIndicators.volume > 1.5 ? 'rgba(255, 152, 0, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                      color: 
+                        analysis.technicalIndicators.volume > 1.5 ? 'warning.main' : 'text.secondary'
+                    }}
+                  />
+                )}
+              </Box>
+            </Box>
           )}
 
           {/* 거래 시도 결과 표시 */}
