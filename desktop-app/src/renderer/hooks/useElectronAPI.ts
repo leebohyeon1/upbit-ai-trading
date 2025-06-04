@@ -29,6 +29,27 @@ export const useElectronAPI = () => {
   const [learningStates, setLearningStates] = useState<LearningState[]>([]);
   const [supportedCoins, setSupportedCoins] = useState<string[]>([]);
 
+  // Window control methods
+  const minimizeWindow = useCallback(() => {
+    window.electronAPI.minimizeWindow();
+  }, []);
+
+  const maximizeWindow = useCallback(() => {
+    window.electronAPI.maximizeWindow();
+  }, []);
+
+  const closeWindow = useCallback(() => {
+    window.electronAPI.closeWindow();
+  }, []);
+
+  const isMaximized = useCallback(async () => {
+    return await window.electronAPI.isMaximized();
+  }, []);
+
+  const onMaximizeChange = useCallback((callback: (isMaximized: boolean) => void) => {
+    window.electronAPI.onMaximizeChange(callback);
+  }, []);
+
   // API 키 검증
   const validateApiKey = useCallback(async (accessKey: string, secretKey: string, claudeApiKey?: string) => {
     try {
@@ -232,6 +253,13 @@ export const useElectronAPI = () => {
     tradingState,
     learningStates,
     supportedCoins,
+    
+    // Window control
+    minimizeWindow,
+    maximizeWindow,
+    closeWindow,
+    isMaximized,
+    onMaximizeChange,
     
     // Actions
     validateApiKey,

@@ -1,6 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Window control methods
+  minimizeWindow: () => ipcRenderer.send('window-minimize'),
+  maximizeWindow: () => ipcRenderer.send('window-maximize'),
+  closeWindow: () => ipcRenderer.send('window-close'),
+  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  
+  // Window events
+  onMaximizeChange: (callback) => {
+    ipcRenderer.on('window-maximize-change', (event, isMaximized) => callback(isMaximized));
+  },
   // API Key methods
   validateApiKey: (accessKey, secretKey, claudeApiKey) => ipcRenderer.invoke('validate-api-key', accessKey, secretKey, claudeApiKey),
   

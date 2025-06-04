@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useTradingContext } from '../../contexts/TradingContext';
 import { ThemeToggle } from '../common/ThemeToggle';
+import { TitleBar } from './TitleBar';
 import { TAB_INDEX } from '../../constants';
 
 interface MainLayoutProps {
@@ -118,9 +119,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', width: '100%' }}>
-      {/* Sidebar */}
-      <Drawer
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
+      {/* Custom Title Bar */}
+      <TitleBar />
+      
+      {/* Main Content Area */}
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Sidebar */}
+        <Drawer
         variant="permanent"
         open={drawerOpen}
         sx={{
@@ -134,6 +140,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               duration: theme.transitions.duration.enteringScreen,
             }),
             overflowX: 'hidden',
+            position: 'relative',
+            height: '100%',
+            top: 0,
+            border: 'none',
+            borderRight: `1px solid ${theme.palette.divider}`
           },
         }}
       >
@@ -293,19 +304,20 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         </List>
       </Drawer>
 
-      {/* Main Content */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
-          p: 0,
-          overflow: 'auto',
-          height: '100vh',
-          width: '100%'
-        }}
-      >
-        {children}
+        {/* Main Content */}
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
+            p: 0,
+            overflow: 'auto',
+            height: '100%',
+            width: '100%'
+          }}
+        >
+          {children}
+        </Box>
       </Box>
     </Box>
   );

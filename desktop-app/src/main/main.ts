@@ -142,13 +142,17 @@ class TradingApp {
     this.mainWindow = new BrowserWindow({
       width: 1300,
       height: 800,
+      frame: false, // 기본 프레임 제거
+      titleBarStyle: 'hidden', // macOS에서 타이틀바 숨김
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         preload: path.join(__dirname, 'preload', 'preload.js')
       },
       icon: iconPath,
-      title: process.env.ELECTRON_DEV_MODE === 'true' ? 'Upbit AI Trading (개발)' : 'Upbit AI Trading'
+      title: process.env.ELECTRON_DEV_MODE === 'true' ? 'Upbit AI Trading (개발)' : 'Upbit AI Trading',
+      minWidth: 1000,
+      minHeight: 600
     });
 
     this.mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -964,6 +968,36 @@ class TradingApp {
   }
 
   private setupIPC() {
+    // Window control handlers
+    ipcMain.on('window-minimize', () => {
+      this.mainWindow?.minimize();
+    });
+
+    ipcMain.on('window-maximize', () => {
+      if (this.mainWindow?.isMaximized()) {
+        this.mainWindow?.unmaximize();
+      } else {
+        this.mainWindow?.maximize();
+      }
+    });
+
+    ipcMain.on('window-close', () => {
+      this.mainWindow?.close();
+    });
+
+    ipcMain.handle('window-is-maximized', () => {
+      return this.mainWindow?.isMaximized() || false;
+    });
+
+    // Window state change listener
+    this.mainWindow?.on('maximize', () => {
+      this.mainWindow?.webContents.send('window-maximize-change', true);
+    });
+
+    this.mainWindow?.on('unmaximize', () => {
+      this.mainWindow?.webContents.send('window-maximize-change', false);
+    });
+
     // start-trading은 setupIpcHandlers()에서 처리하므로 여기서는 제거
 
     // 자동매매 중지

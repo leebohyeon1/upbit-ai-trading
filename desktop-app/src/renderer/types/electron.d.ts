@@ -14,6 +14,13 @@ import {
 declare global {
   interface Window {
     electronAPI: {
+      // Window control methods
+      minimizeWindow: () => void;
+      maximizeWindow: () => void;
+      closeWindow: () => void;
+      isMaximized: () => Promise<boolean>;
+      onMaximizeChange: (callback: (isMaximized: boolean) => void) => void;
+      
       // API Key methods
       validateApiKey: (accessKey: string, secretKey: string, claudeApiKey?: string) => Promise<ApiKeyStatus>;
       
