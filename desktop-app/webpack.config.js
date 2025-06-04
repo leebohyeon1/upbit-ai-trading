@@ -52,6 +52,10 @@ module.exports = [
           test: /\.css$/,
           use: ['style-loader', 'css-loader'],
         },
+        {
+          test: /\.(png|svg|jpg|jpeg|gif)$/i,
+          type: 'asset/resource',
+        },
       ],
     },
     resolve: {
@@ -77,6 +81,10 @@ module.exports = [
             from: 'src/preload',
             to: 'preload',
           },
+          {
+            from: 'src/main/icon.png',
+            to: 'icon.png'
+          }
         ],
       }),
     ],

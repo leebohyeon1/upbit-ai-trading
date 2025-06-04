@@ -181,6 +181,11 @@ declare global {
       
       // Advanced indicators analysis methods
       analyzeAdvancedIndicators: (params: { symbol: string; timeframe?: string; period?: number }) => Promise<any>;
+      
+      // App info and update methods
+      getAppVersion: () => Promise<string>;
+      checkForUpdates: () => Promise<{ updateAvailable: boolean; version: string; releaseNotes: string | null }>;
+      showNotification: (title: string, body: string) => Promise<void>;
 
       // Event listeners
       onApiKeyStatus: (callback: (status: ApiKeyStatus) => void) => () => void;

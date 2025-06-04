@@ -9,7 +9,12 @@ import {
   ListItemIcon,
   ListItemText,
   useTheme,
-  alpha
+  alpha,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button
 } from '@mui/material';
 import {
   Minimize,
@@ -17,24 +22,27 @@ import {
   Close,
   FilterNone,
   Menu as MenuIcon,
-  ShowChart,
   Settings,
   Info,
-  GitHub,
   BugReport,
   Update
 } from '@mui/icons-material';
 import { useElectronAPI } from '../../hooks/useElectronAPI';
+import { TAB_INDEX } from '../../constants';
+import iconImage from '../../../main/icon.png';
 
 interface TitleBarProps {
   title?: string;
+  onTabChange?: (tab: number) => void;
 }
 
-export const TitleBar: React.FC<TitleBarProps> = ({ title = 'Upbit AI Trading' }) => {
+export const TitleBar: React.FC<TitleBarProps> = ({ title = 'Upbit AI Trading', onTabChange }) => {
   const theme = useTheme();
   const electronAPI = useElectronAPI();
   const [isMaximized, setIsMaximized] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('Loading...');
   const menuOpen = Boolean(anchorEl);
 
   useEffect(() => {
@@ -44,6 +52,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({ title = 'Upbit AI Trading' }
     // 최대화 상태 변경 리스너
     electronAPI.onMaximizeChange((maximized) => {
       setIsMaximized(maximized);
+    });
+    
+    // 앱 버전 가져오기
+    window.electronAPI.getAppVersion().then(version => {
+      setAppVersion(version);
+    }).catch(error => {
+      console.error('Failed to get app version:', error);
+      setAppVersion('Unknown');
     });
   }, [electronAPI]);
 
@@ -67,29 +83,37 @@ export const TitleBar: React.FC<TitleBarProps> = ({ title = 'Upbit AI Trading' }
     electronAPI.closeWindow();
   };
 
-  const handleMenuItemClick = (action: string) => {
+  const handleMenuItemClick = async (action: string) => {
     handleMenuClose();
     
     switch (action) {
       case 'settings':
         // 설정 화면으로 이동
-        console.log('Open settings');
+        if (onTabChange) {
+          onTabChange(TAB_INDEX.SETTINGS);
+        }
         break;
       case 'about':
-        // 정보 표시
-        console.log('Show about');
+        // 정보 다이얼로그 표시
+        setAboutDialogOpen(true);
         break;
       case 'checkUpdate':
         // 업데이트 확인
-        console.log('Check for updates');
+        try {
+          const result = await window.electronAPI.checkForUpdates();
+          if (result.updateAvailable) {
+            window.electronAPI.showNotification('업데이트 확인', `새 버전 ${result.version}이 사용 가능합니다.`);
+          } else {
+            window.electronAPI.showNotification('업데이트 확인', '현재 최신 버전을 사용 중입니다.');
+          }
+        } catch (error) {
+          console.error('Update check failed:', error);
+          window.electronAPI.showNotification('업데이트 확인 실패', '업데이트를 확인할 수 없습니다.');
+        }
         break;
       case 'reportBug':
-        // 버그 리포트
-        window.open('https://github.com/your-username/upbit-ai-trading/issues', '_blank');
-        break;
-      case 'github':
-        // GitHub 저장소 열기
-        window.open('https://github.com/your-username/upbit-ai-trading', '_blank');
+        // 버그 리포트 - 이메일로 변경
+        window.location.href = 'mailto:debug.bohyeon@gmail.com?subject=Upbit AI Trading 버그 리포트';
         break;
     }
   };
@@ -135,12 +159,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({ title = 'Upbit AI Trading' }
           <MenuIcon fontSize="small" />
         </IconButton>
 
-        {/* 아이콘 - ShowChart 아이콘 사용 */}
-        <ShowChart 
-          sx={{ 
+        {/* 아이콘 - icon.png 사용 */}
+        <img 
+          src={iconImage}
+          alt="App Icon"
+          style={{ 
             width: 20, 
             height: 20,
-            color: theme.palette.primary.main
+            marginRight: 8
           }} 
         />
 
@@ -207,14 +233,47 @@ export const TitleBar: React.FC<TitleBarProps> = ({ title = 'Upbit AI Trading' }
           </ListItemIcon>
           <ListItemText>버그 신고</ListItemText>
         </MenuItem>
-        
-        <MenuItem onClick={() => handleMenuItemClick('github')}>
-          <ListItemIcon>
-            <GitHub fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>GitHub</ListItemText>
-        </MenuItem>
       </Menu>
+
+      {/* 정보 다이얼로그 */}
+      <Dialog
+        open={aboutDialogOpen}
+        onClose={() => setAboutDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Upbit AI Trading</DialogTitle>
+        <DialogContent>
+          <Box sx={{ textAlign: 'center', py: 2 }}>
+            <img 
+              src={iconImage}
+              alt="App Icon"
+              style={{ 
+                width: 80, 
+                height: 80,
+                marginBottom: 16
+              }}
+            />
+            <Typography variant="h6" gutterBottom>
+              버전 {appVersion}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Upbit 암호화폐 자동매매 AI 트레이딩 봇
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              © 2025 Upbit AI Trading. All rights reserved.
+            </Typography>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Made with Electron + React + TypeScript
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAboutDialogOpen(false)}>닫기</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 창 컨트롤 버튼 */}
       <Box 

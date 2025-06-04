@@ -121,7 +121,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
       {/* Custom Title Bar */}
-      <TitleBar />
+      <TitleBar onTabChange={onTabChange} />
       
       {/* Main Content Area */}
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

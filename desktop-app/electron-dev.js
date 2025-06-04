@@ -6,11 +6,11 @@ process.env.ELECTRON_DEV_MODE = 'true';
 const { app } = require('electron');
 const path = require('path');
 
+// 앱이 준비되기 전에 이름 설정
+app.name = 'Upbit AI Trading';
+
 // 개발 모드용 별도 userData 경로 설정 (설치된 버전과 분리)
 app.setPath('userData', path.join(app.getPath('appData'), 'Upbit AI Trading Dev'));
-
-// 개발용 앱 이름 설정 (작업 표시줄에서 구분 가능)
-app.setName('Upbit AI Trading (Dev)');
 
 // 메인 프로세스 실행
 require('./dist/main.js');

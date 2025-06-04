@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, safeStorage, Notification } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -43,13 +43,11 @@ class TradingApp {
   }
 
   private setupApp() {
+    // 앱 이름 설정 (알림에서 표시되는 이름)
+    app.setName('Upbit AI Trading');
+    
     // 개발 모드에서는 Single instance lock 비활성화
     const isDev = process.env.ELECTRON_DEV_MODE === 'true';
-    
-    // 개발 모드에서 창 제목에 (Dev) 추가
-    if (isDev) {
-      app.name = 'Upbit AI Trading (Dev)';
-    }
     
     if (!isDev) {
       // Single instance lock
@@ -1099,6 +1097,27 @@ class TradingApp {
       return await this.getLearningStates();
     });
 
+
+    // App info and update handlers
+    ipcMain.handle('app-get-version', () => {
+      // package.json에서 버전 가져오기
+      const packageJson = require('../../package.json');
+      return packageJson.version;
+    });
+
+    ipcMain.handle('check-for-updates', async () => {
+      // 실제 업데이트 확인 로직은 나중에 구현
+      // 지금은 모의 데이터 반환
+      return {
+        updateAvailable: false,
+        version: app.getVersion(),
+        releaseNotes: null
+      };
+    });
+
+    ipcMain.handle('show-notification', async (event, title: string, body: string) => {
+      new Notification({ title, body }).show();
+    });
 
     // 설정 초기화
     ipcMain.handle('reset-all-settings', async () => {
@@ -2593,6 +2612,9 @@ class TradingApp {
     console.log('All IPC handlers registered successfully');
   }
 }
+
+// 앱 인스턴스 생성 전에 앱 이름 설정
+app.name = 'Upbit AI Trading';
 
 const tradingApp = new TradingApp();
 

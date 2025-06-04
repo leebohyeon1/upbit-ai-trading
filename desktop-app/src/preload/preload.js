@@ -174,6 +174,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Advanced indicators analysis methods
   analyzeAdvancedIndicators: (params) => ipcRenderer.invoke('analyze-advanced-indicators', params),
   
+  // App info and update methods
+  getAppVersion: () => ipcRenderer.invoke('app-get-version'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  showNotification: (title, body) => ipcRenderer.invoke('show-notification', title, body),
+  
   // Trade history methods
   addTrade: (trade) => ipcRenderer.invoke('add-trade', trade),
   getTradeHistory: (options) => ipcRenderer.invoke('get-trade-history', options),
