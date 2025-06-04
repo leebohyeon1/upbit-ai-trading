@@ -3307,7 +3307,7 @@ class TradingEngine extends EventEmitter {
         const initialCapital = 10000000;
         const currentProfitRate = ((currentTotalValue - initialCapital) / initialCapital) * 100;
         
-        // trade-history-service에서 과거 거래 데이터 가져오기
+        // trade-history-service에서 과거 거래 데이터 가져오기 (실거래만)
         const dailyPerformance = tradeHistoryService.getDailyPerformance(days);
         
         // 최근 30일 데이터 생성
@@ -3340,26 +3340,39 @@ class TradingEngine extends EventEmitter {
         
         return history;
       } else {
-        // 시뮬레이션 모드: 기존 로직 유지
+        // 시뮬레이션 모드: 시뮬레이션 거래 데이터 사용
         const initialCapital = 10000000;
         const totalValue = this.calculateTotalPortfolioValue();
-        const profitRate = ((totalValue - initialCapital) / initialCapital) * 100;
+        const currentProfitRate = ((totalValue - initialCapital) / initialCapital) * 100;
         
-        // 최근 30일 더미 데이터 생성 (시뮬레이션용)
+        // trade-history-service에서 시뮬레이션 거래 데이터 가져오기
+        const dailyPerformance = tradeHistoryService.getDailyPerformance(days, true); // includeSimulation = true
+        
+        // 최근 30일 데이터 생성
         const history: Array<{ time: string; profitRate: number; totalValue: number }> = [];
         const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days + 1);
         
-        for (let i = days - 1; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
+        let cumulativeProfit = 0;
+        
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          const dayPerf = dailyPerformance.find(p => p.date === dateStr);
           
-          // 오늘이면 실제 값, 아니면 0
-          const isToday = i === 0;
+          if (dayPerf) {
+            cumulativeProfit += dayPerf.profit;
+          }
+          
+          // 오늘이면 현재 포트폴리오 가치 사용
+          const isToday = d.toDateString() === new Date().toDateString();
+          const totalValue = isToday ? this.calculateTotalPortfolioValue() : initialCapital + cumulativeProfit;
+          const profitRate = isToday ? currentProfitRate : (cumulativeProfit / initialCapital) * 100;
           
           history.push({
-            time: date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-            profitRate: isToday ? profitRate : 0,
-            totalValue: isToday ? totalValue : initialCapital
+            time: d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+            profitRate: profitRate,
+            totalValue: totalValue
           });
         }
         

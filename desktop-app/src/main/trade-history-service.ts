@@ -348,17 +348,19 @@ class TradeHistoryService {
   }
 
   // 일별 성과 조회 (실제 거래만)
-  getDailyPerformance(days: number = 30): DailyPerformance[] {
+  getDailyPerformance(days: number = 30, includeSimulation: boolean = false): DailyPerformance[] {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // 실제 거래만 필터링하여 일별 성과 재계산
-    const realTradesOnly = this.trades.filter(t => !t.isSimulation);
+    // 필터링 기준에 따라 거래 선택
+    const filteredTrades = includeSimulation 
+      ? this.trades 
+      : this.trades.filter(t => !t.isSimulation);
     const dailyPerformanceReal = new Map<string, DailyPerformance>();
     
-    // 실제 거래만으로 일별 성과 계산
-    for (const trade of realTradesOnly) {
+    // 선택된 거래로 일별 성과 계산
+    for (const trade of filteredTrades) {
       const date = new Date(trade.timestamp).toISOString().split('T')[0];
       const existing = dailyPerformanceReal.get(date) || {
         date,

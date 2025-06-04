@@ -1079,8 +1079,19 @@ class TradingApp {
     // 실제 거래 토글
     ipcMain.handle('toggle-real-trade', async (event, enabled: boolean) => {
       try {
+        // 실거래 모드 전환 시 주의사항
+        if (enabled) {
+          console.log('[Main] 실거래 모드로 전환합니다. 시뮬레이션 데이터는 별도로 관리됩니다.');
+        } else {
+          console.log('[Main] 시뮬레이션 모드로 전환합니다.');
+        }
+        
         tradingEngine.setConfig({ enableRealTrading: enabled });
         console.log(`Real trading ${enabled ? 'enabled' : 'disabled'}`);
+        
+        // 수익률 업데이트 이벤트 발송 (모드 전환 후 즉시 반영)
+        this.sendProfitUpdate();
+        
         return true;
       } catch (error) {
         console.error('Failed to toggle real trade:', error);
