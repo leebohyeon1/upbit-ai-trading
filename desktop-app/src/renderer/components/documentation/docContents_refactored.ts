@@ -1,6 +1,13 @@
 // 리팩토링된 문서 통합 파일
 // 모든 섹션별 문서를 하나로 통합
 
+// 타입 정의
+export interface DocContent {
+  title: string;
+  content: string;
+  category?: string;
+}
+
 // Import all section contents
 import { gettingStartedContents } from './docContents_gettingStarted';
 import { initialSetupContents } from './docContents_initialSetup';
@@ -9,6 +16,7 @@ import { interfaceContents } from './docContents_interface';
 import { tradingStrategyContents } from './docContents_tradingStrategy';
 import { advancedStrategiesContents } from './docContents_advancedStrategies';
 import { allFeaturesContents } from './docContents_allFeatures';
+import { userManualContents, userManualSection } from './docContents_userManual';
 
 // 기존 파일에서 추가로 필요한 섹션들 (간소화된 버전)
 const additionalContents = {
@@ -983,13 +991,15 @@ export const allDocContents = {
   ...tradingStrategyContents,
   ...advancedStrategiesContents,
   ...allFeaturesContents,
+  ...userManualContents,
   ...additionalContents
 };
 
 // 섹션별 카테고리 정의
 export const documentSections = {
+  'user-manual': userManualSection,
   'getting-started': {
-    title: '시작하기',
+    title: '빠른 시작 가이드',
     items: [
       'getting-started.introduction',
       'getting-started.quick-start',
@@ -1008,17 +1018,6 @@ export const documentSections = {
       'initial-setup.2fa-setup'
     ]
   },
-  'core-concepts': {
-    title: '핵심 개념',
-    items: [
-      'core-concepts.technical-indicators',
-      'core-concepts.advanced-indicators',
-      'core-concepts.pattern-recognition',
-      'core-concepts.ai-analysis',
-      'core-concepts.confidence-system',
-      'core-concepts.market-conditions'
-    ]
-  },
   'interface': {
     title: '화면 구성',
     items: [
@@ -1030,7 +1029,7 @@ export const documentSections = {
     ]
   },
   'trading-strategy': {
-    title: '거래 전략 설정',
+    title: '거래 설정',
     items: [
       'trading-strategy.global-vs-coin',
       'trading-strategy.buy-sell-conditions',
@@ -1041,8 +1040,19 @@ export const documentSections = {
       'trading-strategy.smart-order'
     ]
   },
+  'core-concepts': {
+    title: '핵심 개념',
+    items: [
+      'core-concepts.technical-indicators',
+      'core-concepts.advanced-indicators',
+      'core-concepts.pattern-recognition',
+      'core-concepts.ai-analysis',
+      'core-concepts.confidence-system',
+      'core-concepts.market-conditions'
+    ]
+  },
   'advanced-strategies': {
-    title: '고급 거래 전략',
+    title: '고급 전략',
     items: [
       'advanced-strategies.grid-trading',
       'advanced-strategies.dca-strategy',
@@ -1053,34 +1063,10 @@ export const documentSections = {
       'advanced-strategies.news-analysis'
     ]
   },
-  'backtest': {
-    title: '백테스트',
+  'all-features': {
+    title: '전체 기능 요약',
     items: [
-      'backtest.backtest-setup'
-    ]
-  },
-  'ai-learning': {
-    title: 'AI 학습 시스템',
-    items: [
-      'ai-learning.learning-activation'
-    ]
-  },
-  'risk-management': {
-    title: '리스크 관리',
-    items: [
-      'risk-management.overview'
-    ]
-  },
-  'news-analysis': {
-    title: '뉴스 & 감성 분석',
-    items: [
-      'news-analysis.sentiment-analysis'
-    ]
-  },
-  'notification': {
-    title: '알림 시스템',
-    items: [
-      'notification.notification-types'
+      'all-features.overview'
     ]
   },
   'troubleshooting': {
@@ -1094,12 +1080,6 @@ export const documentSections = {
     items: [
       'reference.glossary',
       'reference.faq'
-    ]
-  },
-  'all-features': {
-    title: '전체 기능 가이드',
-    items: [
-      'all-features.overview'
     ]
   }
 };
