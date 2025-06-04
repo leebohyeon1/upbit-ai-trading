@@ -101,7 +101,7 @@ const defaultTradingConfig: TradingConfig = {
   buyRatio: DEFAULT_CONFIG.BUY_RATIO,
   sellRatio: DEFAULT_CONFIG.SELL_RATIO,
   maxInvestmentPerCoin: DEFAULT_CONFIG.MAX_INVESTMENT_PER_COIN,
-  enableRealTrading: false,
+  enableRealTrading: true,
   dynamicConfidence: true,
   riskLevel: 2,  // 낮은 리스크 레벨
   useKellyCriterion: true,  // Kelly Criterion 사용 (최적 베팅 크기)

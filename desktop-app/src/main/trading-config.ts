@@ -194,7 +194,7 @@ export class TradingConfigHelper {
       volatilityAdjustment: false,
       newsImpactMultiplier: 1.0,
       preferredTradingHours: [],
-      useSimplifiedConfig: true,  // 기본적으로 간소화 설정 사용
+      useSimplifiedConfig: false,  // 기본적으로 간소화 설정 사용 안함
       simplifiedConfig: {
         timeframe: 'minute60',  // 기본 60분봉 (이전 프로젝트처럼)
         analysisInterval: 60,   // 60분마다 분석

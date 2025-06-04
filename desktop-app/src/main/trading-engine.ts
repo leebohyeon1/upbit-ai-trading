@@ -132,8 +132,8 @@ class TradingEngine extends EventEmitter {
     takeProfitPercent: 8,
     rsiOverbought: 70,
     rsiOversold: 30,
-    buyingCooldown: 10,    // 기본 10분 (분 단위)
-    sellingCooldown: 1,    // 기본 1분 (분 단위)
+    buyingCooldown: 60,    // 기본 10분 (분 단위)
+    sellingCooldown: 120,    // 기본 1분 (분 단위)
     minConfidenceForTrade: 0,  // 사용 안 함
     sellRatio: 0.3,
     buyRatio: 0.1,

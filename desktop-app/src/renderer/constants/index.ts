@@ -73,7 +73,7 @@ export const DEFAULT_CONFIG = {
   ANALYSIS_INTERVAL_SECONDS: 60,  // 60초 = 1분마다 분석
   // 간소화된 설정 추가
   simplifiedConfig: {
-    enabled: true,  // 기본적으로 간소화 모드 활성화
+    enabled: false,  // 기본적으로 간소화 모드 비활성화
     timeframe: 'minute60',
     analysisInterval: 60,
     useIndicators: {
