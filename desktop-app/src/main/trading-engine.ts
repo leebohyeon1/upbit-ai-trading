@@ -2082,8 +2082,23 @@ class TradingEngine extends EventEmitter {
     this.analysisConfigs = configs;
     console.log('[TradingEngine] Analysis configs updated:', configs.length, 'coins');
     
-    // activeMarkets가 이미 설정되어 있는지 확인
-    if (this.activeMarkets.length === 0 && configs.length > 0) {
+    // activeMarkets와 analysisConfigs 동기화
+    if (this.activeMarkets.length > 0) {
+      // activeMarkets가 이미 설정되어 있으면, analysisConfigs를 activeMarkets에 맞게 필터링
+      const activeMarketsSet = new Set(this.activeMarkets);
+      this.analysisConfigs = configs.filter(config => {
+        const ticker = config.ticker.startsWith('KRW-') ? config.ticker : `KRW-${config.ticker}`;
+        return activeMarketsSet.has(ticker);
+      });
+      console.log('[TradingEngine] Filtered analysisConfigs to match activeMarkets:', this.analysisConfigs.length, 'configs');
+      
+      // 필터링 결과 확인
+      if (this.analysisConfigs.length !== this.activeMarkets.length) {
+        console.warn('[TradingEngine] WARNING: analysisConfigs count does not match activeMarkets count!');
+        console.warn('activeMarkets:', this.activeMarkets);
+        console.warn('analysisConfigs tickers:', this.analysisConfigs.map(c => c.ticker));
+      }
+    } else if (configs.length > 0) {
       // activeMarkets가 비어있으면 analysisConfigs에서 추출
       console.log('[TradingEngine] activeMarkets is empty, extracting from analysisConfigs');
       const newActiveMarkets = configs.map(config => {
@@ -2093,9 +2108,6 @@ class TradingEngine extends EventEmitter {
       });
       this.activeMarkets = newActiveMarkets;
       console.log('[TradingEngine] Set activeMarkets from analysisConfigs:', this.activeMarkets);
-    } else {
-      // activeMarkets가 이미 설정되어 있으면 유지
-      console.log('[TradingEngine] Keeping existing activeMarkets:', this.activeMarkets);
     }
     
     // 디버깅: 첫 번째 설정의 쿨다운 확인

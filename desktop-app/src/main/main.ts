@@ -763,6 +763,17 @@ class TradingApp {
         
         console.log('[Main] Updating active markets (enabled only):', activeMarkets);
         tradingEngine.setActiveMarkets(activeMarkets);
+        
+        // 분석 설정도 동기화
+        const analysisConfigs = await this.getAnalysisConfigs();
+        const enabledSymbols = enabledCoins.map(coin => coin.symbol);
+        const enabledAnalysisConfigs = analysisConfigs.filter(config => {
+          const symbol = config.ticker.startsWith('KRW-') ? config.ticker.split('-')[1] : config.ticker;
+          return enabledSymbols.includes(symbol);
+        });
+        
+        console.log('[Main] Updating analysis configs for enabled coins:', enabledAnalysisConfigs.length);
+        tradingEngine.setAnalysisConfigs(enabledAnalysisConfigs);
       }
       
       return true;
@@ -1485,12 +1496,6 @@ class TradingApp {
         
         console.log('[Main] Filtered analysis configs:', enabledAnalysisConfigs.length);
         
-        // AI 설정
-        tradingEngine.toggleAI(tradingConfig.useAI || false);
-        
-        // 분석 설정 전달 (활성화된 코인만)
-        tradingEngine.setAnalysisConfigs(enabledAnalysisConfigs);
-        
         // 활성화된 코인들의 market 목록 생성
         const markets = enabledAnalysisConfigs.map(config => {
           // config.ticker가 이미 KRW-를 포함하고 있을 수 있음
@@ -1503,6 +1508,15 @@ class TradingApp {
           console.error('[Main] No markets to trade after extraction');
           return false;
         }
+        
+        // AI 설정
+        tradingEngine.toggleAI(tradingConfig.useAI || false);
+        
+        // 중요: activeMarkets를 먼저 설정한 후 analysisConfigs 설정
+        tradingEngine.setActiveMarkets(markets);
+        
+        // 분석 설정 전달 (활성화된 코인만)
+        tradingEngine.setAnalysisConfigs(enabledAnalysisConfigs);
         
         return await this.startTrading(markets);
       } catch (error) {
