@@ -55,12 +55,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // VaR and Risk Management methods
   generateRiskReport: () => ipcRenderer.invoke('generate-risk-report'),
   
-  // Rebalancing methods
-  getRebalancingConfig: () => ipcRenderer.invoke('get-rebalancing-config'),
-  saveRebalancingConfig: (config) => ipcRenderer.invoke('save-rebalancing-config', config),
-  executeRebalancing: () => ipcRenderer.invoke('execute-rebalancing'),
-  simulateRebalancing: () => ipcRenderer.invoke('simulate-rebalancing'),
-  
   // Settings methods
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
   getApiKeys: () => ipcRenderer.invoke('get-api-keys'),

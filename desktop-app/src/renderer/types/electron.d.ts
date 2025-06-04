@@ -131,25 +131,6 @@ declare global {
         recommendations: string[];
       }>;
       
-      // Rebalancing methods
-      getRebalancingConfig: () => Promise<{
-        enabled: boolean;
-        interval: number;
-        threshold: number;
-        minTradeAmount: number;
-        targetWeights: Array<{ symbol: string; weight: number }>;
-        useVaRConstraints: boolean;
-        maxVaR: number;
-      } | null>;
-      saveRebalancingConfig: (config: any) => Promise<boolean>;
-      executeRebalancing: () => Promise<{ success: boolean; trades?: any[] }>;
-      simulateRebalancing: () => Promise<{
-        sellOrders: any[];
-        buyOrders: any[];
-        estimatedFees: number;
-        newVaR: number;
-      } | null>;
-      
       // Kill Switch methods
       getKillSwitchStatus: () => Promise<{
         isActive: boolean;

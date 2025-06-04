@@ -14,9 +14,7 @@ import {
   Alert,
   CircularProgress,
   TextField,
-  InputAdornment,
-  Tabs,
-  Tab
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -27,13 +25,11 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
-  Autorenew as AutorenewIcon,
   DeleteForever as DeleteForeverIcon
 } from '@mui/icons-material';
 import { PortfolioCoin, Account, TickerData } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { useTradingContext } from '../../contexts/TradingContext';
-import { AutoRebalancingPanel } from './AutoRebalancingPanel';
 
 interface PortfolioManagerProps {
   portfolio: PortfolioCoin[];
@@ -50,7 +46,6 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
 }) => {
   const [showOnlyHoldings, setShowOnlyHoldings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState(0);
   const [availableCoins, setAvailableCoins] = useState<{ symbol: string; name: string }[]>([]);
   const [isLoadingCoins, setIsLoadingCoins] = useState(true);
   const { fetchSupportedCoins } = useTradingContext();
@@ -202,20 +197,7 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
 
   return (
     <Box>
-      <Box mb={3}>
-        <Tabs 
-          value={activeTab} 
-          onChange={(e, newValue) => setActiveTab(newValue)}
-          sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
-        >
-          <Tab label="코인 관리" icon={<AccountBalance />} iconPosition="start" />
-          <Tab label="자동 리밸런싱" icon={<AutorenewIcon />} iconPosition="start" />
-        </Tabs>
-      </Box>
-
-      {activeTab === 0 && (
-        <Box>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Box display="flex" alignItems="center" gap={2}>
               <Tooltip title="지원 코인 목록 새로고침">
                 <IconButton 
@@ -439,12 +421,6 @@ export const PortfolioManager: React.FC<PortfolioManagerProps> = ({
               );
             })}
           </Grid>
-        </Box>
-      )}
-
-      {activeTab === 1 && (
-        <AutoRebalancingPanel />
-      )}
     </Box>
   );
 };

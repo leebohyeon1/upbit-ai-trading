@@ -59,10 +59,6 @@ interface TradingContextType {
   calculatePortfolioData: () => void;
   generateRiskReport: () => Promise<any>;
   getPortfolio: () => Promise<PortfolioCoin[]>;
-  getRebalancingConfig: () => Promise<any>;
-  saveRebalancingConfig: (config: any) => Promise<boolean>;
-  executeRebalancing: () => Promise<{ success: boolean }>;
-  simulateRebalancing: () => Promise<any>;
   getCooldownInfo: (market: string) => Promise<any>;
   runBacktest: (ticker: string, startDate: string, endDate: string, config: any) => Promise<BacktestResult | null>;
   startTrading: (tradingConfig: TradingConfig, analysisConfigs: any[]) => Promise<any>;
@@ -273,41 +269,6 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     }
   }, []);
 
-  const getRebalancingConfig = useCallback(async () => {
-    try {
-      return await window.electronAPI.getRebalancingConfig();
-    } catch (error) {
-      console.error('Failed to get rebalancing config:', error);
-      return null;
-    }
-  }, []);
-
-  const saveRebalancingConfig = useCallback(async (config: any) => {
-    try {
-      return await window.electronAPI.saveRebalancingConfig(config);
-    } catch (error) {
-      console.error('Failed to save rebalancing config:', error);
-      return false;
-    }
-  }, []);
-
-  const executeRebalancing = useCallback(async () => {
-    try {
-      return await window.electronAPI.executeRebalancing();
-    } catch (error) {
-      console.error('Failed to execute rebalancing:', error);
-      return { success: false };
-    }
-  }, []);
-
-  const simulateRebalancing = useCallback(async () => {
-    try {
-      return await window.electronAPI.simulateRebalancing();
-    } catch (error) {
-      console.error('Failed to simulate rebalancing:', error);
-      return null;
-    }
-  }, []);
 
   const getCooldownInfo = useCallback(async (market: string) => {
     try {
@@ -829,10 +790,6 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     calculatePortfolioData,
     generateRiskReport,
     getPortfolio,
-    getRebalancingConfig,
-    saveRebalancingConfig,
-    executeRebalancing,
-    simulateRebalancing,
     getCooldownInfo,
     runBacktest,
     startTrading,
@@ -882,10 +839,6 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     calculatePortfolioData,
     generateRiskReport,
     getPortfolio,
-    getRebalancingConfig,
-    saveRebalancingConfig,
-    executeRebalancing,
-    simulateRebalancing,
     getCooldownInfo,
     runBacktest,
     startTrading,

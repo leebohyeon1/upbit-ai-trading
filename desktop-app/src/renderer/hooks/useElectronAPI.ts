@@ -182,45 +182,6 @@ export const useElectronAPI = () => {
     }
   }, []);
 
-  // 리밸런싱 설정 조회
-  const getRebalancingConfig = useCallback(async () => {
-    try {
-      return await window.electronAPI.getRebalancingConfig();
-    } catch (error) {
-      console.error('Failed to get rebalancing config:', error);
-      return null;
-    }
-  }, []);
-
-  // 리밸런싱 설정 저장
-  const saveRebalancingConfig = useCallback(async (config: any) => {
-    try {
-      return await window.electronAPI.saveRebalancingConfig(config);
-    } catch (error) {
-      console.error('Failed to save rebalancing config:', error);
-      return false;
-    }
-  }, []);
-
-  // 리밸런싱 실행
-  const executeRebalancing = useCallback(async () => {
-    try {
-      return await window.electronAPI.executeRebalancing();
-    } catch (error) {
-      console.error('Failed to execute rebalancing:', error);
-      return { success: false };
-    }
-  }, []);
-
-  // 리밸런싱 시뮬레이션
-  const simulateRebalancing = useCallback(async () => {
-    try {
-      return await window.electronAPI.simulateRebalancing();
-    } catch (error) {
-      console.error('Failed to simulate rebalancing:', error);
-      return null;
-    }
-  }, []);
 
   // 쿨다운 정보 조회
   const getCooldownInfo = useCallback(async (market: string) => {
@@ -285,10 +246,6 @@ export const useElectronAPI = () => {
     fetchSupportedCoins,
     generateRiskReport,
     getPortfolio,
-    getRebalancingConfig,
-    saveRebalancingConfig,
-    executeRebalancing,
-    simulateRebalancing,
     getCooldownInfo,
     
     // 2FA methods
