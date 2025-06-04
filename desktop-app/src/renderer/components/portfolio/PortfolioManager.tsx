@@ -35,7 +35,7 @@ interface PortfolioManagerProps {
   portfolio: PortfolioCoin[];
   accounts: Account[];
   tickers: TickerData[];
-  onUpdatePortfolio: (portfolio: PortfolioCoin[]) => void;
+  onUpdatePortfolio: (portfolio: PortfolioCoin[]) => void | Promise<void>;
 }
 
 export const PortfolioManager: React.FC<PortfolioManagerProps> = ({

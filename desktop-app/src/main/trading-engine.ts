@@ -463,11 +463,22 @@ class TradingEngine extends EventEmitter {
 
   setActiveMarkets(markets: string[]) {
     const marketsChanged = JSON.stringify(this.activeMarkets) !== JSON.stringify(markets);
+    const previousMarkets = [...this.activeMarkets];
     this.activeMarkets = markets;
     
     if (marketsChanged) {
-      console.log('[TradingEngine] Active markets changed:', markets);
+      console.log('[TradingEngine] ========== ACTIVE MARKETS CHANGED ==========');
+      console.log('[TradingEngine] Previous markets:', previousMarkets);
+      console.log('[TradingEngine] New markets:', markets);
+      console.log('[TradingEngine] Removed:', previousMarkets.filter(m => !markets.includes(m)));
+      console.log('[TradingEngine] Added:', markets.filter(m => !previousMarkets.includes(m)));
+      console.log('[TradingEngine] ===========================================');
       this.emitStatus();
+      
+      // 거래가 실행 중이면 즉시 다음 분석 주기를 트리거
+      if (this._isRunning) {
+        console.log('[TradingEngine] Trading is running, will use new markets in next analysis cycle');
+      }
     }
   }
 
@@ -710,16 +721,19 @@ class TradingEngine extends EventEmitter {
     if (!this._isRunning) return;
 
     try {
-      console.log('Performing market analysis...');
-      console.log('Active markets:', this.activeMarkets);
-      console.log('Analysis configs:', this.analysisConfigs.length);
+      console.log('==================== ANALYSIS START ====================');
+      console.log('[TradingEngine] Performing market analysis...');
+      console.log('[TradingEngine] Active markets:', this.activeMarkets);
+      console.log('[TradingEngine] Number of active markets:', this.activeMarkets.length);
+      console.log('[TradingEngine] Analysis configs:', this.analysisConfigs.length);
       
       if (this.activeMarkets.length === 0) {
-        console.log('No active markets to analyze');
+        console.log('[TradingEngine] No active markets to analyze');
         return;
       }
       
       for (const market of this.activeMarkets) {
+        console.log(`[TradingEngine] Analyzing market: ${market}`);
         try {
           // 간소화 모드 사용 여부 확인
           const useSimplifiedMode = this.config.simplifiedConfig?.enabled ?? true;
@@ -994,6 +1008,18 @@ class TradingEngine extends EventEmitter {
     
     // 실거래 비활성화 시에도 시뮬레이션은 계속 진행
     // (이 체크를 제거하여 시뮬레이션 모드에서도 동일한 로직 실행)
+    
+    // 활성 마켓에 포함되어 있는지 다시 확인 (영구적 해결책)
+    if (!this.activeMarkets.includes(market)) {
+      console.log(`[${market}] Market is not in active markets, skipping trade signal`);
+      console.log(`[${market}] Current active markets:`, this.activeMarkets);
+      return {
+        attempted: false,
+        success: false,
+        failureReason: 'NOT_ACTIVE',
+        details: `${market}은(는) 비활성화된 코인입니다.`
+      };
+    }
     
     try {
       // 코인별 설정 가져오기

@@ -328,9 +328,24 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     setAnalysisConfigs(configs);
   }, []);
 
-  const updatePortfolio = useCallback((newPortfolio: PortfolioCoin[]) => {
+  const updatePortfolio = useCallback(async (newPortfolio: PortfolioCoin[]) => {
+    console.log('[TradingContext] Updating portfolio:', newPortfolio.map(p => ({ symbol: p.symbol, enabled: p.enabled })));
     setPortfolio(newPortfolio);
-  }, []);
+    
+    // 즉시 백엔드에 저장
+    try {
+      const result = await window.electronAPI.savePortfolio(newPortfolio);
+      console.log('[TradingContext] Portfolio saved to backend:', result);
+      
+      // 거래가 실행 중이면 즉시 activeMarkets 업데이트를 트리거
+      if (localTradingState.isRunning) {
+        console.log('[TradingContext] Trading is running, triggering immediate activeMarkets update');
+        // 백엔드가 자동으로 activeMarkets를 업데이트하므로 별도 호출 불필요
+      }
+    } catch (error) {
+      console.error('[TradingContext] Failed to save portfolio to backend:', error);
+    }
+  }, [localTradingState.isRunning]);
 
   const toggleTrading = useCallback(async () => {
     if (!tradingConfig) return;

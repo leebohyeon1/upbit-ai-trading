@@ -747,6 +747,12 @@ class TradingApp {
 
   private async savePortfolio(portfolio: any[]): Promise<boolean> {
     try {
+      console.log('[Main] savePortfolio called with portfolio:', portfolio.map(p => ({
+        symbol: p.symbol,
+        enabled: p.enabled,
+        ticker: p.ticker
+      })));
+      
       fs.writeFileSync(
         this.getPortfolioPath(),
         JSON.stringify(portfolio, null, 2)
@@ -756,6 +762,8 @@ class TradingApp {
       if (tradingEngine.isRunning()) {
         // enabled가 true인 코인만 필터링
         const enabledCoins = portfolio.filter(item => item.enabled === true);
+        console.log('[Main] Enabled coins:', enabledCoins.map(c => c.symbol));
+        
         const activeMarkets = enabledCoins.map(item => {
           const ticker = item.ticker || item.market || (item.symbol ? `KRW-${item.symbol}` : '');
           return ticker;
@@ -763,6 +771,7 @@ class TradingApp {
         
         console.log('[Main] Updating active markets (enabled only):', activeMarkets);
         tradingEngine.setActiveMarkets(activeMarkets);
+        console.log('[Main] Active markets updated successfully');
         
         // 분석 설정도 동기화
         const analysisConfigs = await this.getAnalysisConfigs();
